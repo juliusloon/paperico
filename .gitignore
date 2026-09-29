@@ -1,0 +1,57 @@
+# ===== Secrets / BYOK 凭证(绝不入库) =====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.mobileprovision
+
+# ===== 本地数据:数据库 / 论文 PDF / MinerU 抽取结果(绝不入库) =====
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.db.bak*
+*.sqlite
+*.sqlite3
+backend/app/storage/
+backend/storage/
+**/storage/pdfs/
+**/storage/mineru_output/
+**/storage/mineru_chem_spike/
+**/storage/images/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== Frontend =====
+node_modules/
+dist/
+
+# ===== Xcode / Apple 构建产物 =====
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# ===== UI 历史归档(整仓构建快照,体积大;截图可能含论文标题) =====
+docs/ui-archives/
+
+# 验证截图含论文标题/摘要/正文片段,不公开
+docs/verification/**/*.png
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

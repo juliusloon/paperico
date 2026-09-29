@@ -1,0 +1,12 @@
+
+> frontend@0.0.0 test:browser
+> node scripts/verify-workspace.mjs
+
+library: search, selection, upload dialog, light/dark
+reader: correct PDF link, mode switch while collapsed, zoom
+all 18 source PDFs rendered
+late paper response cannot replace the current paper
+missing PDF reports an error and retry recovers
+390px: library, home, methods, settings, reader fit viewport
+768px: library, home, methods, settings, reader fit viewport
+1024px: library, home, methods, settings, reader fit viewport
