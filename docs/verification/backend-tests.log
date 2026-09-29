@@ -1,0 +1,25 @@
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_chem_batch_keeps_the_separate_task_id (test_pipeline.PipelineTests.test_chem_batch_keeps_the_separate_task_id) ... ok
+test_chem_bundle_schema_and_artifact_audit (test_pipeline.PipelineTests.test_chem_bundle_schema_and_artifact_audit) ... ok
+test_chem_request_cannot_silently_fall_back_to_normal_batch (test_pipeline.PipelineTests.test_chem_request_cannot_silently_fall_back_to_normal_batch) ... ok
+test_encryption_key_survives_process_cache_reset (test_pipeline.PipelineTests.test_encryption_key_survives_process_cache_reset) ... ok
+test_llm_normalizes_mimo_endpoint_and_trims_credentials (test_pipeline.PipelineTests.test_llm_normalizes_mimo_endpoint_and_trims_credentials) ... ok
+test_llm_surfaces_provider_error_without_secret (test_pipeline.PipelineTests.test_llm_surfaces_provider_error_without_secret) ... ok
+test_local_pdf_uses_v4_signed_batch_pipeline (test_pipeline.PipelineTests.test_local_pdf_uses_v4_signed_batch_pipeline) ... ok
+test_map_json_parser_never_treats_keywords_as_block_results (test_pipeline.PipelineTests.test_map_json_parser_never_treats_keywords_as_block_results) ... ok
+test_map_strict_allows_non_chinese_proper_name_headings (test_pipeline.PipelineTests.test_map_strict_allows_non_chinese_proper_name_headings) ... ok
+test_mineru_finds_prefixed_content_list_and_normalizes_blocks (test_pipeline.PipelineTests.test_mineru_finds_prefixed_content_list_and_normalizes_blocks) ... ok
+test_reduce_result_unwraps_provider_envelope_and_requires_content (test_pipeline.PipelineTests.test_reduce_result_unwraps_provider_envelope_and_requires_content) ... ok
+test_migration_is_idempotent_and_survives_another_move (test_storage.MigrationTests.test_migration_is_idempotent_and_survives_another_move) ... ok
+test_default_database_is_independent_of_launch_directory (test_storage.StorageTests.test_default_database_is_independent_of_launch_directory) ... ok
+test_missing_recorded_path_can_use_only_own_id (test_storage.StorageTests.test_missing_recorded_path_can_use_only_own_id) ... ok
+test_no_cross_paper_fallback_to_shared_legacy_file (test_storage.StorageTests.test_no_cross_paper_fallback_to_shared_legacy_file) ... ok
+test_original_pdf_endpoint_identity_range_and_404 (test_storage.StorageTests.test_original_pdf_endpoint_identity_range_and_404) ... ok
+test_rebases_mac_windows_and_relative_paths (test_storage.StorageTests.test_rebases_mac_windows_and_relative_paths) ... ok
+test_traversal_and_symlinks_cannot_escape_storage (test_storage.StorageTests.test_traversal_and_symlinks_cannot_escape_storage) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.111s
+
+OK
