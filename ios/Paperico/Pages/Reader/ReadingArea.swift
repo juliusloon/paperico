@@ -8,7 +8,6 @@ enum ReaderViewMode: String {
 /// processing/error stages, progress tracking, block flash highlighting.
 struct ReadingArea: View {
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(ReaderStore.self) private var readerStore
     @Environment(\.apiClient) private var client
     @Environment(Router.self) private var router
@@ -81,17 +80,18 @@ struct ReadingArea: View {
                 .allowsHitTesting(viewMode == .pdf)
             }
 
-            if outlineVisible {
-                VStack(alignment: .leading, spacing: 0) {
-                    WorkspaceNav(
-                        collapsed: readerStore.leftPanelCollapsed,
-                        currentPaperId: paperId,
-                        onToggleOutline: { readerStore.toggleLeftPanel() }
-                    )
-                    Spacer(minLength: 0)
-                }
+            // 工作台导航贴底左侧(桌面端);目录收起时变圆形按钮组
+            if !mobile {
+                WorkspaceNav(
+                    collapsed: readerStore.leftPanelCollapsed,
+                    currentPaperId: paperId,
+                    onToggleOutline: { readerStore.toggleLeftPanel() },
+                    opensUpward: true
+                )
                 .padding(.leading, 14)
-                .padding(.top, 14)
+                .padding(.bottom, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .zIndex(3)
                 .allowsHitTesting(true)
             }
 
@@ -114,6 +114,7 @@ struct ReadingArea: View {
             .padding(.top, 14)
             .padding(.trailing, mobile ? 10 : 18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .zIndex(2)
             .allowsHitTesting(true)
 
             GeometryReader { geo in
@@ -193,15 +194,15 @@ struct ReadingArea: View {
                             .font(.system(size: 11, weight: .semibold))
                     }
                 }
-                .foregroundStyle(retranslateActive ? palette.accent : palette.accent)
+                .foregroundStyle(palette.accent)
                 .frame(minWidth: mobile ? 36 : 96, minHeight: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(retranslateActive ? palette.accentSoft : palette.gray0.opacity(0.92))
-                )
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.accent.opacity(0.4)))
+                .modifier(LiquidToolModifier(
+                    cornerRadius: 12,
+                    tint: retranslateActive ? palette.accent : nil
+                ))
             }
             .buttonStyle(.plain)
+            .noFocusRing()
             .disabled(paper == nil || blocks.isEmpty || paperProcessing || retranslateBusy)
             .help(retranslateActive ? "正在重新翻译并重建逻辑链…" : "重新翻译本文献(补齐缺失译文与逻辑链)")
 
@@ -213,8 +214,7 @@ struct ReadingArea: View {
                     .frame(width: 30, alignment: .leading)
             }
             .frame(width: mobile ? 60 : 70, height: 40)
-            .background(RoundedRectangle(cornerRadius: 12).fill(palette.gray0.opacity(0.92)))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.gray300.opacity(0.72)))
+            .liquidTool(cornerRadius: 12)
             .help("\(viewMode == .pdf ? "PDF" : "文本")阅读进度 \(Int(activeProgress.rounded()))%")
 
             HStack(spacing: 1) {
@@ -226,8 +226,7 @@ struct ReadingArea: View {
                 scaleButton(icon: Ic.zoomIn) { changeReadingScale(1) }
             }
             .frame(width: mobile ? 98 : 112, height: 40)
-            .background(RoundedRectangle(cornerRadius: 12).fill(palette.gray0.opacity(0.92)))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.gray300.opacity(0.72)))
+            .liquidTool(cornerRadius: 12)
         }
     }
 
@@ -239,7 +238,7 @@ struct ReadingArea: View {
                 .frame(width: 30, height: 30)
         }
         .buttonStyle(.plain)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.clear))
+        .noFocusRing()
         .contentShape(Rectangle())
     }
 
@@ -249,13 +248,10 @@ struct ReadingArea: View {
                 .font(.system(size: 16))
                 .foregroundStyle(pressed ? .white : palette.gray500)
                 .frame(minWidth: 40, minHeight: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(pressed ? palette.accent : palette.gray0.opacity(0.92))
-                )
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(pressed ? palette.accent : palette.gray300.opacity(0.72)))
+                .modifier(LiquidToolModifier(cornerRadius: 12, tint: pressed ? palette.accent : nil))
         }
         .buttonStyle(.plain)
+        .noFocusRing()
         .help(help)
     }
 
@@ -349,7 +345,7 @@ struct ReadingArea: View {
                     )
                 }
             )
-            .scrollPadding(top: 88)
+            .contentMargins(.top, 88, for: .scrollContent)
             .onPreferenceChange(ReadingViewportKey.self) { viewportHeight = max(1, $0) }
             .onPreferenceChange(BlockFramesKey.self) { frames in
                 blockFrames = frames
@@ -482,7 +478,7 @@ struct ReadingArea: View {
             }
             .frame(maxWidth: outlineVisible ? .infinity : 820)
             .frame(maxWidth: .infinity)
-            .padding(.bottom, 84)
+            .padding(.bottom, mobile ? 84 : 104)
         } else if let paper, blocks.isEmpty, paper.statusEnum != .error {
             processingStage(paper: paper)
         } else if let paper, paper.statusEnum == .error {

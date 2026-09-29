@@ -91,9 +91,7 @@ struct RightPanel: View {
                     .frame(maxHeight: .infinity)
             }
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .liquidPanel(cornerRadius: 14)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -116,7 +114,7 @@ struct RightPanel: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 48)
-            .background(palette.gray0.opacity(0.96))
+            .background(Color.clear)
             .overlay(alignment: .bottom) { Rectangle().fill(palette.gray100).frame(height: 1) }
         }
     }
@@ -156,9 +154,7 @@ struct MobileSidePanel: View {
                         .overlay(alignment: .top) { Rectangle().fill(palette.gray100).frame(height: 1) }
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 15).fill(palette.gray0))
-            .overlay(RoundedRectangle(cornerRadius: 15).stroke(palette.gray300.opacity(0.74)))
-            .shadow(color: palette.shadowCard, radius: 8, y: 3)
+            .liquidPanel(cornerRadius: 15)
 
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
@@ -173,9 +169,7 @@ struct MobileSidePanel: View {
 
                 ChatPanel(paperId: readerStore.paper?.paper.id ?? "")
             }
-            .background(RoundedRectangle(cornerRadius: 15).fill(palette.gray0))
-            .overlay(RoundedRectangle(cornerRadius: 15).stroke(palette.gray300.opacity(0.74)))
-            .shadow(color: palette.shadowCard, radius: 8, y: 3)
+            .liquidPanel(cornerRadius: 15)
             .frame(maxHeight: .infinity)
         }
     }

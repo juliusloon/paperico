@@ -1,11 +1,11 @@
 import SwiftUI
 
 /// Mirrors settings/SettingsPage.tsx — three tabs (AI 模型 / PDF 解析 / 阅读外观),
-/// readiness card, test-connection actions, bottom notice. Adds the native-client
-/// server address field (necessary addition: a native app needs an absolute API origin).
+/// readiness card, test-connection actions, bottom notice.
+/// 窄窗口(≤800px,与 web 断点一致)切换为单栏 + 横向 tab。
 struct SettingsPage: View {
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.containerWidth) private var containerWidth
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(AppStore.self) private var appStore
 
@@ -16,6 +16,7 @@ struct SettingsPage: View {
     @State private var notice: Notice?
     @State private var showLlmKey = false
     @State private var showMineruKey = false
+    @State private var showAccentPicker = false
 
     // LLM form (mirrors llmForm)
     @State private var llmId = "primary"
@@ -41,10 +42,6 @@ struct SettingsPage: View {
     @State private var appearanceAccent = "#275DCE"
     @State private var appearanceTheme = "system"
     @State private var appearanceFontSize = 18
-
-    // Server address (native addition)
-    @State private var serverBase = ServerConfig.baseURL.absoluteString
-    @State private var serverHealth: HealthState = .idle
 
     enum Tab: String, CaseIterable {
         case model, parser, appearance
@@ -76,11 +73,7 @@ struct SettingsPage: View {
         let message: String
     }
 
-    enum HealthState: Equatable {
-        case idle, checking, ok, fail
-    }
-
-    private var isCompact: Bool { sizeClass == .compact }
+    private var isCompact: Bool { containerWidth < LayoutBreakpoint.settings }
 
     private var llmReady: Bool {
         settingsStore.settings?.modelProfiles.first?.apiKeyConfigured ?? false
@@ -97,10 +90,10 @@ struct SettingsPage: View {
         Group {
             if isCompact {
                 VStack(spacing: 0) {
-                    compactTopBar
+                    CompactTopBar()
                     ScrollView {
                         VStack(spacing: 12) {
-                            sidebarCard
+                            compactTabBar
                             sectionCard
                         }
                         .padding(8)
@@ -108,12 +101,15 @@ struct SettingsPage: View {
                 }
                 .background(palette.gray0)
             } else {
+                // 左列:设置侧栏在上,导航栏贴底收尾
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: 70)
+                    VStack(spacing: 12) {
                         sidebarCard
+                            .frame(maxHeight: .infinity, alignment: .top)
+                        WorkspaceNav(opensUpward: true)
                     }
                     .frame(width: 224)
+                    .zIndex(1)
                     sectionCard
                 }
                 .padding(14)
@@ -124,16 +120,29 @@ struct SettingsPage: View {
         .overlay(alignment: .bottomTrailing) { noticeOverlay }
     }
 
-    private var compactTopBar: some View {
-        HStack(spacing: 8) {
-            WorkspaceNav(collapsed: true)
-            Spacer(minLength: 0)
+    /// 紧凑宽度:三个设置 tab 变成横向分段条(web ≤800px)。
+    private var compactTabBar: some View {
+        HStack(spacing: 3) {
+            ForEach(Tab.allCases, id: \.self) { item in
+                Button {
+                    tab = item
+                } label: {
+                    HStack(spacing: 6) {
+                        Image.ic(item.icon).font(.system(size: 13))
+                        Text(item.label).font(.system(size: 12.5, weight: .semibold))
+                    }
+                    .foregroundStyle(tab == item ? .white : palette.gray500)
+                    .frame(maxWidth: .infinity, minHeight: 38)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(tab == item ? palette.accent : Color.clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .noFocusRing()
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(height: 56)
-        .background(palette.gray0)
-        .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
+        .padding(3)
+        .background(RoundedRectangle(cornerRadius: 12).fill(palette.gray50))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.gray200))
     }
 
     // MARK: sidebar
@@ -167,9 +176,8 @@ struct SettingsPage: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .noFocusRing()
             }
-
-            serverField
 
             Spacer(minLength: 0)
 
@@ -186,77 +194,8 @@ struct SettingsPage: View {
             .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray200))
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
-        .frame(maxHeight: .infinity, alignment: isCompact ? .center : .top)
-    }
-
-    private var serverField: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("服务器地址(原生端新增)").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.gray500)
-            HStack(spacing: 6) {
-                TextField("http://192.168.1.10:8000", text: $serverBase)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: .monospaced))
-                    .padding(.horizontal, 8)
-                    .frame(height: 32)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(palette.gray0))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(palette.gray300))
-                    .onSubmit { applyServerBase() }
-                Button {
-                    applyServerBase()
-                } label: {
-                    Image.ic(Ic.check).font(.system(size: 12)).foregroundStyle(.white)
-                        .frame(width: 30, height: 32)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(palette.accent))
-                }
-                .buttonStyle(.plain)
-                .help("保存并检测")
-            }
-            HStack(spacing: 5) {
-                switch serverHealth {
-                case .idle: EmptyView()
-                case .checking: ProgressView().controlSize(.mini)
-                case .ok: Image.ic(Ic.check).font(.system(size: 11)).foregroundStyle(palette.success)
-                case .fail: Image.ic(Ic.close).font(.system(size: 11)).foregroundStyle(palette.danger)
-                }
-                Text(healthText).font(.system(size: 11)).foregroundStyle(healthColor)
-            }
-        }
-    }
-
-    private var healthText: String {
-        switch serverHealth {
-        case .idle: return "后端:http://…/api/health"
-        case .checking: return "检测中…"
-        case .ok: return "后端连接正常"
-        case .fail: return "无法连接后端,请检查地址与防火墙"
-        }
-    }
-
-    private var healthColor: Color {
-        switch serverHealth {
-        case .ok: return palette.success
-        case .fail: return palette.danger
-        default: return palette.gray400
-        }
-    }
-
-    private func applyServerBase() {
-        let trimmed = serverBase.trimmingCharacters(in: .whitespaces)
-        serverBase = trimmed
-        LocalPrefs.serverBase = trimmed
-        serverHealth = .checking
-        Task {
-            let client = ApiClient()
-            do {
-                let ok = try await client.health()
-                serverHealth = ok ? .ok : .fail
-            } catch {
-                serverHealth = .fail
-            }
-        }
+        .trafficLightTopPadding()
+        .liquidPanel(cornerRadius: 14)
     }
 
     // MARK: content
@@ -276,9 +215,8 @@ struct SettingsPage: View {
             .padding(30)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .trafficLightTopPadding()
+        .liquidPanel(cornerRadius: 14)
         .frame(maxHeight: .infinity)
     }
 
@@ -323,91 +261,73 @@ struct SettingsPage: View {
         .padding(.bottom, 31)
     }
 
-    private func field<V: View>(_ label: String, hint: String? = nil, @ViewBuilder content: () -> V) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(palette.gray700)
+    /// 字段行:名称与控件同一行,提示文字由控件的 placeholder 承载。
+    private func field<V: View>(_ label: String, @ViewBuilder content: () -> V) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            Text(label)
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(palette.gray700)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(width: 88, alignment: .leading)
             content()
-            if let hint {
-                Text(hint).font(.system(size: 12.5)).lineSpacing(3).foregroundStyle(palette.gray400)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Narrow fields sit side by side like the web grid; wide fields get the full row.
+    /// 两列并排的字段(窄屏收为单列)。
     private func fieldRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 18) { content() }
+        Group {
+            if isCompact {
+                VStack(alignment: .leading, spacing: 14) { content() }
+            } else {
+                HStack(alignment: .center, spacing: 18) { content() }
+            }
+        }
     }
 
     private func textFieldBinding(_ text: Binding<String>, placeholder: String) -> some View {
-        TextField(placeholder, text: text)
-            .textFieldStyle(.plain)
-            .font(.system(size: 13))
-            .padding(.horizontal, 12)
-            .frame(height: 42)
-            .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+        FormTextField(text: text, placeholder: placeholder)
     }
 
     private func pickerBinding(_ value: Binding<String>, options: [(String, String)]) -> some View {
-        Picker("", selection: value) {
-            ForEach(options, id: \.0) { Text($0.1).tag($0.0) }
-        }
-        .labelsHidden()
-        .frame(height: 42)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+        PillPicker(selection: value, options: options)
     }
 
     private func secretField(_ text: Binding<String>, placeholder: String, visible: Binding<Bool>) -> some View {
-        HStack(spacing: 0) {
-            SecureOrPlainField(text: text, visible: visible.wrappedValue, placeholder: placeholder)
-                .padding(.horizontal, 12)
-                .frame(height: 42)
-            Button {
-                visible.wrappedValue.toggle()
-            } label: {
-                Image.ic(visible.wrappedValue ? Ic.eyeOff : Ic.eye)
-                    .font(.system(size: 13))
-                    .foregroundStyle(palette.gray400)
-                    .padding(.trailing, 12)
-            }
-            .buttonStyle(.plain)
-        }
-        .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+        FormSecretField(text: text, placeholder: placeholder, visible: visible)
     }
 
     // MARK: model tab
 
     private var modelSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 22) {
             fieldRow {
-                field("配置名称") { textFieldBinding($llmName, placeholder: "主要模型") }
-                field("模型名称", hint: "必须与服务商控制台中的 model id 完全一致") {
-                    textFieldBinding($llmModel, placeholder: "gpt-4o-mini")
+                field("配置名称") {
+                    textFieldBinding($llmName, placeholder: "主要模型")
+                }
+                field("模型名称") {
+                    textFieldBinding($llmModel, placeholder: "必须与服务商控制台中的 model id 完全一致")
                 }
             }
-            field("Base URL", hint: "填写到 /v1,应用会自动追加 /chat/completions") {
-                textFieldBinding($llmBaseUrl, placeholder: "https://api.openai.com/v1")
+            field("Base URL") {
+                textFieldBinding($llmBaseUrl, placeholder: "填写到 /v1,应用会自动追加 /chat/completions")
             }
-            field("API Key", hint: llmReady ? "已保存:\(settingsStore.settings?.modelProfiles.first?.apiKeyMasked ?? "")。留空会继续使用,不会覆盖。" : "测试时会先安全保存当前配置。") {
-                secretField($llmApiKey, placeholder: llmReady ? "留空以继续使用已保存密钥" : "tp-...", visible: $showLlmKey)
+            field("API Key") {
+                secretField(
+                    $llmApiKey,
+                    placeholder: llmReady
+                        ? "已保存:\(settingsStore.settings?.modelProfiles.first?.apiKeyMasked ?? "")。留空会继续使用,不会覆盖。"
+                        : "测试时会先安全保存当前配置。",
+                    visible: $showLlmKey
+                )
             }
             fieldRow {
                 field("思考强度") {
                     pickerBinding($llmReasoning, options: [("off", "关闭"), ("low", "低"), ("medium", "中"), ("high", "高")])
                 }
                 field("单次最大输出") {
-                    Stepper("\(llmMaxTokens)", value: $llmMaxTokens, in: 256...32768, step: 256)
-                        .font(.system(size: 13))
-                        .frame(height: 42)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 12)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+                    FormStepper(title: "\(llmMaxTokens)", value: $llmMaxTokens, range: 256...32768, step: 256)
                 }
             }
             actionRow(testing: $testingLlm, saveTitle: "保存配置", testTitle: "保存并测试") {
@@ -421,20 +341,26 @@ struct SettingsPage: View {
     // MARK: parser tab
 
     private var parserSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 22) {
             field("解析方式") {
                 pickerBinding($mineruMode, options: [("cloud", "MinerU 云端 API"), ("local", "本地部署(Gradio 服务)")])
             }
             if mineruMode == "local" {
-                field("本地服务地址", hint: "指向 mineru-gradio 的 HTTP 地址,例如 http://127.0.0.1:7860") {
-                    textFieldBinding($mineruLocalUrl, placeholder: "http://127.0.0.1:7860")
+                field("本地服务地址") {
+                    textFieldBinding($mineruLocalUrl, placeholder: "指向 mineru-gradio 的 HTTP 地址,例如 http://127.0.0.1:7860")
                 }
             } else {
                 field("Base URL") {
                     textFieldBinding($mineruBaseUrl, placeholder: "https://mineru.net/api/v4")
                 }
-                field("MinerU Token", hint: settingsStore.settings?.mineru.apiKeyConfigured == true ? "已保存。留空保存不会覆盖。" : "在 MinerU API 管理页面创建 Token。") {
-                    secretField($mineruApiKey, placeholder: settingsStore.settings?.mineru.apiKeyConfigured == true ? "留空以继续使用已保存 Token" : "Bearer Token(只填写 Token 本身)", visible: $showMineruKey)
+                field("MinerU Token") {
+                    secretField(
+                        $mineruApiKey,
+                        placeholder: settingsStore.settings?.mineru.apiKeyConfigured == true
+                            ? "已保存。留空保存不会覆盖。"
+                            : "在 MinerU API 管理页面创建 Token(只填写 Token 本身)",
+                        visible: $showMineruKey
+                    )
                 }
             }
             fieldRow {
@@ -479,33 +405,18 @@ struct SettingsPage: View {
     // MARK: appearance tab
 
     private var appearanceSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 22) {
             fieldRow {
                 field("主题") {
                     pickerBinding($appearanceTheme, options: [("light", "亮色"), ("dark", "暗色"), ("system", "跟随系统")])
                 }
                 field("正文字号") {
-                    Stepper("\(appearanceFontSize)", value: $appearanceFontSize, in: 13...23)
-                        .font(.system(size: 13))
-                        .frame(height: 42)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 12)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+                    FormStepper(title: "\(appearanceFontSize)", value: $appearanceFontSize, range: 13...23)
                 }
             }
             field("强调色") {
                 HStack(spacing: 9) {
-                    ColorPicker("", selection: Binding(
-                        get: { Color(hex: appearanceAccent) ?? palette.accent },
-                        set: { newValue in
-                            if let hex = newValue.toHex() { appearanceAccent = hex }
-                        }
-                    ), supportsOpacity: false)
-                    .labelsHidden()
-                    .frame(width: 44, height: 42)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+                    accentSwatch
                     textFieldBinding($appearanceAccent, placeholder: "#275DCE")
                 }
             }
@@ -515,39 +426,94 @@ struct SettingsPage: View {
         }
     }
 
+    /// 强调色示例块:与字段框同规格的圆角矩形,点按弹出预设色板 + 系统拾色器。
+    private var accentSwatch: some View {
+        Button {
+            showAccentPicker = true
+        } label: {
+            RoundedRectangle(cornerRadius: ControlSpec.radius)
+                .fill(Color(hex: appearanceAccent) ?? palette.accent)
+                .overlay(
+                    RoundedRectangle(cornerRadius: ControlSpec.radius)
+                        .strokeBorder(palette.gray300, lineWidth: 1)
+                        .opacity(0.6)
+                )
+                .overlay(alignment: .center) {
+                    Image.ic(Ic.penLine)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                }
+                .frame(width: 44, height: ControlSpec.height)
+        }
+        .buttonStyle(.plain)
+        .noFocusRing()
+        .help("选取强调色")
+        .popover(isPresented: $showAccentPicker, arrowEdge: .bottom) {
+            accentPickerPopover
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private var accentPickerPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("预设强调色")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(palette.gray700)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 8), count: 6), spacing: 10) {
+                ForEach(accentPresets, id: \.self) { hex in
+                    Button {
+                        appearanceAccent = hex
+                    } label: {
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(Color(hex: hex) ?? palette.accent)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 7)
+                                    .stroke(appearanceAccent.caseInsensitiveCompare(hex) == .orderedSame ? palette.gray800 : palette.gray300, lineWidth: appearanceAccent.caseInsensitiveCompare(hex) == .orderedSame ? 2 : 1)
+                                    .opacity(0.8)
+                            )
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .noFocusRing()
+                    .help(hex)
+                }
+            }
+            Divider()
+            HStack(spacing: 9) {
+                ColorPicker("", selection: Binding(
+                    get: { Color(hex: appearanceAccent) ?? palette.accent },
+                    set: { newValue in
+                        if let hex = newValue.toHex() { appearanceAccent = hex }
+                    }
+                ), supportsOpacity: false)
+                .labelsHidden()
+                Text("自定义颜色")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(palette.gray600)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(14)
+        .frame(width: 260)
+    }
+
+    private var accentPresets: [String] {
+        ["#275DCE", "#2F6FED", "#0E7C66", "#0891B2", "#4F46E5", "#7C3AED",
+         "#B66A12", "#D97706", "#B64235", "#DB2777", "#237A52", "#515762"]
+    }
+
     // MARK: shared actions row
 
     private func actionRow(testing: Binding<Bool>, saveTitle: String, testTitle: String?, onSave: @escaping () -> Void, onTest: @escaping () -> Void) -> some View {
         HStack(spacing: 9) {
-            Button(action: onSave) {
-                HStack(spacing: 8) {
-                    if saving || testing.wrappedValue { SpinnerIcon(size: 14) } else { Image.ic(Ic.save).font(.system(size: 14)) }
-                    Text(saveTitle)
-                }
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 15)
-                .frame(minHeight: 40)
-                .background(RoundedRectangle(cornerRadius: 8).fill(palette.accent))
+            ToolbarButton(title: saveTitle, icon: Ic.save, kind: .primary, busy: saving || testing.wrappedValue) {
+                onSave()
             }
-            .buttonStyle(.plain)
-            .disabled(saving || testing.wrappedValue)
 
             if let testTitle {
-                Button(action: onTest) {
-                    HStack(spacing: 8) {
-                        if testing.wrappedValue { SpinnerIcon(size: 14) } else { Image.ic(Ic.testTube).font(.system(size: 14)) }
-                        Text(testTitle)
-                    }
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(palette.gray700)
-                    .padding(.horizontal, 15)
-                    .frame(minHeight: 40)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+                ToolbarButton(title: testTitle, icon: Ic.testTube, busy: testing.wrappedValue) {
+                    onTest()
                 }
-                .buttonStyle(.plain)
-                .disabled(saving || testing.wrappedValue)
             }
             Spacer(minLength: 0)
         }
@@ -756,7 +722,9 @@ struct SecureOrPlainField: View {
         .font(.system(size: 13))
         .frame(maxWidth: .infinity, alignment: .leading)
         .autocorrectionDisabled()
+        #if os(iOS)
         .textInputAutocapitalization(.never)
+        #endif
     }
 }
 
@@ -764,7 +732,7 @@ struct SecureOrPlainField: View {
 
 extension Color {
     func toHex() -> String? {
-        guard let components = cgColor.components, components.count >= 3 else { return nil }
+        guard let components = rgbComponents, components.count >= 3 else { return nil }
         let r = Int(round(components[0] * 255))
         let g = Int(round(components[1] * 255))
         let b = Int(round(components[2] * 255))

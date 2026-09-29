@@ -140,7 +140,7 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
             forName: .PDFViewPageChanged, object: view, queue: .main
         ) { [weak self] _ in self?.reportPage() })
         observers.append(NotificationCenter.default.addObserver(
-            forName: .PDFViewDidChangeSelection, object: view, queue: .main
+            forName: .PDFViewSelectionChanged, object: view, queue: .main
         ) { [weak self] _ in self?.reportSelection() })
     }
 
@@ -214,18 +214,19 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
         // PDFKit's origin is bottom-left with y pointing up; the MinerU bbox
         // is page-relative with y pointing down — flip vertically.
         let rect = CGRect(
-            x: bounds.width * bbox[0] / 1000,
-            y: bounds.height * (1 - bbox[3] / 1000),
-            width: bounds.width * (bbox[2] - bbox[0]) / 1000,
-            height: bounds.height * (bbox[3] - bbox[1]) / 1000
+            x: bounds.width * CGFloat(bbox[0] / 1000),
+            y: bounds.height * CGFloat(1 - bbox[3] / 1000),
+            width: bounds.width * CGFloat((bbox[2] - bbox[0]) / 1000),
+            height: bounds.height * CGFloat((bbox[3] - bbox[1]) / 1000)
         )
         let annotation = PDFAnnotation(bounds: rect, forType: .square, withProperties: nil)
-        annotation.borderWidth = 0 // transparent border, accent fill at ~30%
+        annotation.color = PlatformColor.clear // transparent border, accent fill at ~30%
         #if os(iOS)
-        annotation.fillColor = (shared.focusColor ?? UIColor.systemBlue).withAlphaComponent(0.3)
+        let focus = shared.focusColor ?? UIColor.systemBlue
         #else
-        annotation.fillColor = (shared.focusColor ?? NSColor.controlAccentColor).withAlphaComponent(0.3)
+        let focus = shared.focusColor ?? NSColor.controlAccentColor
         #endif
+        annotation.setValue(focus.withAlphaComponent(0.3), forAnnotationKey: .interiorColor)
         page.addAnnotation(annotation)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak page, weak annotation] in
             if let annotation { page?.removeAnnotation(annotation) }

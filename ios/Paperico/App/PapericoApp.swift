@@ -20,10 +20,14 @@ struct PapericoApp: App {
                 .preferredColorScheme(appModel.preferredScheme)
                 .tint(appModel.palette.accent)
                 #if os(macOS)
-                .frame(minWidth: 980, minHeight: 640)
-                .defaultSize(width: 1360, height: 860)
+                .frame(minWidth: 680, minHeight: 560)
                 #endif
         }
+        #if os(macOS)
+        // 去掉系统标题栏:红绿灯悬浮于窗口左上角,由左侧栏顶部承接
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1360, height: 860)
+        #endif
     }
 }
 

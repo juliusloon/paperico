@@ -108,7 +108,7 @@ extension Color {
     /// `ratio` = share of `self` in the blend (0 → other, 1 → self).
     func mix(with other: Color, ratio: Double) -> Color {
         let t = max(0, min(1, ratio))
-        guard let a = cgColor.components, a.count >= 3, let b = other.cgColor.components, b.count >= 3 else {
+        guard let a = rgbComponents, a.count >= 3, let b = other.rgbComponents, b.count >= 3 else {
             return self
         }
         return Color(
@@ -226,8 +226,17 @@ extension Palette {
 }
 
 extension Color {
+    /// `Color.cgColor` 在 macOS 上是 `CGColor?`(iOS 为非 optional),统一为可空访问。
+    var rgbComponents: [CGFloat]? {
+        #if os(macOS)
+        return cgColor?.components
+        #else
+        return cgColor.components
+        #endif
+    }
+
     var isLight: Bool {
-        guard let c = cgColor.components, c.count >= 3 else { return true }
+        guard let c = rgbComponents, c.count >= 3 else { return true }
         return (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) > 0.6
     }
 }

@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Mirrors projects/MethodsPage.tsx — category sidebar, search, expandable method cards.
+/// 窄窗口(≤760px,与 web 断点一致)切换为抽屉 + 顶部导航条。
 struct MethodsPage: View {
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.containerWidth) private var containerWidth
     @Environment(Router.self) private var router
 
     @Environment(\.apiClient) private var client
@@ -15,7 +16,7 @@ struct MethodsPage: View {
     @State private var sidebarCollapsed = false
     @State private var mobileSidebarOpen = false
 
-    private var isCompact: Bool { sizeClass == .compact }
+    private var isCompact: Bool { containerWidth < LayoutBreakpoint.workspace }
     private var effectiveSidebarCollapsed: Bool { sidebarCollapsed && !isCompact }
 
     private var categoryCounts: [String: Int] {
@@ -39,18 +40,21 @@ struct MethodsPage: View {
         Group {
             if isCompact {
                 VStack(spacing: 0) {
-                    compactTopBar
+                    CompactTopBar()
                     mainColumn
                 }
                 .background(palette.gray0)
                 .overlay { if mobileSidebarOpen { drawerLayer } }
             } else {
+                // 左列:侧栏在上,导航栏贴底收尾;侧栏收起时导航栏变纯圆形按钮
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: 70)
+                    VStack(spacing: 12) {
                         sidebar
+                            .frame(maxHeight: .infinity, alignment: .top)
+                        WorkspaceNav(collapsed: sidebarCollapsed, opensUpward: true)
                     }
                     .frame(width: sidebarCollapsed ? 52 : 224)
+                    .zIndex(1)
                     mainColumn
                 }
                 .padding(14)
@@ -73,18 +77,6 @@ struct MethodsPage: View {
     }
 
     // MARK: chrome
-
-    private var compactTopBar: some View {
-        HStack(spacing: 8) {
-            WorkspaceNav(collapsed: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(height: 56)
-        .background(palette.gray0)
-        .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
-    }
 
     private var drawerLayer: some View {
         ZStack(alignment: .leading) {
@@ -138,9 +130,8 @@ struct MethodsPage: View {
                 Spacer(minLength: 0)
             }
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .trafficLightTopPadding()
+        .liquidPanel(cornerRadius: 14)
     }
 
     private func categoryRow(key: String, label: String, count: Int, color: Color?) -> some View {
@@ -174,9 +165,8 @@ struct MethodsPage: View {
             toolbar
             contentArea
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .trafficLightTopPadding()
+        .liquidPanel(cornerRadius: 14)
         .padding(isCompact ? 8 : 0)
     }
 
@@ -194,38 +184,21 @@ struct MethodsPage: View {
                 }
                 .frame(width: 118, alignment: .leading)
             }
-            HStack(spacing: 8) {
-                HStack(spacing: 0) {
-                    Image.ic(Ic.search).font(.system(size: 13)).foregroundStyle(palette.gray400).padding(.leading, 8)
-                    TextField("搜索方法名称...", text: $query)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14.5))
-                        .padding(.leading, 5)
-                        .padding(.trailing, 10)
-                        .onSubmit { Task { await load(query: query.isEmpty ? nil : query) } }
-                }
-                .frame(height: 38)
-                .frame(maxWidth: 420)
-                .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray300))
-
-                Button {
-                    Task { await load(query: query.isEmpty ? nil : query) }
-                } label: {
-                    Text("搜索")
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .frame(height: 38)
-                        .background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
-                }
-                .buttonStyle(.plain)
+            PillSearchField(text: $query, prompt: "搜索方法名称...") {
+                Task { await load(query: query.isEmpty ? nil : query) }
             }
+
             Spacer(minLength: 0)
+
+            if !isCompact {
+                ToolbarButton(title: "搜索", kind: .primary) {
+                    Task { await load(query: query.isEmpty ? nil : query) }
+                }
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .frame(minHeight: 50)
+        .frame(minHeight: 56)
     }
 
     @ViewBuilder

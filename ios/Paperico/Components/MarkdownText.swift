@@ -107,7 +107,7 @@ struct MarkdownText: View {
                 flushParagraph()
                 var quote: [String] = []
                 while index < lines.count, lines[index].trimmingCharacters(in: .whitespaces).hasPrefix(">") {
-                    quote.append(lines[index].trimmingCharacters(in: .whitespaces).dropFirst().trimmed)
+                    quote.append(String(lines[index].trimmed.dropFirst()).trimmed)
                     index += 1
                 }
                 blocks.append(.quote(quote))
@@ -289,7 +289,7 @@ struct MarkdownText: View {
         var options = AttributedString.MarkdownParsingOptions()
         options.interpretedSyntax = .inlineOnlyPreservingWhitespace
         if var attributed = try? AttributedString(markdown: markdown, options: options) {
-            for run in attributed.runs where run.code != nil {
+            for run in attributed.runs where run.inlinePresentationIntent?.contains(.code) == true {
                 attributed[run.range].font = .mono(fontSize * 0.88)
                 attributed[run.range].backgroundColor = palette.gray100
             }
@@ -367,10 +367,10 @@ enum HTMLTableParser {
         guard html.contains("<table") else { return nil }
         var rows: [[String]] = []
         for rowMatch in matches(of: "<tr[^>]*>(.*?)</tr>", in: html) {
-            let rowHtml = rowMatch.1
+            let rowHtml = String(rowMatch.1)
             var cells: [String] = []
             for cellMatch in matches(of: "<t[dh][^>]*>(.*?)</t[dh]>", in: rowHtml) {
-                cells.add(elementsOf: stripTags(cellMatch.1))
+                cells.append(stripTags(String(cellMatch.1)))
             }
             if !cells.isEmpty { rows.append(cells) }
         }
@@ -431,12 +431,6 @@ enum HTMLTableParser {
                   let inner = Range(match.range(at: 1), in: text) else { return nil }
             return (text[outer], text[inner])
         }
-    }
-}
-
-private extension Array {
-    mutating func add(elementsOf other: [Element]) {
-        other.forEach { append($0) }
     }
 }
 

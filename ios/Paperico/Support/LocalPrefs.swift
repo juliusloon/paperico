@@ -4,13 +4,6 @@ import Foundation
 enum LocalPrefs {
     private static let d = UserDefaults.standard
 
-    // MARK: server
-
-    static var serverBase: String {
-        get { d.string(forKey: ServerConfig.key) ?? "" }
-        set { d.set(newValue, forKey: ServerConfig.key) }
-    }
-
     // MARK: workspace nav
 
     static var lastPaperId: String? {
