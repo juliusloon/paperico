@@ -155,7 +155,7 @@ final class PapersStore {
             papers = try await client.papersList(projectId: f.projectId, q: f.q)
             filter = f
         } catch {
-            error = ApiFailure.wrap(error).errorDescription ?? "论文库加载失败"
+            self.error = ApiFailure.wrap(error).errorDescription ?? "论文库加载失败"
             filter = f
         }
     }

@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Floating workspace navigation pill (mirrors layout/WorkspaceNav.tsx).
-/// Home uses it inside a 72px nav row; workspace pages float it over content;
-/// the reader shows a collapsed variant with the outline toggle.
+/// 工作台导航(floating pill, mirrors layout/WorkspaceNav.tsx)。
+/// - 常规:224×44 玻璃圆角矩形;菜单下拉与自身同宽、左缘对齐。
+/// - 收起(collapsed):纯圆形 logo 按钮(宽度与 52pt 收起侧栏对齐);
+///   阅读器目录收起时仍附加一个圆形目录切换按钮。
+/// - 贴底放置(opensUpward)时菜单向上弹出,否则向下弹出。
 struct WorkspaceNav: View {
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var systemScheme
@@ -12,6 +14,7 @@ struct WorkspaceNav: View {
     var collapsed = false
     var currentPaperId: String?
     var onToggleOutline: (() -> Void)? = nil
+    var opensUpward = false
 
     @State private var menuOpen = false
 
@@ -65,10 +68,55 @@ struct WorkspaceNav: View {
     }
 
     var body: some View {
-        HStack(spacing: 3) {
-            brandButton
-            Spacer(minLength: 0)
-            if !collapsed {
+        Group {
+            if collapsed {
+                // 收起态:圆形按钮各自携带玻璃表面
+                navContent
+            } else {
+                navContent
+                    .modifier(NavPillSurface(collapsed: false))
+            }
+        }
+        .overlay(alignment: opensUpward ? .bottomLeading : .topLeading) {
+            if menuOpen {
+                pageMenu
+                    .offset(y: opensUpward ? -(44 + 8) : (44 + 8))
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: menuOpen)
+        .animation(.easeInOut(duration: 0.18), value: collapsed)
+        .background {
+            // 点击菜单以外任意区域关闭(覆盖整窗,在菜单层之下)
+            if menuOpen {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { menuOpen = false }
+                    .ignoresSafeArea()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var navContent: some View {
+        if collapsed {
+            HStack(spacing: 4) {
+                circularButton(systemName: Ic.feather, tint: palette.accent, help: "展开工作台导航") {
+                    menuOpen.toggle()
+                }
+                if let onToggleOutline {
+                    circularButton(
+                        systemName: Ic.panelLeft,
+                        tint: palette.gray500,
+                        help: "展开结构目录",
+                        action: onToggleOutline
+                    )
+                }
+            }
+        } else {
+            HStack(spacing: 3) {
+                brandButton
+                Spacer(minLength: 0)
                 RoundIconButton(
                     systemName: isDark ? Ic.sun : Ic.moon,
                     size: 32,
@@ -76,33 +124,75 @@ struct WorkspaceNav: View {
                 ) {
                     appStore.setTheme(isDark ? "light" : "dark")
                 }
-            }
-            if let onToggleOutline {
-                RoundIconButton(
-                    systemName: collapsed ? Ic.panelLeft : Ic.panelLeftClose,
-                    size: 32,
-                    title: collapsed ? "展开结构目录" : "收起结构目录"
-                ) {
-                    onToggleOutline()
+                if let onToggleOutline {
+                    RoundIconButton(
+                        systemName: Ic.panelLeftClose,
+                        size: 32,
+                        title: "收起结构目录"
+                    ) {
+                        onToggleOutline()
+                    }
                 }
             }
+            .padding(4)
+            .frame(width: 224, height: 44)
         }
-        .padding(4)
-        .frame(width: collapsed ? 92 : 224, height: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 13)
-                .fill(palette.gray0.opacity(0.92))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 13))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 13)
-                .stroke(palette.gray300.opacity(0.72))
-        )
-        .shadow(color: palette.shadowFloat, radius: 14, y: 5)
-        .popover(isPresented: $menuOpen, attachmentAnchor: .point(.bottomLeading), arrowEdge: .bottom) {
-            pageMenu
-                .presentationCompactAdaptation(.popover)
-                .frame(width: 224)
+    }
+
+    private func circularButton(systemName: String, tint: Color, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image.ic(systemName)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .noFocusRing()
+        .modifier(NavPillSurface(collapsed: true))
+        .help(help)
+    }
+
+    /// macOS 26+ / iOS 26+ 走系统 Liquid Glass;旧系统保持原有手绘浮标外观。
+    private struct NavPillSurface: ViewModifier {
+        var collapsed: Bool
+        @Environment(\.palette) private var palette
+
+        func body(content: Content) -> some View {
+            #if os(macOS)
+            if #available(macOS 26.0, *) {
+                content.glassEffect(.regular.interactive(), in: shape)
+            } else {
+                legacy(content)
+            }
+            #elseif os(iOS)
+            if #available(iOS 26.0, *) {
+                content.glassEffect(.regular.interactive(), in: shape)
+            } else {
+                legacy(content)
+            }
+            #else
+            legacy(content)
+            #endif
+        }
+
+        private var shape: AnyShape {
+            collapsed ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 13))
+        }
+
+        private func legacy(_ content: Content) -> some View {
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 13)
+                        .fill(palette.gray0.opacity(0.92))
+                        .background(.ultraThinMaterial, in: shapeForMaterial)
+                )
+                .overlay(shapeForMaterial.stroke(palette.gray300.opacity(0.72)))
+                .shadow(color: palette.shadowFloat, radius: 14, y: 5)
+        }
+
+        private var shapeForMaterial: RoundedRectangle {
+            RoundedRectangle(cornerRadius: collapsed ? 22 : 13)
         }
     }
 
@@ -117,21 +207,19 @@ struct WorkspaceNav: View {
                     .frame(width: 30, height: 30)
                     .background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
                     .clipShape(RoundedRectangle(cornerRadius: 9))
-                if !collapsed {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Paperico")
-                            .font(.reading(13, weight: .semibold))
-                            .foregroundStyle(palette.gray800)
-                        Text("RESEARCH DESK")
-                            .font(.mono(7, weight: .bold))
-                            .kerning(0.7)
-                            .foregroundStyle(palette.gray400)
-                    }
-                    Image.ic(Ic.chevronDown)
-                        .font(.system(size: 11, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Paperico")
+                        .font(.reading(13, weight: .semibold))
+                        .foregroundStyle(palette.gray800)
+                    Text("RESEARCH DESK")
+                        .font(.mono(7, weight: .bold))
+                        .kerning(0.7)
                         .foregroundStyle(palette.gray400)
-                        .rotationEffect(.degrees(menuOpen ? 180 : 0))
                 }
+                Image.ic(Ic.chevronDown)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(palette.gray400)
+                    .rotationEffect(.degrees(menuOpen ? 180 : 0))
             }
             .padding(.leading, 3)
             .padding(.trailing, 7)
@@ -139,9 +227,11 @@ struct WorkspaceNav: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .noFocusRing()
         .help("展开工作台导航")
     }
 
+    /// 下拉页面菜单:与导航栏同宽(224)、左缘对齐,玻璃圆角矩形。
     private var pageMenu: some View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(pages, id: \.self) { item in
@@ -170,24 +260,41 @@ struct WorkspaceNav: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .noFocusRing()
             }
         }
         .padding(8)
-        .background(palette.gray0)
+        .frame(width: 224, alignment: .leading)
+        .modifier(MenuSurface())
     }
-}
 
-// MARK: - Nav slot container (mirrors TopBar.tsx page-nav-slot)
+    /// 菜单面板表面:macOS 26+ 用 Liquid Glass,旧系统回退到手绘浮层。
+    private struct MenuSurface: ViewModifier {
+        @Environment(\.palette) private var palette
 
-/// Home embeds the pill in an in-flow 72px row; workspace pages float it absolutely.
-struct HomeNavSlot: View {
-    var body: some View {
-        HStack {
-            WorkspaceNav()
-            Spacer(minLength: 0)
+        func body(content: Content) -> some View {
+            #if os(macOS)
+            if #available(macOS 26.0, *) {
+                content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 13))
+            } else {
+                legacy(content)
+            }
+            #elseif os(iOS)
+            if #available(iOS 26.0, *) {
+                content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 13))
+            } else {
+                legacy(content)
+            }
+            #else
+            legacy(content)
+            #endif
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 14)
-        .frame(height: 72, alignment: .top)
+
+        private func legacy(_ content: Content) -> some View {
+            content
+                .background(RoundedRectangle(cornerRadius: 13).fill(palette.gray0))
+                .overlay(RoundedRectangle(cornerRadius: 13).stroke(palette.gray200))
+                .shadow(color: palette.shadowFloat, radius: 18, y: 8)
+        }
     }
 }

@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// Mirrors reader/ReaderPage.tsx — three-column desktop shell with draggable
-/// splitters, tabbed panes on compact width, status polling.
+/// splitters, tabbed panes on narrow width (web ≤900px breakpoint), status polling.
 struct ReaderPage: View {
     let paperId: String
 
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.containerWidth) private var containerWidth
     @Environment(ReaderStore.self) private var readerStore
     @Environment(ChatStore.self) private var chatStore
 
@@ -19,7 +19,7 @@ struct ReaderPage: View {
     @State private var mobileTab: MobileTab = .reading
     @State private var visitedTabs: Set<MobileTab> = [.reading]
 
-    private var isCompact: Bool { sizeClass == .compact }
+    private var isCompact: Bool { containerWidth < LayoutBreakpoint.reader }
     private var paperStatus: PaperStatus? { readerStore.paper?.paper.statusEnum }
 
     var body: some View {
@@ -133,7 +133,7 @@ struct ReaderPage: View {
         VStack(spacing: 0) {
             mobileTopBar
             ZStack {
-                ReadingArea(leftWidth: .constant(240), mobile: true)
+                ReadingArea(mobile: true, leftWidth: .constant(240))
                     .opacity(mobileTab == .reading ? 1 : 0)
                     .allowsHitTesting(mobileTab == .reading)
 
@@ -167,15 +167,9 @@ struct ReaderPage: View {
     }
 
     private var mobileTopBar: some View {
-        HStack(spacing: 8) {
-            WorkspaceNav(collapsed: true, currentPaperId: paperId)
+        CompactTopBar(currentPaperId: paperId) {
             tabStrip
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(height: 56)
-        .background(palette.gray0)
-        .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
     }
 
     private var tabStrip: some View {
@@ -214,6 +208,7 @@ struct ReaderPage: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .noFocusRing()
     }
 
     private func switchTab(_ tab: MobileTab) {

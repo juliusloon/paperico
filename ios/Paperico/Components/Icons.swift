@@ -178,6 +178,7 @@ struct RoundIconButton: View {
                 .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
+        .noFocusRing()
         .background(RoundedRectangle(cornerRadius: size * 0.28).fill(Color.clear))
         .contentShape(Rectangle())
         .help(Text(title))
@@ -190,13 +191,28 @@ struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.palette) private var palette
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let label = configuration.label
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .frame(minHeight: 40)
-            .background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
-            .opacity(configuration.isPressed ? 0.88 : 1)
+
+        Group {
+            #if os(macOS)
+            if #available(macOS 26.0, *) {
+                label.glassEffect(accentGlass(palette.accent), in: Capsule())
+            } else {
+                label.background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
+            }
+            #elseif os(iOS)
+            if #available(iOS 26.0, *) {
+                label.glassEffect(accentGlass(palette.accent), in: Capsule())
+            } else {
+                label.background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
+            }
+            #endif
+        }
+        .opacity(configuration.isPressed ? 0.88 : 1)
     }
 }
 
@@ -213,6 +229,7 @@ struct PrimaryActionButton: View {
             }
         }
         .buttonStyle(PrimaryButtonStyle())
+        .noFocusRing()
     }
 }
 
@@ -220,14 +237,32 @@ struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.palette) private var palette
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let label = configuration.label
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(palette.gray700)
             .padding(.horizontal, 16)
             .frame(minHeight: 40)
-            .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-            .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray300))
-            .opacity(configuration.isPressed ? 0.88 : 1)
+
+        Group {
+            #if os(macOS)
+            if #available(macOS 26.0, *) {
+                label.glassEffect(.regular.interactive(), in: Capsule())
+            } else {
+                label
+                    .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray300))
+            }
+            #elseif os(iOS)
+            if #available(iOS 26.0, *) {
+                label.glassEffect(.regular.interactive(), in: Capsule())
+            } else {
+                label
+                    .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray300))
+            }
+            #endif
+        }
+        .opacity(configuration.isPressed ? 0.88 : 1)
     }
 }
 
@@ -244,5 +279,6 @@ struct SecondaryActionButton: View {
             }
         }
         .buttonStyle(SecondaryButtonStyle())
+        .noFocusRing()
     }
 }

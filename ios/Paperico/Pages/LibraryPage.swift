@@ -3,9 +3,10 @@ import UniformTypeIdentifiers
 
 /// Mirrors projects/LibraryPage.tsx: project sidebar, toolbar, selection bar,
 /// paper card grid, upload sheet, drag-to-project on desktop.
+/// 窄窗口(≤760px,与 web 断点一致)切换为抽屉 + 顶部导航条。
 struct LibraryPage: View {
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.containerWidth) private var containerWidth
     @Environment(ProjectsStore.self) private var projectsStore
     @Environment(PapersStore.self) private var papersStore
     @Environment(SettingsStore.self) private var settingsStore
@@ -36,7 +37,7 @@ struct LibraryPage: View {
     @State private var showBatchDeleteConfirm = false
     @State private var showFileImporter = false
 
-    private var isCompact: Bool { sizeClass == .compact }
+    private var isCompact: Bool { containerWidth < LayoutBreakpoint.workspace }
     private var sidebarCollapsed: Bool { projectSidebarCollapsed && !isCompact }
 
     // MARK: derived data
@@ -78,18 +79,22 @@ struct LibraryPage: View {
         Group {
             if isCompact {
                 VStack(spacing: 0) {
-                    compactTopBar
+                    CompactTopBar()
                     mainColumn
                 }
                 .background(palette.gray0)
                 .overlay { if mobileSidebarOpen { drawerLayer } }
             } else {
+                // 左列:侧栏在上,导航栏贴底收尾(间距与列间距一致);
+                // 侧栏收起时导航栏变纯圆形按钮。
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: 70)
+                    VStack(spacing: 12) {
                         sidebar
+                            .frame(maxHeight: .infinity, alignment: .top)
+                        WorkspaceNav(collapsed: projectSidebarCollapsed, opensUpward: true)
                     }
                     .frame(width: sidebarCollapsed ? 52 : 224)
+                    .zIndex(1)
                     mainColumn
                 }
                 .padding(14)
@@ -132,19 +137,7 @@ struct LibraryPage: View {
         }
     }
 
-    // MARK: compact chrome
-
-    private var compactTopBar: some View {
-        HStack(spacing: 8) {
-            WorkspaceNav(collapsed: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(height: 56)
-        .background(palette.gray0)
-        .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
-    }
+    // MARK: chrome
 
     private var drawerLayer: some View {
         GeometryReader { geo in
@@ -215,9 +208,8 @@ struct LibraryPage: View {
                 Spacer(minLength: 0)
             }
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .trafficLightTopPadding()
+        .liquidPanel(cornerRadius: 14)
     }
 
     private var newProjectForm: some View {
@@ -380,124 +372,113 @@ struct LibraryPage: View {
             }
             contentArea
         }
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .trafficLightTopPadding()
+        .liquidPanel(cornerRadius: 14)
         .padding(isCompact ? 8 : 0)
     }
 
+    private var toolbarTitle: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("LIBRARY").font(.mono(8, weight: .bold)).kerning(1.2).foregroundStyle(palette.accent)
+            Text("论文库").font(.reading(22, weight: .medium)).foregroundStyle(palette.gray900)
+        }
+        .frame(width: 118, alignment: .leading)
+    }
+
+    private var libraryPickers: some View {
+        HStack(spacing: 8) {
+            PillPicker(icon: Ic.listFilter, selection: $statusFilter, options: [
+                ("all", "全部状态"),
+                ("uploaded", "待解析"),
+                ("ready", "已就绪"),
+                ("parsed", "已解析"),
+                ("normalizing", "清洗中"),
+                ("analyzing", "分析中"),
+                ("reducing", "归纳中"),
+                ("parsing", "解析中"),
+                ("error", "出错"),
+            ], width: 138)
+
+            PillPicker(selection: $sortMode, options: [
+                ("recent", "最近添加"),
+                ("title", "标题排序"),
+                ("year", "年份排序"),
+                ("status", "状态排序"),
+            ], width: 122)
+        }
+    }
+
     private var toolbar: some View {
-        HStack(spacing: 12) {
+        Group {
             if isCompact {
-                RoundIconButton(systemName: Ic.folderInput, size: 38, title: "项目分组") {
-                    withAnimation(.easeInOut(duration: 0.18)) { mobileSidebarOpen = true }
-                }
-            }
-            if !isCompact {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("LIBRARY").font(.mono(8, weight: .bold)).kerning(1.2).foregroundStyle(palette.accent)
-                    Text("论文库").font(.reading(22, weight: .medium)).foregroundStyle(palette.gray900)
-                }
-                .frame(width: 118, alignment: .leading)
-            }
-            HStack(spacing: 8) {
-                HStack(spacing: 0) {
-                    Image.ic(Ic.search)
-                        .font(.system(size: 13))
-                        .foregroundStyle(palette.gray400)
-                        .padding(.leading, 8)
-                    TextField("搜索论文标题...", text: $searchQuery)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14.5))
-                        .padding(.leading, 5)
-                        .padding(.trailing, 10)
-                        .onSubmit { handleSearch() }
-                }
-                .frame(height: 38)
-                .frame(maxWidth: 420)
-                .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray300))
-
-                HStack(spacing: 6) {
-                    Image.ic(Ic.listFilter).font(.system(size: 12)).foregroundStyle(palette.gray400)
-                    Picker("", selection: $statusFilter) {
-                        Text("全部状态").tag("all")
-                        Text("待解析").tag("uploaded")
-                        Text("已就绪").tag("ready")
-                        Text("已解析").tag("parsed")
-                        Text("清洗中").tag("normalizing")
-                        Text("分析中").tag("analyzing")
-                        Text("归纳中").tag("reducing")
-                        Text("解析中").tag("parsing")
-                        Text("出错").tag("error")
+                HStack(spacing: 12) {
+                    RoundIconButton(systemName: Ic.folderInput, size: 38, title: "项目分组") {
+                        withAnimation(.easeInOut(duration: 0.18)) { mobileSidebarOpen = true }
                     }
-                    .labelsHidden()
-                    .font(.system(size: 12))
-                    .frame(width: 108)
+                    PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", maxWidth: .infinity, onSubmit: handleSearch)
+                    ToolbarButton(title: "选择", icon: Ic.cursor, active: selectionMode) {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectionMode.toggle()
+                            if !selectionMode { selectedIds = [] }
+                        }
+                    }
+                    ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
+                        openUpload()
+                    }
                 }
-                .padding(.horizontal, 8)
-                .frame(height: 38)
-                .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray200))
-
-                Picker("", selection: $sortMode) {
-                    Text("最近添加").tag("recent")
-                    Text("标题排序").tag("title")
-                    Text("年份排序").tag("year")
-                    Text("状态排序").tag("status")
+            } else if containerWidth < 1080 {
+                // 窄桌面窗口:工具栏折两行(状态/排序换行),避免溢出
+                VStack(spacing: 6) {
+                    HStack(spacing: 12) {
+                        toolbarTitle
+                        PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", onSubmit: handleSearch)
+                        Spacer(minLength: 0)
+                        ToolbarButton(title: "选择", icon: Ic.cursor, active: selectionMode) {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                selectionMode.toggle()
+                                if !selectionMode { selectedIds = [] }
+                            }
+                        }
+                        ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
+                            openUpload()
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        libraryPickers
+                        Spacer(minLength: 0)
+                    }
                 }
-                .labelsHidden()
-                .font(.system(size: 12))
-                .frame(width: 106, height: 38)
-                .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray200))
+            } else {
+                HStack(spacing: 12) {
+                    toolbarTitle
+                    PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", onSubmit: handleSearch)
+                    libraryPickers
+                    Spacer(minLength: 0)
+                    ToolbarButton(title: "选择", icon: Ic.cursor, active: selectionMode) {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectionMode.toggle()
+                            if !selectionMode { selectedIds = [] }
+                        }
+                    }
+                    ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
+                        openUpload()
+                    }
+                }
             }
-
-            Spacer(minLength: 0)
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    selectionMode.toggle()
-                    if !selectionMode { selectedIds = [] }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image.ic(Ic.cursor).font(.system(size: 12))
-                    Text("选择")
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(selectionMode ? palette.accent : palette.gray600)
-                .padding(.horizontal, 12)
-                .frame(height: 38)
-                .background(RoundedRectangle(cornerRadius: 9).fill(selectionMode ? palette.accentSoft : palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(selectionMode ? palette.accent.opacity(0.34) : palette.gray200))
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                if !pipelineReady {
-                    uploadError = "上传前需要先配置并测试 AI 模型 API Key 与 MinerU Token。"
-                    showUpload = true
-                    return
-                }
-                uploadError = ""
-                showUpload = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image.ic(Ic.upload).font(.system(size: 12))
-                    Text("上传论文")
-                }
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 38)
-                .background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .frame(minHeight: 50)
+        .frame(minHeight: 56)
+    }
+
+    private func openUpload() {
+        if !pipelineReady {
+            uploadError = "上传前需要先配置并测试 AI 模型 API Key 与 MinerU Token。"
+            showUpload = true
+            return
+        }
+        uploadError = ""
+        showUpload = true
     }
 
     private var selectionBar: some View {
@@ -509,74 +490,45 @@ struct LibraryPage: View {
                 }
                 .font(.system(size: 12))
                 .foregroundStyle(palette.accent)
+                .lineLimit(1)
             }
             .buttonStyle(.plain)
 
-            Text(selectedIds.isEmpty ? "点击条目或复选框进行选择" : "已选择 \(selectedIds.count) 篇")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(palette.gray700)
+            if !selectedIds.isEmpty {
+                Text("已选择 \(selectedIds.count) 篇")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(palette.gray700)
+                    .lineLimit(1)
+            } else if !isCompact {
+                Text("点击条目或复选框进行选择")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(palette.gray700)
+                    .lineLimit(1)
+            }
 
             Spacer(minLength: 0)
 
-            Picker("", selection: $targetProjectId) {
-                Text("移出项目分组").tag("")
-                ForEach(projectsStore.projects) { project in
-                    Text("移动到:\(project.name)").tag(project.id)
-                }
-            }
-            .labelsHidden()
-            .font(.system(size: 12))
-            .frame(width: 190, height: 32)
-            .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray200))
+            PillPicker(selection: $targetProjectId, options: [
+                ("", "移出项目分组"),
+            ] + projectsStore.projects.map { ($0.id, "移动到:\($0.name)") }, maxWidth: 240)
 
-            Button {
+            ToolbarButton(title: "移动", icon: Ic.folderInput, kind: .primary, busy: moving, disabled: selectedIds.isEmpty) {
                 Task { await move(ids: Array(selectedIds), projectId: targetProjectId.isEmpty ? nil : targetProjectId) }
-            } label: {
-                HStack(spacing: 5) {
-                    if moving { SpinnerIcon(size: 13) } else { Image.ic(Ic.folderInput).font(.system(size: 13)) }
-                    Text("移动")
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 9)
-                .frame(minHeight: 32)
-                .background(RoundedRectangle(cornerRadius: 8).fill(palette.accent))
             }
-            .buttonStyle(.plain)
-            .disabled(selectedIds.isEmpty || moving)
 
-            Button {
+            ToolbarButton(title: "删除", icon: Ic.trash, kind: .danger, busy: deleting, disabled: selectedIds.isEmpty) {
                 showBatchDeleteConfirm = true
-            } label: {
-                HStack(spacing: 5) {
-                    if deleting { SpinnerIcon(size: 13) } else { Image.ic(Ic.trash).font(.system(size: 13)) }
-                    Text("删除")
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(palette.danger)
-                .padding(.horizontal, 9)
-                .frame(minHeight: 32)
-                .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray200))
             }
-            .buttonStyle(.plain)
-            .disabled(selectedIds.isEmpty || deleting)
 
-            Button {
-                clearSelection()
-            } label: {
-                Text("完成")
-                    .font(.system(size: 12))
-                    .foregroundStyle(palette.gray600)
-                    .padding(.horizontal, 9)
-                    .frame(minHeight: 32)
+            if !isCompact && containerWidth >= 980 {
+                ToolbarButton(title: "完成") {
+                    clearSelection()
+                }
             }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .frame(minHeight: 48)
+        .frame(minHeight: 52)
         .background(palette.accentFaint.opacity(0.52))
         .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
     }

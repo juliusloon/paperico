@@ -1,32 +1,55 @@
 import SwiftUI
 
 /// Mirrors projects/HomePage.tsx — hero, orbit art, metrics, recent list, workflow.
+/// 窄窗口适配沿用 web 端断点(≤860 单列 hero、≤640 小屏排版)。
 struct HomePage: View {
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.containerWidth) private var containerWidth
     @Environment(PapersStore.self) private var papersStore
     @Environment(ProjectsStore.self) private var projectsStore
     @Environment(Router.self) private var router
 
+    private var isCompact: Bool { containerWidth < LayoutBreakpoint.workspace }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                hero
-                metrics
-                lowerGrid
+        Group {
+            if isCompact {
+                VStack(spacing: 0) {
+                    CompactTopBar()
+                    scrollContent
+                }
+                .background(palette.gray0)
+            } else {
+                scrollContent
+                    .overlay(alignment: .bottomLeading) {
+                        WorkspaceNav(opensUpward: true)
+                            .padding(.leading, 14)
+                            .padding(.bottom, 14)
+                            .zIndex(2)
+                    }
+                    .background(palette.gray0)
             }
-            .padding(.horizontal, clampValue(22, 78))
-            .padding(.bottom, 58)
-            .frame(maxWidth: .infinity)
         }
-        .background(palette.gray0)
         .task {
             await papersStore.fetch()
             await projectsStore.fetch()
         }
     }
 
-    private func clampValue(_ low: CGFloat, _ high: CGFloat) -> CGFloat { low }
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                hero
+                metrics
+                lowerGrid
+            }
+            .padding(.horizontal, containerWidth < LayoutBreakpoint.home ? 16 : 22)
+            .padding(.bottom, isCompact ? 58 : 86)
+            .padding(.top, 12)
+            .trafficLightTopPadding(10)
+            .frame(maxWidth: .infinity)
+        }
+    }
 
     private var readyCount: Int {
         papersStore.papers.filter { $0.statusEnum == .ready }.count
@@ -47,13 +70,13 @@ struct HomePage: View {
                 .padding(.bottom, 18)
 
                 Text("将读 PDF 变成\n真正理解论文。")
-                    .font(.reading(clampSize(38, 66), weight: .medium))
+                    .font(.reading(heroTitleSize, weight: .medium))
                     .kerning(-0.8)
                     .lineSpacing(6)
                     .foregroundStyle(palette.gray900)
 
                 Text("上传 PDF,自动拆解文本图表,生成双语阅读与逻辑链,并在原文证据范围内持续追问。")
-                    .font(.system(size: sizeClass == .compact ? 14 : 16.5))
+                    .font(.system(size: containerWidth < LayoutBreakpoint.home ? 14 : 16.5))
                     .lineSpacing(7)
                     .foregroundStyle(palette.gray600)
                     .padding(.top, 22)
@@ -69,18 +92,19 @@ struct HomePage: View {
                 .padding(.top, 26)
             }
 
-            if sizeClass != .compact {
+            if containerWidth >= LayoutBreakpoint.hero {
                 OrbitArt()
                     .frame(height: 280)
             }
         }
-        .frame(minHeight: 300, alignment: .center)
+        .frame(minHeight: containerWidth >= LayoutBreakpoint.hero ? 300 : 0, alignment: .center)
         .frame(maxWidth: 1240)
-        .padding(.top, 12)
     }
 
-    private func clampSize(_ small: CGFloat, _ large: CGFloat) -> CGFloat {
-        sizeClass == .compact ? small : large
+    private var heroTitleSize: CGFloat {
+        if containerWidth < LayoutBreakpoint.home { return 30 }
+        if containerWidth < LayoutBreakpoint.hero { return 38 }
+        return 66
     }
 
     // MARK: metrics
@@ -94,9 +118,7 @@ struct HomePage: View {
             metric(icon: Ic.brain, value: projectsStore.projects.count, label: "个研究项目")
         }
         .frame(maxWidth: 1240)
-        .background(RoundedRectangle(cornerRadius: 12).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .liquidPanel(cornerRadius: 12)
         .padding(.top, 10)
     }
 
@@ -106,9 +128,11 @@ struct HomePage: View {
 
     private func metric(icon: String, value: Int, label: String) -> some View {
         HStack(spacing: 10) {
-            Image.ic(icon)
-                .font(.system(size: 16))
-                .foregroundStyle(palette.accent)
+            if containerWidth >= LayoutBreakpoint.home {
+                Image.ic(icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(palette.accent)
+            }
             Text("\(value)")
                 .font(.reading(25, weight: .medium))
                 .foregroundStyle(palette.gray900)
@@ -122,11 +146,20 @@ struct HomePage: View {
     // MARK: lower grid
 
     private var lowerGrid: some View {
-        HStack(alignment: .top, spacing: 22) {
-            recentPanel
-                .frame(maxWidth: .infinity, alignment: .leading)
-            workflowPanel
-                .frame(width: sizeClass == .compact ? nil : 300)
+        Group {
+            if containerWidth >= LayoutBreakpoint.hero {
+                HStack(alignment: .top, spacing: 22) {
+                    recentPanel
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    workflowPanel
+                        .frame(width: 300)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 22) {
+                    recentPanel
+                    workflowPanel
+                }
+            }
         }
         .frame(maxWidth: 1240)
         .frame(maxWidth: .infinity)
@@ -177,9 +210,7 @@ struct HomePage: View {
             }
         }
         .padding(24)
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .liquidPanel(cornerRadius: 14)
     }
 
     private func recentRow(index: Int, paper: PaperListItem) -> some View {
@@ -235,9 +266,7 @@ struct HomePage: View {
             .padding(.top, 20)
         }
         .padding(24)
-        .background(RoundedRectangle(cornerRadius: 14).fill(palette.gray0))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(palette.gray300.opacity(0.68)))
-        .shadow(color: palette.shadowCard, radius: 8, y: 3)
+        .liquidPanel(cornerRadius: 14)
     }
 
     private func workflowStep(number: String, title: String, detail: String) -> some View {
