@@ -29,7 +29,11 @@ First open-source release.
   API-contract check script against the backend OpenAPI schema.
 - **Project**: MIT license, contributing guide, code of conduct, security policy, CI
   (backend lint + tests, macOS build, secret scan), issue/PR templates,
-  Dependabot, bilingual README.
+  Dependabot, bilingual README; DMG packaging script (`macos/scripts/make_dmg.sh`)
+  and an automated GitHub Release workflow on version tags; standard user-data
+  containers (sandboxed Application Support + logs in the app; `start.sh --app-data`
+  to keep the backend's database and PDF storage under
+  `~/Library/Application Support/Paperico/`).
 
 [Unreleased]: https://github.com/juliusloon/paperico/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/juliusloon/paperico/releases/tag/v0.1.0

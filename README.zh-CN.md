@@ -94,6 +94,29 @@ cd paperico
 > 在设置页填写的 Key 会先经 Fernet 加密再入库；密钥文件保存在后端存储目录下
 > （权限 0600），也可以通过 `PAPERICO_ENCRYPTION_KEY` 指定自己的密钥。
 
+### 安装 macOS 客户端
+
+每个 [GitHub Release](https://github.com/juliusloon/paperico/releases) 都附带预打包的
+DMG（也可以自己打一个：`cd macos && ./scripts/make_dmg.sh`）。打开 DMG，把 **Paperico**
+拖入 *Applications* 即可。
+
+目前 Release **未经签名**：首次启动 Gatekeeper 会拦截——右键 App → **打开** →
+**打开** 确认即可。如果你有 Developer ID，可以产出签名版本：
+`PAPERICO_SIGN_IDENTITY="Developer ID Application: …" ./scripts/make_dmg.sh`
+（分发前再做公证）。
+
+### 我的数据在哪里？
+
+- **App 本身**已启用沙盒：偏好与阅读进度存放在容器
+  （`~/Library/Containers/com.paperico.native/`）内，诊断日志在容器的
+  `…/Data/Library/Application Support/Paperico/logs/`。
+- **论文、PDF 与抽取结果**属于后端而非 App：
+  - `./start.sh`（仓库模式，默认）把数据存在仓库目录内
+    （`backend/paperico.db` + `backend/app/storage/`）；
+  - `./start.sh --app-data` 把数据存到 `~/Library/Application Support/Paperico/`
+    ——后端成为日常固定设施后推荐用这种布局。首次使用会自动迁移仓库里的既有数据。
+    两种模式下，设置页填写的 API Key 都是 Fernet 加密存储的。
+
 ### macOS 客户端
 
 原生客户端是单个 SwiftUI target，与后端通过 REST + SSE 通信。

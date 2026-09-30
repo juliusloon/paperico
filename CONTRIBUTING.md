@@ -45,7 +45,9 @@ xcodebuild -project Paperico.xcodeproj -scheme Paperico \
 
 Swift files are picked up automatically (synchronized groups) — there is no need to
 regenerate the project when adding files. After a backend API schema change, run the
-contract check (next section).
+contract check (next section). To produce a distributable `Paperico-<version>.dmg`,
+run `./scripts/make_dmg.sh` from `macos/` (Release build + signed DMG via
+`PAPERICO_SIGN_IDENTITY`, optional).
 
 ## The API-contract rule
 
