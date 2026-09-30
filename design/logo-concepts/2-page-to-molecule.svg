@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- 概念 B：纸页上的文字行向下“解析”成分子骨架（论文 → 结构化理解） -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <rect x="352" y="276" width="320" height="470" rx="30" fill="#275DCE"/>
+  <!-- 正文行 -->
+  <rect x="400" y="342" width="216" height="18" rx="9" fill="#FFFFFF" opacity="0.92"/>
+  <rect x="400" y="394" width="164" height="18" rx="9" fill="#FFFFFF" opacity="0.92"/>
+  <rect x="400" y="446" width="196" height="18" rx="9" fill="#FFFFFF" opacity="0.55"/>
+  <!-- 骨架式：苯环 + 取代基 -->
+  <g stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <polygon points="512,552 446,590 446,666 512,704 578,666 578,590"/>
+    <line x1="512" y1="552" x2="512" y2="504"/>
+    <line x1="446" y1="666" x2="400" y2="700"/>
+  </g>
+  <circle cx="512" cy="490" r="12" fill="#FFFFFF"/>
+  <circle cx="388" cy="708" r="12" fill="#F0B25A"/>
+</svg>

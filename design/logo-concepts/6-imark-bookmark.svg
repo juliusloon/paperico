@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- 概念 F：小写 i 的单字标——六边形点是“ico/分子”，丝带字杆是书签（精读进度） -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <!-- 六边形点：苯环 -->
+  <polygon points="512,276 429,324 429,420 512,468 595,420 595,324"
+           fill="none" stroke="#275DCE" stroke-width="46" stroke-linejoin="round"/>
+  <circle cx="512" cy="372" r="42" fill="none" stroke="#275DCE" stroke-width="18"/>
+  <!-- 书签丝带字杆 -->
+  <path d="M 490 540 H 534 A 20 20 0 0 1 554 560 V 776 L 512 736 L 470 776 V 560 A 20 20 0 0 1 490 540 Z"
+        fill="#275DCE"/>
+</svg>

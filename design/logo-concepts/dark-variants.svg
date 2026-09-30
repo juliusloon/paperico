@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 700">
+  <!-- 六个概念在深色模式下的适配（左上→右下 A–F，与浅色版一一对应） -->
+  <rect width="1024" height="700" fill="#14161B"/>
+
+  <!-- A · P×苯环 -->
+  <g transform="translate(38,38) scale(0.293)">
+    <defs>
+      <linearGradient id="dA" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#1E3C8C"/>
+        <stop offset="1" stop-color="#152B66"/>
+      </linearGradient>
+    </defs>
+    <rect width="1024" height="1024" rx="230" fill="url(#dA)"/>
+    <rect x="309" y="304" width="72" height="452" rx="14" fill="#FFFFFF"/>
+    <polygon points="541,304 679,384 679,544 541,624 403,544 403,384"
+             fill="none" stroke="#FFFFFF" stroke-width="72" stroke-linejoin="round"/>
+    <circle cx="541" cy="464" r="58" fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="16"/>
+  </g>
+
+  <!-- B · 纸页生分子 -->
+  <g transform="translate(362,38) scale(0.293)">
+    <rect width="1024" height="1024" rx="230" fill="#20242B"/>
+    <rect x="352" y="276" width="320" height="470" rx="30" fill="#275DCE"/>
+    <rect x="400" y="342" width="216" height="18" rx="9" fill="#FFFFFF" opacity="0.92"/>
+    <rect x="400" y="394" width="164" height="18" rx="9" fill="#FFFFFF" opacity="0.92"/>
+    <rect x="400" y="446" width="196" height="18" rx="9" fill="#FFFFFF" opacity="0.55"/>
+    <g stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <polygon points="512,552 446,590 446,666 512,704 578,666 578,590"/>
+      <line x1="512" y1="552" x2="512" y2="504"/>
+      <line x1="446" y1="666" x2="400" y2="700"/>
+    </g>
+    <circle cx="512" cy="490" r="12" fill="#FFFFFF"/>
+    <circle cx="388" cy="708" r="12" fill="#F0B25A"/>
+  </g>
+
+  <!-- C · 逻辑链 -->
+  <g transform="translate(686,38) scale(0.293)">
+    <rect width="1024" height="1024" rx="230" fill="#20242B"/>
+    <line x1="337" y1="332" x2="337" y2="692" stroke="#48515F" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="337" cy="332" r="26" fill="#20242B" stroke="#6E97EC" stroke-width="16"/>
+    <circle cx="337" cy="452" r="26" fill="#20242B" stroke="#6E97EC" stroke-width="16"/>
+    <circle cx="337" cy="572" r="26" fill="#D99A4A"/>
+    <circle cx="337" cy="572" r="9" fill="#20242B"/>
+    <circle cx="337" cy="692" r="26" fill="#20242B" stroke="#6E97EC" stroke-width="16"/>
+    <g fill="#48515F">
+      <rect x="413" y="318" width="300" height="28" rx="14"/>
+      <rect x="413" y="438" width="240" height="28" rx="14"/>
+      <rect x="413" y="558" width="288" height="28" rx="14"/>
+      <rect x="413" y="678" width="200" height="28" rx="14"/>
+    </g>
+  </g>
+
+  <!-- D · 双页对照 -->
+  <g transform="translate(38,362) scale(0.293)">
+    <rect width="1024" height="1024" rx="230" fill="#20242B"/>
+    <rect x="420" y="260" width="300" height="420" rx="26" fill="#343943"/>
+    <g fill="#778290">
+      <rect x="464" y="316" width="212" height="16" rx="8"/>
+      <rect x="464" y="364" width="168" height="16" rx="8"/>
+      <rect x="464" y="412" width="212" height="16" rx="8"/>
+      <rect x="464" y="460" width="140" height="16" rx="8"/>
+    </g>
+    <rect x="304" y="344" width="300" height="420" rx="26" fill="#275DCE"/>
+    <g fill="#FFFFFF" opacity="0.92">
+      <rect x="348" y="400" width="212" height="16" rx="8"/>
+      <rect x="348" y="448" width="164" height="16" rx="8"/>
+      <rect x="348" y="496" width="212" height="16" rx="8"/>
+      <rect x="348" y="544" width="140" height="16" rx="8"/>
+      <rect x="348" y="592" width="188" height="16" rx="8"/>
+    </g>
+  </g>
+
+  <!-- E · 三栏玻璃 -->
+  <g transform="translate(362,362) scale(0.293)">
+    <defs>
+      <linearGradient id="dE" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#1E3C8C"/>
+        <stop offset="1" stop-color="#152B66"/>
+      </linearGradient>
+    </defs>
+    <rect width="1024" height="1024" rx="230" fill="url(#dE)"/>
+    <rect x="292" y="372" width="104" height="280" rx="24" fill="#FFFFFF" opacity="0.28"
+          stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="3"/>
+    <rect x="628" y="372" width="104" height="280" rx="24" fill="#FFFFFF" opacity="0.28"
+          stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="3"/>
+    <rect x="424" y="292" width="176" height="440" rx="28" fill="#FFFFFF" opacity="0.95"/>
+    <g fill="#275DCE" opacity="0.85">
+      <rect x="460" y="344" width="104" height="14" rx="7"/>
+      <rect x="460" y="392" width="72" height="14" rx="7"/>
+      <rect x="460" y="440" width="88" height="14" rx="7"/>
+    </g>
+  </g>
+
+  <!-- F · i·书签 -->
+  <g transform="translate(686,362) scale(0.293)">
+    <rect width="1024" height="1024" rx="230" fill="#20242B"/>
+    <polygon points="512,276 429,324 429,420 512,468 595,420 595,324"
+             fill="none" stroke="#6E97EC" stroke-width="46" stroke-linejoin="round"/>
+    <circle cx="512" cy="372" r="42" fill="none" stroke="#6E97EC" stroke-width="18"/>
+    <path d="M 490 540 H 534 A 20 20 0 0 1 554 560 V 776 L 512 736 L 470 776 V 560 A 20 20 0 0 1 490 540 Z"
+          fill="#6E97EC"/>
+  </g>
+</svg>

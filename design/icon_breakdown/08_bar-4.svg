@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254">
+  <!-- 横条4: y=999, 从节点4中心到 x=704 (圆头端帽延伸到 x=748), 描边88 -->
+  <path d="M 405 999 L 704 999" fill="none" stroke="#C8CFDB" stroke-width="88" stroke-linecap="round"/>
+</svg>
