@@ -6,9 +6,12 @@ backend/*.db
 backend/storage/
 *.pyc
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
+# Web 端已下线:本地保留
+frontend/
+
+# macOS 客户端构建产物
+macos/build/
+macos/DerivedData/
 
 # IDE
 .vscode/

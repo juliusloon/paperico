@@ -39,26 +39,6 @@ jobs:
       - name: Test
         run: pytest -q
 
-  frontend:
-    name: Web client (lint + build)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install
-        run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Build
-        run: npm run build
-
   macos:
     name: macOS client (xcodebuild)
     runs-on: macos-15
@@ -66,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         run: |
-          xcodebuild -project ios/Paperico.xcodeproj -scheme Paperico \
+          xcodebuild -project macos/Paperico.xcodeproj -scheme Paperico \
             -destination 'platform=macOS' \
-            -derivedDataPath ios/build/DerivedData-CI build \
+            -derivedDataPath macos/build/DerivedData-CI build \
             CODE_SIGNING_ALLOWED=NO

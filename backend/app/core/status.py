@@ -1,6 +1,6 @@
 """Single source of truth for paper status strings and structured error codes.
 
-Implements agentero-lessons §2.3: the frontend (web + native) may only make
+Implements agentero-lessons §2.3: clients (native app or web) may only make
 decisions off these stable codes, never off error-message text. `error_message`
 stays free-form for humans; `error_code` is the machine contract.
 """

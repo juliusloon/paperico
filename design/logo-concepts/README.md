@@ -62,9 +62,9 @@
 见 `dark-variants.svg`：蓝渐变底的概念（A/E）直接压深渐变即可；白底的概念（B/C/D/F）在深色下把蓝提亮到 `#6E97EC` 一档、灰阶换成 `#48515F`，避免 `#275DCE` 贴着 `#20242B` 发闷。
 
 ## 落地到 App 图标
-1. 选定方向后，将对应 SVG 导出 **1024×1024 全出血 PNG**（不要带圆角和透明边，iOS 会自己遮罩）；
-2. 替换 `ios/Paperico/Assets.xcassets/AppIcon.appiconset/appicon.png`；
-3. 网页端在 `frontend/index.html` 加同图形的 32/180px favicon 与 apple-touch-icon。
+1. 选定方向后，将对应 SVG 导出 **1024×1024 全出血 PNG**（不要带圆角和透明边，Apple 平台会自己遮罩）；
+2. 替换 `macos/Paperico/Assets.xcassets/AppIcon.appiconset/appicon.png`；
+3. （网页端已下线，此步仅适用于本地保留的网页端）在 `frontend/index.html` 加同图形的 32/180px favicon 与 apple-touch-icon。
 
 ## 文件
 - `1-hexp-monogram.svg` … `6-imark-bookmark.svg`：1024 全出血浅色版

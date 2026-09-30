@@ -7,7 +7,7 @@ the same commit:
     UPDATE_SNAPSHOT=1 .venv/bin/python -m pytest tests/test_openapi_snapshot.py
 
 The client-side twin (schema fields mirrored by the Swift models) lives in
-``ios/scripts/check_api_contract.py``.
+``macos/scripts/check_api_contract.py``.
 """
 
 import json

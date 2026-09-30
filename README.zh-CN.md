@@ -38,40 +38,35 @@ OpenAI 兼容端点），Paperico 自身不做任何中转代理。
   block；可附加选中文本、方法卡、图表作为额外上下文。
 - **笔记模式** — 多选 block 生成结构化笔记，导出 Markdown。
 - **文献库管理** — 项目分组、状态筛选、导入去重、批量操作、回收站与恢复。
-- **双原生客户端，同一后端** — Web 客户端（React + Vite）与 macOS 原生客户端
-  （SwiftUI + PDFKit，零第三方依赖）。
-- **PDF 模式** — 结构化视图旁显示原始 PDF（Web 用 pdf.js，原生用 PDFKit），阅读进度
-  双向同步。
+- **原生 macOS 客户端** — SwiftUI + PDFKit，零第三方依赖，与任何 API 客户端一样对接
+  同一本地后端。
+- **PDF 模式** — 结构化视图旁用 PDFKit 显示原始 PDF，阅读进度双向同步。
 
 ## 架构
 
 ```text
-┌─────────────┐   ┌─────────────┐   ┌──────────────┐
-│  Web 客户端  │   │  macOS 客户端 │   │ (其他客户端)  │
-│  React/Vite │   │  SwiftUI     │   │              │
-└──────┬──────┘   └──────┬──────┘   └──────┬───────┘
-       │  HTTP + SSE     │                 │
-       └────────┬────────┴─────────────────┘
-                ▼
-        ┌───────────────┐   直连调用     ┌─────────────────────┐
-        │ FastAPI +     │ ─────────────▶ │ MinerU（云/自托管）   │
-        │ SQLite，PDF   │                │                     │
-        │ 与 block 本地 │ ─────────────▶ │ 任意 OpenAI 兼容端点  │
-        │ 存储          │                │                     │
-        └───────────────┘                └─────────────────────┘
+┌──────────────────────┐
+│  macOS 客户端(SwiftUI) │    ← 任何 HTTP 客户端都可调用 API
+└──────────┬───────────┘
+           │  REST + SSE
+           ▼
+   ┌───────────────────┐   直连调用     ┌───────────────────────┐
+   │ FastAPI + SQLite, │ ─────────────▶ │ MinerU（云/自托管）     │
+   │ PDF 与 block 本地 │                │                       │
+   │ 存储              │ ─────────────▶ │ 任意 OpenAI 兼容端点    │
+   └───────────────────┘                └───────────────────────┘
 ```
 
 | 目录 | 说明 |
 |---|---|
 | [`backend/`](backend) | FastAPI 后端：任务调度、本地存储、加密配置、REST + SSE API |
-| [`frontend/`](frontend) | Web 客户端：React 19、Vite、Tailwind 4、Zustand、pdf.js |
-| [`ios/`](ios) | macOS 原生客户端：SwiftUI + PDFKit（单 Xcode target） |
+| [`macos/`](macos) | macOS 原生客户端：SwiftUI + PDFKit（单 Xcode target） |
 | [`docs/`](docs) | 工程笔记：bbox 坐标系、存储迁移、化学结构解析 spike 等 |
 | [`design/`](design) | Logo 概念稿与图标资产拆解 |
 
 ## 快速开始
 
-环境要求：**Python 3.11+** 与 **Node 20+**。
+环境要求：**Python 3.11+**。
 
 ```bash
 git clone https://github.com/juliusloon/paperico.git
@@ -79,17 +74,15 @@ cd paperico
 ./start.sh
 ```
 
-`start.sh` 首次运行会自动创建 Python 虚拟环境并安装依赖，然后同时启动两个进程：
+`start.sh` 首次运行会自动创建 Python 虚拟环境并安装依赖，然后启动后端：
 
-- Web 客户端：http://127.0.0.1:5173
 - 后端 API：http://127.0.0.1:8000 · 接口文档 http://127.0.0.1:8000/docs
 
-更习惯手动搭建？参见 [`backend/README.md`](backend/README.md) 与
-[`frontend/README.md`](frontend/README.md)。
+更习惯手动搭建？参见 [`backend/README.md`](backend/README.md)。
 
 ### 首次使用
 
-1. 打开 Web 客户端，进入 **设置** 页填写你的 Key：
+1. 启动 macOS 客户端（见下），进入 **设置** 页填写你的 Key：
    - **AI 模型**：任意 OpenAI 兼容端点（Base URL + Key + 模型名），用于翻译、大纲、
      方法卡片与对话；
    - **MinerU**：`mineru.net` 的 API Key，或把 Base URL 指向你的自托管实例，用于 PDF
@@ -103,16 +96,16 @@ cd paperico
 
 ### macOS 客户端
 
-原生客户端是单个 SwiftUI target，与 Web 共用同一后端。
+原生客户端是单个 SwiftUI target，与后端通过 REST + SSE 通信。
 
 环境要求：macOS 14+、[Xcode 16+](https://developer.apple.com/xcode/)。
 
 ```bash
-open ios/Paperico.xcodeproj   # 选择 Paperico scheme → Run (⌘R)
+open macos/Paperico.xcodeproj   # 选择 Paperico scheme → Run (⌘R)
 ```
 
 首启在 **设置 → 服务器地址** 填入后端地址（如本机后端 `http://127.0.0.1:8000`）。
-构建细节与 API 契约检查见 [`ios/README.md`](ios/README.md)。
+构建细节与 API 契约检查见 [`macos/README.md`](macos/README.md)。
 
 ## 配置
 
@@ -134,7 +127,7 @@ open ios/Paperico.xcodeproj   # 选择 Paperico scheme → Run (⌘R)
 
 ## 路线图
 
-- [x] v0.1.0 — 首个开源版本：解析、双语精读、可溯源对话、笔记、文献库、Web 与
+- [x] v0.1.0 — 首个开源版本：解析、双语精读、可溯源对话、笔记、文献库、后端与
       macOS 客户端
 - [ ] 批量导入（Zotero / arXiv 导出）
 - [ ] 项目内多篇论文联合对话

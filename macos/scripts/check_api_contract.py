@@ -20,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# Field sets the Swift Codable structs in ios/Paperico/Models/Models.swift rely on.
+# Field sets the Swift Codable structs in macos/Paperico/Models/Models.swift rely on.
 # Keys are components.schemas names in the FastAPI OpenAPI document.
 SNAPSHOT: dict[str, set[str]] = {
     "ProjectOut": {"id", "name", "description", "color_tag", "paper_count", "created_at"},

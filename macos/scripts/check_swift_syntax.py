@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Syntax-level validation for every Swift file in ios/Paperico using tree-sitter.
+"""Syntax-level validation for every Swift file in macos/Paperico using tree-sitter.
 
 This cannot type-check SwiftUI (no Apple toolchain on Linux), but it catches
 brace/paren/keyword-level syntax errors before the project is opened in Xcode.

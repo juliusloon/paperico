@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate ios/Paperico.xcodeproj/project.pbxproj for the Paperico native app.
+"""Generate macos/Paperico.xcodeproj/project.pbxproj for the Paperico native app.
 
 Uses the Xcode 16 "file system synchronized groups" format (objectVersion 77):
 the project mirrors the Paperico/ source tree automatically, so adding or

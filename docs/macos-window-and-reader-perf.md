@@ -16,17 +16,17 @@ error: external macro implementation type 'SwiftUIMacros.StateMacro' could not b
 
 因此本轮验证改用两条可执行的路径:
 
-1. `ios/scripts/typecheck_no_macros.sh`
+1. `macos/scripts/typecheck_no_macros.sh`
    把 `@State` 换成类型等价的 `CheckState`、`@Observable` 换成 `: Observable`,
    再对**整个模块**跑 `swiftc -typecheck`(结果:0 error)。
-2. `ios/scripts/run_reader_bench.sh`
+2. `macos/scripts/run_reader_bench.sh`
    阅读页的开销主体是纯函数(解析 / 字典 / 字符串),这些文件不含宏,
    可以直接编译成 CLI 基准程序,跑真实 `GET /api/papers/{id}` 数据。
 
 在 Xcode 里正常构建(验证方式见文末):
 
 ```bash
-cd ios && xcodebuild -project Paperico.xcodeproj -scheme Paperico \
+cd macos && xcodebuild -project Paperico.xcodeproj -scheme Paperico \
   -destination 'platform=macOS' -configuration Debug build
 ```
 
@@ -147,7 +147,7 @@ log stream --level default --predicate 'subsystem == "com.paperico.app"'
 **C. 直接用基准脚本**
 
 ```bash
-cd ios && ./scripts/run_reader_bench.sh          # 自动从后端拉第一篇论文
+cd macos && ./scripts/run_reader_bench.sh          # 自动从后端拉第一篇论文
 ```
 
 **D. 肉眼验收**

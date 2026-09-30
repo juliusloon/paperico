@@ -6,7 +6,7 @@
 // are pure functions of the payload, so they are compiled directly and measured.
 //
 // Build & run:
-//   cd ios && ./scripts/run_reader_bench.sh /tmp/detail_9f73f3144329.json
+//   cd macos && ./scripts/run_reader_bench.sh /tmp/detail_9f73f3144329.json
 //
 // Or manually:
 //   xcrun --sdk macosx swiftc -O \

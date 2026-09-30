@@ -1,7 +1,8 @@
 # Paperico Backend
 
 FastAPI server: paper library, background job center, local storage, encrypted
-settings, and the REST + SSE API consumed by the web and macOS clients.
+settings, and the REST + SSE API consumed by the native macOS client (and any
+other API client).
 
 ## Stack
 
@@ -31,8 +32,8 @@ pip install -e .                 # add ".[dev]" for test/lint tools
 uvicorn app.main:app --reload    # http://127.0.0.1:8000, docs at /docs
 ```
 
-Or from the repository root: `./start.sh` (bootstraps venv + dependencies and starts
-backend and web client together).
+Or from the repository root: `./start.sh` (bootstraps venv + dependencies and
+starts the backend).
 
 Configuration is read from `backend/.env` or `PAPERICO_*` environment variables —
 all optional; see [`.env.example`](.env.example).
@@ -48,7 +49,7 @@ ruff check .      # lint (config in pyproject.toml)
 Notes for contributors:
 
 - **API schema changes** must keep `tests/openapi_snapshot.json` updated (the snapshot
-  test enforces it) and pass `ios/scripts/check_api_contract.py` — see the root
+  test enforces it) and pass `macos/scripts/check_api_contract.py` — see the root
   [CONTRIBUTING.md](../CONTRIBUTING.md).
 - Uploaded PDFs, extracted figures and sidecars live under
   `PAPERICO_STORAGE_ROOT` (default `app/storage/`, gitignored). The SQLite database is
