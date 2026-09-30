@@ -19,8 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.database import async_session  # noqa: E402
-from app.core.trash import restore_batch, trash_root  # noqa: E402
+from app.core.database import async_session
+from app.core.trash import restore_batch, trash_root
 
 
 def list_batches() -> None:
@@ -28,7 +28,6 @@ def list_batches() -> None:
     if not root.is_dir():
         print("recycle bin is empty")
         return
-    import json
 
     for batch_dir in sorted(root.iterdir()):
         if not batch_dir.is_dir():

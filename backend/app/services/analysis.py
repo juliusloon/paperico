@@ -7,8 +7,8 @@ Figure phase: multimodal figure/table analysis.
 
 import json
 import re
-from .llm import LLMClient
 
+from .llm import LLMClient
 
 # ── Map Phase ─────────────────────────────────────────────
 
@@ -269,7 +269,10 @@ async def _run_map_batch(
                 _normalize_map_result(block, parsed_by_id.get(block["block_id"]))
                 for block in batch_data
             ]
-            if not any(_map_result_needs_retry(block, result) for block, result in zip(batch_data, normalized)):
+            if not any(
+                _map_result_needs_retry(block, result)
+                for block, result in zip(batch_data, normalized, strict=True)
+            ):
                 return normalized
         except Exception:
             # Preserve any usable response from a previous attempt; if there
@@ -417,7 +420,7 @@ async def run_reduce_phase(
         if block_id not in result_chain_ids
     ]
     missing_hint = f"当前缺少这些block_id：{json.dumps(missing_ids[:30], ensure_ascii=False)}。" if missing_ids else ""
-    repair_messages = messages + [{
+    repair_messages = [*messages, {
         "role": "user",
         "content": f"上一次输出不是完整的目标JSON。请重新输出单个JSON对象，必须包含非空 narrative_summary、contributions、domain_tags、difficulty_estimate 和 logic_chain；logic_chain必须按输入顺序覆盖每个block_id，role_in_narrative必须使用简体中文。{missing_hint}不要输出思考过程或Markdown围栏。",
     }]

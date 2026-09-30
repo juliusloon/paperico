@@ -1,22 +1,30 @@
 """Chat endpoints with SSE streaming."""
 
 import json
-from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 from starlette.requests import Request
 
 from ..core.config import settings
 from ..core.database import get_db
 from ..core.models import (
-    Paper, Block, MethodEntity, ChatSession, ChatMessage, AppSettingsModel,
+    AppSettingsModel,
+    Block,
+    ChatMessage,
+    ChatSession,
+    MethodEntity,
+    Paper,
 )
 from ..core.schemas import ChatMessageCreate, ChatMessageOut, ChatSessionOut
 from ..services.analysis import build_chat_system_prompt
 from ..services.context import (
-    FIGURE_SUMMARY_LIMIT, SELECTION_SNIPPET_LIMIT, build_paper_context, clip_text,
+    FIGURE_SUMMARY_LIMIT,
+    SELECTION_SNIPPET_LIMIT,
+    build_paper_context,
+    clip_text,
 )
 from ..services.profiles import LlmRole, resolve_llm
 

@@ -1,9 +1,8 @@
 """Pydantic schemas for API request/response validation."""
 
 from __future__ import annotations
-from pydantic import BaseModel, Field
-from typing import Optional
 
+from pydantic import BaseModel, Field
 
 # ── Projects ──────────────────────────────────────────────
 
@@ -28,13 +27,13 @@ class ProjectOut(BaseModel):
 # ── Papers ────────────────────────────────────────────────
 
 class PaperCreate(BaseModel):
-    project_id: Optional[str] = None
-    source_url: Optional[str] = None
+    project_id: str | None = None
+    source_url: str | None = None
 
 
 class PaperMoveRequest(BaseModel):
     paper_ids: list[str] = Field(min_length=1, max_length=500)
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
 
 class PaperRenameRequest(BaseModel):
@@ -46,14 +45,14 @@ class PaperListItem(BaseModel):
     title: str
     title_zh: str
     authors: list[str]
-    year: Optional[int]
+    year: int | None
     domain_tags: list[str]
     status: str
-    project_id: Optional[str]
+    project_id: str | None
     source_type: str
     original_file_name: str
     created_at: str
-    last_opened_at: Optional[str]
+    last_opened_at: str | None
     tldr: str = ""
     narrative_summary: str = ""
     contributions: list[str] = []
@@ -70,9 +69,9 @@ class BlockOut(BaseModel):
     id: str
     order: int
     kind: str
-    page_idx: Optional[int]
+    page_idx: int | None
     # MinerU page-relative bbox, both axes normalized to 0–1000 (T2.3).
-    bbox: Optional[list[float]] = None
+    bbox: list[float] | None = None
     section_title: str
     text_original: str
     text_zh: str
@@ -123,14 +122,14 @@ class PaperStatusOut(BaseModel):
 
 class AttachedContext(BaseModel):
     type: str  # text_selection | method_card | figure | preset_prompt
-    ref_block_id: Optional[str] = None
-    ref_entity_id: Optional[str] = None
-    snippet: Optional[str] = None
+    ref_block_id: str | None = None
+    ref_entity_id: str | None = None
+    snippet: str | None = None
 
 
 class ChatMessageCreate(BaseModel):
     content: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
     attached_context: list[AttachedContext] = []
 
 
@@ -139,8 +138,8 @@ class ChatMessageOut(BaseModel):
     session_id: str
     role: str
     content: str
-    attached_context: Optional[list[dict]]
-    cited_block_ids: Optional[list[str]]
+    attached_context: list[dict] | None
+    cited_block_ids: list[str] | None
     created_at: str
 
     class Config:
@@ -186,23 +185,23 @@ class ModelProfileOut(BaseModel):
     api_key_masked: str
     api_key_configured: bool = False
     model: str
-    temperature: Optional[float]
-    max_tokens: Optional[int]
-    reasoning_effort: Optional[str]
+    temperature: float | None
+    max_tokens: int | None
+    reasoning_effort: str | None
     streaming: bool
 
 
 class ModelProfileCreate(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     name: str
     base_url: str
     api_key: str = ""
     model: str
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    reasoning_effort: Optional[str] = None
-    reasoning_budget_tokens: Optional[int] = None
-    extra_params_json: Optional[str] = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    reasoning_effort: str | None = None
+    reasoning_budget_tokens: int | None = None
+    extra_params_json: str | None = None
     streaming: bool = True
 
 
@@ -245,11 +244,11 @@ class AppSettingsOut(BaseModel):
 
 
 class AppSettingsUpdate(BaseModel):
-    model_profiles: Optional[list[ModelProfileCreate]] = None
-    profile_assignment: Optional[ProfileAssignment] = None
-    mineru: Optional[MinerUSettings] = None
-    appearance: Optional[AppearanceSettings] = None
-    chat_defaults: Optional[ChatDefaults] = None
+    model_profiles: list[ModelProfileCreate] | None = None
+    profile_assignment: ProfileAssignment | None = None
+    mineru: MinerUSettings | None = None
+    appearance: AppearanceSettings | None = None
+    chat_defaults: ChatDefaults | None = None
 
 
 class TestConnectionResult(BaseModel):

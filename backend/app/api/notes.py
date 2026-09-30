@@ -1,12 +1,14 @@
 """Note synthesis and management endpoints."""
 
 import json
+from datetime import UTC
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
-from ..core.models import Paper, Block, MethodEntity, ChatMessage, Note, AppSettingsModel
+from ..core.models import AppSettingsModel, Block, ChatMessage, MethodEntity, Note, Paper
 from ..core.schemas import NoteCreate, NoteOut
 from ..services.analysis import synthesize_note
 from ..services.profiles import LlmRole, resolve_llm
@@ -70,7 +72,7 @@ async def generate_note(
 
     # Add frontmatter if missing
     if not markdown.startswith("---"):
-        from datetime import datetime, timezone
+        from datetime import datetime
         tags = ["paper-note"] + (paper.domain_tags or [])
         frontmatter = f"""---
 title: "{paper.title_zh or paper.title}"
@@ -81,7 +83,7 @@ year: {paper.year or ''}
 project: "{paper.project_id or ''}"
 domain_tags: {json.dumps(paper.domain_tags or [])}
 status: "已读"
-created: "{datetime.now(timezone.utc).isoformat()}"
+created: "{datetime.now(UTC).isoformat()}"
 tags: {json.dumps(tags)}
 ---
 

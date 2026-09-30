@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.papers import reparse_paper, router
-from app.core.config import settings, Settings, BACKEND_ROOT
+from app.core.config import BACKEND_ROOT, Settings, settings
 from app.core.database import Base, get_db
 from app.core.models import Paper
 from app.core.storage import migrate_storage_references, resolve_paper_pdf, resolve_storage_path
@@ -22,7 +22,9 @@ class StorageTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / "moved-repo" / "storage"
+        # resolve() so expectations match on macOS, where /tmp and /var are
+        # symlinks into /private (resolve_storage_path always resolves).
+        self.root = (Path(self.tmp.name) / "moved-repo" / "storage").resolve()
         (self.root / "pdfs").mkdir(parents=True)
         self.patch = patch.object(settings, "storage_root", self.root)
         self.patch.start()
@@ -115,7 +117,7 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
                     moved = Path(tmp) / "second"
                     root.rename(moved)
                     with patch.object(settings, "storage_root", moved):
-                        self.assertEqual(resolve_paper_pdf(value, "first"), moved / "pdfs" / "None.pdf")
+                        self.assertEqual(resolve_paper_pdf(value, "first"), moved.resolve() / "pdfs" / "None.pdf")
                         self.assertEqual((await migrate_storage_references(db))["updated"], 0)
                         cached = moved / "mineru_output" / "first" / "content_list.json"
                         cached.write_text("[]")

@@ -1,11 +1,11 @@
 """Cross-paper method/terminology index."""
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
-from ..core.models import MethodEntity, Paper, ProjectGroup
+from ..core.models import MethodEntity, Paper
 from ..core.schemas import MethodIndexItem
 
 router = APIRouter()

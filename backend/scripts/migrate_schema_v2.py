@@ -19,7 +19,7 @@ import argparse
 import re
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -65,8 +65,8 @@ def parse_timestamp(value: str) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def canonical_timestamp(value: str) -> str | None:

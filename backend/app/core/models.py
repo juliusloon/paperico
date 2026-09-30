@@ -1,11 +1,20 @@
 """SQLAlchemy ORM models matching the spec's data model."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import (
-    Column, String, Integer, Float, Text, Boolean, ForeignKey, JSON, Table, DateTime
+    JSON,
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
 )
 from sqlalchemy.orm import relationship
+
 from .database import Base
 
 
@@ -20,7 +29,7 @@ def _now() -> str:
     exact same width or same-second ordering can drift. See T0.2 in
     docs/agentero-execution-plan.md.
     """
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 # Many-to-many: Block <-> MethodEntity

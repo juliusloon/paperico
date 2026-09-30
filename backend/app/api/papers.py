@@ -3,22 +3,54 @@
 import asyncio
 import hashlib
 import uuid
+from datetime import UTC
 from pathlib import Path
-from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException, BackgroundTasks
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import noload
 
-from ..core.database import get_db
 from ..core.config import settings
-from ..core.storage import analyses_dir, resolve_paper_pdf, resolve_storage_path, storage_reference, write_analysis_raw
-from ..core.models import Paper, Block, MethodEntity, AppSettingsModel, ProjectGroup, block_entity_table, _now
-from ..core.schemas import PaperCreate, PaperMoveRequest, PaperRenameRequest, PaperListItem, PaperDetail, BlockOut, EntityOut, PaperStatusOut
 from ..core.crypto import decrypt_or_empty
+from ..core.database import get_db
+from ..core.models import (
+    AppSettingsModel,
+    Block,
+    MethodEntity,
+    Paper,
+    ProjectGroup,
+    _now,
+    block_entity_table,
+)
+from ..core.schemas import (
+    BlockOut,
+    EntityOut,
+    PaperDetail,
+    PaperListItem,
+    PaperMoveRequest,
+    PaperRenameRequest,
+    PaperStatusOut,
+)
 from ..core.status import ErrorCode, PipelineError, set_paper_error
+from ..core.storage import (
+    resolve_paper_pdf,
+    resolve_storage_path,
+    storage_reference,
+    write_analysis_raw,
+)
 from ..core.trash import move_paper_to_trash
-from ..services import mineru, analysis
+from ..services import analysis, mineru
 from ..services.llm import LLMClient
 from ..services.profiles import LlmRole, resolve_llm
 
@@ -199,8 +231,8 @@ async def get_paper(paper_id: str, db: AsyncSession = Depends(get_db)):
     if not paper:
         raise HTTPException(404, "Paper not found")
     # Update last opened
-    from datetime import datetime, timezone
-    paper.last_opened_at = datetime.now(timezone.utc).isoformat()
+    from datetime import datetime
+    paper.last_opened_at = datetime.now(UTC).isoformat()
     await db.commit()
 
     blocks_result = await db.execute(

@@ -9,11 +9,10 @@ undocumented API contract.
 from __future__ import annotations
 
 import json
-
-from ..core.status import ErrorCode
 from pathlib import Path
 from typing import Any
 
+from ..core.status import ErrorCode
 
 CHEM_SUMMARY_FILENAME = "demonstration_tables.json"
 CHEM_MOLECULE_RAW_FILENAME = "apicall_mol.json"

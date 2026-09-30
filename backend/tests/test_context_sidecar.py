@@ -11,8 +11,12 @@ from app.core.models import _now
 from app.core.storage import analyses_dir, write_analysis_raw
 from app.services import analysis
 from app.services.context import (
-    LOGIC_CHAIN_BUDGET, METHOD_INDEX_TOP_K, build_paper_context,
-    clip_text, compact_logic_chain, compact_method_index,
+    LOGIC_CHAIN_BUDGET,
+    METHOD_INDEX_TOP_K,
+    build_paper_context,
+    clip_text,
+    compact_logic_chain,
+    compact_method_index,
 )
 
 

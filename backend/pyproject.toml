@@ -20,3 +20,39 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E4", "E7", "E9", "W", "F", # pycodestyle / pyflakes basics
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific hygiene
+]
+ignore = [
+    "B008",     # FastAPI idiom: Depends()/Query() in parameter defaults
+    "BLE001",   # broad except at API/job boundaries is deliberate
+    "SIM117",   # nested with-blocks read fine in test setups
+    "ASYNC230", # small config/JSON reads in async paths
+    "S112",     # try-except-continue is intentional in scan loops
+    "TRY004",
+    "SIM103",
+    "C408",
+    "PLC3002",
+    "RUF001", "RUF002", "RUF003", # CJK fullwidth punctuation in zh comments/strings
+]
