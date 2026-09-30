@@ -1,9 +1,0 @@
-
-> frontend@0.0.0 test:browser
-> node scripts/verify-workspace.mjs
-
-original navigation, compact library, selection and upload dialog
-original home copy and illustration
-original reader switches between text and rendered PDF
-legacy None.pdf still renders
-original mobile drawer and PDF reader
