@@ -157,11 +157,24 @@ extension View {
 extension View {
     /// 隐藏标题栏后红绿灯悬浮在窗口左上角;给面板/内容顶部留出安全高度。
     /// 非 macOS 平台为无操作。
+    ///
+    /// 高度不再硬编码 34pt,而是取 `WindowChrome.additionalTopClearance`
+    /// (见 App/WindowChrome.swift):它已经扣掉系统自动保留的顶部安全区,
+    /// 避免在 macOS 26+ 上形成 32 + 34 = 66pt 的突兀空档。
     func trafficLightTopPadding(_ extra: CGFloat = 0) -> some View {
+        modifier(TrafficLightTopPaddingModifier(extra: extra))
+    }
+}
+
+private struct TrafficLightTopPaddingModifier: ViewModifier {
+    var extra: CGFloat
+    @Environment(\.trafficLightClearance) private var clearance
+
+    func body(content: Content) -> some View {
         #if os(macOS)
-        self.padding(.top, 34 + extra)
+        content.padding(.top, clearance + extra)
         #else
-        self
+        content
         #endif
     }
 }

@@ -5,6 +5,11 @@ import SwiftUI
 // SwiftUI has no KaTeX; LaTeX segments ($$…$$ display, $…$ inline) render as
 // monospaced math blocks. Everything else (headings, lists, code, blockquotes,
 // tables, links, emphasis) renders natively.
+//
+// 解析部分(`parseBlocks` / `AttributedString(markdown:)`)已经移到
+// `Support/PaperMarkdown.swift`,并加上按内容缓存。
+// 原因:body 每次求值都会触发解析,而阅读页一次 scroll/一次 activeBlock 变更
+// 都会让全部 block 重新求值 —— 原来等于把整篇论文反复重新解析。
 
 struct MarkdownText: View {
     @Environment(\.palette) private var palette
@@ -15,202 +20,21 @@ struct MarkdownText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(parseBlocks(text).enumerated()), id: \.offset) { _, block in
+            ForEach(Array(PaperMarkdown.blocks(for: text).enumerated()), id: \.offset) { _, block in
                 blockView(block)
             }
         }
     }
 
-    // MARK: block parsing
-
-    enum MarkdownBlock {
-        case heading(level: Int, text: String)
-        case paragraph(String)
-        case code(String)
-        case quote([String])
-        case unordered([String])
-        case ordered([String])
-        case mathDisplay(String)
-        case table([[String]])
-        case rule
-    }
-
-    private func parseBlocks(_ source: String) -> [MarkdownBlock] {
-        var blocks: [MarkdownBlock] = []
-        var paragraph: [String] = []
-        var lines = source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
-        var index = 0
-
-        func flushParagraph() {
-            if !paragraph.isEmpty {
-                blocks.append(.paragraph(paragraph.joined(separator: "\n")))
-                paragraph = []
-            }
-        }
-
-        while index < lines.count {
-            let line = lines[index]
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
-            if trimmed.hasPrefix("```") {
-                flushParagraph()
-                index += 1
-                var code: [String] = []
-                while index < lines.count, !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
-                    code.append(lines[index])
-                    index += 1
-                }
-                index += 1 // closing fence
-                blocks.append(.code(code.joined(separator: "\n")))
-                continue
-            }
-
-            if trimmed.hasPrefix("$$") {
-                flushParagraph()
-                var math = trimmed.hasPrefix("$$") ? String(trimmed.dropFirst(2)) : ""
-                if math.hasSuffix("$$"), math.count >= 2 {
-                    math = String(math.dropLast(2))
-                    blocks.append(.mathDisplay(math.trimmingCharacters(in: .whitespaces)))
-                    index += 1
-                    continue
-                }
-                index += 1
-                while index < lines.count, !lines[index].contains("$$") {
-                    math += "\n" + lines[index]
-                    index += 1
-                }
-                if index < lines.count {
-                    let tail = lines[index]
-                    if let range = tail.range(of: "$$") {
-                        math += "\n" + String(tail[..<range.lowerBound])
-                    }
-                    index += 1
-                }
-                blocks.append(.mathDisplay(math.trimmingCharacters(in: .whitespaces)))
-                continue
-            }
-
-            if trimmed.isEmpty {
-                flushParagraph()
-                index += 1
-                continue
-            }
-
-            if let heading = headingLevel(of: trimmed) {
-                flushParagraph()
-                blocks.append(.heading(level: heading, text: String(trimmed.dropFirst(heading)).trimmingCharacters(in: .whitespaces)))
-                index += 1
-                continue
-            }
-
-            if trimmed.hasPrefix(">") {
-                flushParagraph()
-                var quote: [String] = []
-                while index < lines.count, lines[index].trimmingCharacters(in: .whitespaces).hasPrefix(">") {
-                    quote.append(String(lines[index].trimmed.dropFirst()).trimmed)
-                    index += 1
-                }
-                blocks.append(.quote(quote))
-                continue
-            }
-
-            if isTableLine(trimmed), index + 1 < lines.count, isTableSeparator(lines[index + 1]) {
-                flushParagraph()
-                var rows: [[String]] = [tableCells(trimmed)]
-                index += 2 // skip separator
-                while index < lines.count, isTableLine(lines[index].trimmingCharacters(in: .whitespaces)) {
-                    rows.append(tableCells(lines[index].trimmingCharacters(in: .whitespaces)))
-                    index += 1
-                }
-                blocks.append(.table(rows))
-                continue
-            }
-
-            if trimmed == "---" || trimmed == "***" {
-                flushParagraph()
-                blocks.append(.rule)
-                index += 1
-                continue
-            }
-
-            if isBullet(trimmed) {
-                flushParagraph()
-                var items: [String] = []
-                while index < lines.count, isBullet(lines[index].trimmingCharacters(in: .whitespaces)) {
-                    let item = lines[index].trimmingCharacters(in: .whitespaces)
-                    items.append(String(item.dropFirst(1)).trimmed)
-                    index += 1
-                }
-                blocks.append(.unordered(items))
-                continue
-            }
-
-            if let numberLength = orderedPrefixLength(trimmed) {
-                flushParagraph()
-                var items: [String] = []
-                while index < lines.count, let n = orderedPrefixLength(lines[index].trimmingCharacters(in: .whitespaces)) {
-                    let item = lines[index].trimmingCharacters(in: .whitespaces)
-                    items.append(String(item.dropFirst(n)).trimmed)
-                    index += 1
-                }
-                blocks.append(.ordered(items))
-                _ = numberLength
-                continue
-            }
-
-            paragraph.append(trimmed)
-            index += 1
-        }
-        flushParagraph()
-        return blocks
-    }
-
-    private func headingLevel(of line: String) -> Int? {
-        var count = 0
-        for ch in line {
-            if ch == "#" { count += 1 } else { break }
-        }
-        guard count >= 1, count <= 6, line.count > count else { return nil }
-        let after = line[line.index(line.startIndex, offsetBy: count)]
-        return after == " " ? count : nil
-    }
-
-    private func isBullet(_ line: String) -> Bool {
-        (line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ "))
-    }
-
-    private func orderedPrefixLength(_ line: String) -> Int? {
-        guard let dot = line.firstIndex(where: { $0 == "." || $0 == ")" }) else { return nil }
-        let digits = line[..<dot]
-        guard !digits.isEmpty, digits.allSatisfy(\.isNumber), dot < line.endIndex else { return nil }
-        let after = line.index(after: dot)
-        return after < line.endIndex && line[after] == " " ? line.distance(from: line.startIndex, to: after) + 1 : nil
-    }
-
-    private func isTableLine(_ line: String) -> Bool {
-        line.hasPrefix("|") && line.hasSuffix("|") && line.contains("|")
-    }
-
-    private func isTableSeparator(_ line: String) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return isTableLine(trimmed) && trimmed.allSatisfy { $0 == "|" || $0 == "-" || $0 == ":" || $0 == " " }
-    }
-
-    private func tableCells(_ line: String) -> [String] {
-        var content = line
-        if content.hasPrefix("|") { content.removeFirst() }
-        if content.hasSuffix("|") { content.removeLast() }
-        return content.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-    }
-
     // MARK: block views
 
     @ViewBuilder
-    private func blockView(_ block: MarkdownBlock) -> some View {
+    private func blockView(_ block: PaperMarkdown.MarkdownBlock) -> some View {
         let baseColor = color ?? palette.gray800
         switch block {
         case .heading(let level, let text):
-            inlineText(text)
+            // 标题原文直出,不套 `$…$` → 行内代码 的转换(与修改前一致)。
+            inlineText(text, mathSplitter: false)
                 .font(.reading(fontSize * headingScale(level), weight: .semibold))
                 .foregroundStyle(palette.gray900)
                 .padding(.top, 2)
@@ -279,28 +103,24 @@ struct MarkdownText: View {
     /// (monospaced on the code background) inside the native markdown text so
     /// line wrapping keeps working.
     private func inlineParagraph(_ text: String, color: Color) -> some View {
-        let prepared = InlineMathSplitter.inlineMathToCode(text)
-        return inlineText(prepared)
+        // 行内公式转换由 PaperMarkdown 在缓存 miss 时完成,这里不再每次跑正则。
+        return inlineText(text, mathSplitter: true)
             .font(.system(size: fontSize))
             .foregroundStyle(color)
     }
 
-    private func inlineText(_ markdown: String) -> Text {
-        var options = AttributedString.MarkdownParsingOptions()
-        options.interpretedSyntax = .inlineOnlyPreservingWhitespace
-        if var attributed = try? AttributedString(markdown: markdown, options: options) {
-            for run in attributed.runs where run.inlinePresentationIntent?.contains(.code) == true {
-                attributed[run.range].font = .mono(fontSize * 0.88)
-                attributed[run.range].backgroundColor = palette.gray100
-            }
+    private func inlineText(_ markdown: String, mathSplitter: Bool) -> Text {
+        if let attributed = PaperMarkdown.attributedString(
+            markdown: markdown,
+            fontSize: fontSize,
+            codeFont: .mono(fontSize * 0.88),
+            codeBackground: palette.gray100,
+            mathSplitter: mathSplitter
+        ) {
             return Text(attributed)
         }
         return Text(markdown)
     }
-}
-
-extension String {
-    var trimmed: String { trimmingCharacters(in: .whitespaces) }
 }
 
 extension View {
@@ -308,22 +128,6 @@ extension View {
     @ViewBuilder
     func horizontalScrollIfAvailable() -> some View {
         ScrollView(.horizontal, showsIndicators: false) { self }
-    }
-}
-
-// MARK: - Inline math handling
-
-enum InlineMathSplitter {
-    /// Rewrites `$x^2$` spans into ``x^2`` so they render as inline code while
-    /// keeping everything in one wrapping Text. `$$…$$` display math is handled
-    /// earlier as its own block and never reaches here.
-    static func inlineMathToCode(_ text: String) -> String {
-        guard text.contains("$") else { return text }
-        return text.replacingOccurrences(
-            of: "(?<!\\$)\\$(?!\\$)([^$\\n]+?)\\$(?!\\$)",
-            with: "`$1`",
-            options: .regularExpression
-        )
     }
 }
 
@@ -363,6 +167,24 @@ struct NativeMarkdownTable: View {
 // MARK: - HTML table → native grid (replaces block.table_html dangerouslySetInnerHTML)
 
 enum HTMLTableParser {
+    /// 表格 HTML → 二维数组的解析结果缓存。
+    /// 原来每次 body 求值都会跑一遍 NSRegularExpression;表格通常很大且内容不变,
+    /// 滚动时反复求值等于反复全文匹配。
+    private static let cache: NSCache<NSString, CachedTableRows> = {
+        let cache = NSCache<NSString, CachedTableRows>()
+        cache.countLimit = 200
+        return cache
+    }()
+
+    /// 带缓存入口;`PaperTableView` 走这里。
+    static func rows(for html: String) -> [[String]]? {
+        let key = html as NSString
+        if let hit = cache.object(forKey: key) { return hit.value }
+        let value = parse(html)
+        cache.setObject(CachedTableRows(value), forKey: key)
+        return value
+    }
+
     static func parse(_ html: String) -> [[String]]? {
         guard html.contains("<table") else { return nil }
         var rows: [[String]] = []
@@ -436,6 +258,11 @@ enum HTMLTableParser {
 
 // MARK: - Table block view
 
+final class CachedTableRows {
+    let value: [[String]]?
+    init(_ value: [[String]]?) { self.value = value }
+}
+
 struct PaperTableView: View {
     @Environment(\.palette) private var palette
     let html: String
@@ -443,7 +270,7 @@ struct PaperTableView: View {
 
     var body: some View {
         Group {
-            if let rows = HTMLTableParser.parse(html) {
+            if let rows = HTMLTableParser.rows(for: html) {
                 NativeMarkdownTable(rows: rows, fontSize: fontSize * 0.85)
             } else {
                 Text("表格数据无法本地渲染").font(.system(size: fontSize * 0.8)).foregroundStyle(palette.gray500)
