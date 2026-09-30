@@ -62,7 +62,6 @@ OpenAI 兼容端点），Paperico 自身不做任何中转代理。
 | [`backend/`](backend) | FastAPI 后端：任务调度、本地存储、加密配置、REST + SSE API |
 | [`macos/`](macos) | macOS 原生客户端：SwiftUI + PDFKit（单 Xcode target） |
 | [`docs/`](docs) | 工程笔记：bbox 坐标系、存储迁移、化学结构解析 spike 等 |
-| [`design/`](design) | Logo 概念稿与图标资产拆解 |
 
 ## 快速开始
 

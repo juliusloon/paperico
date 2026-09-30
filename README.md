@@ -74,7 +74,6 @@ the providers **you** configure (BYOK).
 | [`backend/`](backend) | FastAPI server: jobs, storage, encrypted settings, REST + SSE API |
 | [`macos/`](macos) | Native macOS client: SwiftUI + PDFKit (single Xcode target) |
 | [`docs/`](docs) | Engineering notes: bbox coordinates, storage migration, chemistry parsing spike |
-| [`design/`](design) | Logo concepts and icon asset breakdowns |
 
 ## Quickstart
 

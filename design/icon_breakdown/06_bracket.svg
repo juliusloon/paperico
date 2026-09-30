@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254">
-  <!-- 大括号: 顶条 y=324 → 右侧半椭圆弧(rx=200 ry=240) → 底条 y=775 → 回到节点3
-       描边 88, 圆头。弧线参数由原图拟合, 平均误差约1.5px -->
-  <path d="M 405 324 L 835.7 324 A 200 240 0 0 1 794.6 775 L 405 775" fill="none" stroke="#C8CFDB" stroke-width="88" stroke-linecap="round"/>
-</svg>
