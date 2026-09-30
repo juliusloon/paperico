@@ -26,6 +26,9 @@ backend/storage/
 # ===== Web 端已下线:本地保留,不入库 =====
 frontend/
 
+# ===== 品牌设计稿:本地保留,不入库(app 图标源文件在 macos/Paperico/paperico.icon) =====
+design/
+
 # ===== Python =====
 __pycache__/
 *.py[cod]

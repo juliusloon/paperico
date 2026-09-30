@@ -10,7 +10,6 @@ backend from drifting apart.
 backend/    FastAPI server (Python 3.11+, SQLAlchemy async + SQLite)
 macos/      Native macOS client (SwiftUI + PDFKit, single Xcode target)
 docs/       Engineering notes
-design/     Logo concepts and icon assets
 ```
 
 ## Development setup

@@ -9,6 +9,9 @@ backend/storage/
 # Web 端已下线:本地保留
 frontend/
 
+# 品牌设计稿:本地保留
+design/
+
 # macOS 客户端构建产物
 macos/build/
 macos/DerivedData/
