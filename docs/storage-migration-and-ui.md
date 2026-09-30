@@ -1,15 +1,15 @@
 # PDF 迁移修复与界面更新
 
-> 2026-09-28 更新：按用户要求，UI 已回退至优化前的版本。优化版源码、构建产物与截图见
-> [界面存档](ui-archives/2026-09-28-before-rollback/README.md)。PDF 迁移修复与请求防错配逻辑保留。
-> 本文下方的 UI 与验证描述是 2026-09-12 的历史记录；本次回退验证见 `verification/ui-rollback-2026-09-28/`。
+> 2026-09-28 更新：UI 已回退至优化前的版本（优化版源码、构建产物与截图仅存于本地
+> `ui-archives/` 与 `verification/` 归档，不入公共仓库）。PDF 迁移修复与请求防错配逻辑保留。
+> 本文下方的 UI 与验证描述是 2026-09-12 的历史记录。
 
 2026-09-12，本地验收。
 
 ## 根因与处理
 
-18 篇论文的 `pdf_path` 和 `mineru_output_dir` 仍指向旧机器的
-`/Users/<redacted>/Documents/Files/temp/paperico/`。本地 PDF 实际位于
+18 篇论文的 `pdf_path` 和 `mineru_output_dir` 仍指向旧机器上的仓库目录
+（绝对路径随机器而异）。本地 PDF 实际位于
 `backend/app/storage/pdfs/`，因此原始 PDF 接口返回 404。
 
 论文 `72802d5d0d31` 使用早期上传流程留下的 `None.pdf`。已检查该 PDF 首页：
