@@ -109,6 +109,30 @@ Prefer manual setup? See [`backend/README.md`](backend/README.md).
 > lives under the backend storage directory (mode 0600), or provide your own via
 > `PAPERICO_ENCRYPTION_KEY`.
 
+### Install the macOS app
+
+Prebuilt DMGs are attached to each [GitHub Release](https://github.com/juliusloon/paperico/releases)
+(or build one yourself: `cd macos && ./scripts/make_dmg.sh`). Open the DMG and drag
+**Paperico** into *Applications*.
+
+Releases are currently **unsigned**: on first launch macOS Gatekeeper will warn —
+right-click the app → **Open** → **Open** to confirm. With a Developer ID you can produce
+signed builds: `PAPERICO_SIGN_IDENTITY="Developer ID Application: …" ./scripts/make_dmg.sh`
+(then notarize before distribution).
+
+### Where is my data?
+
+- **The app itself** is sandboxed and keeps preferences and per-paper reader state in its
+  container (`~/Library/Containers/com.paperico.native/`), diagnostics logs under
+  `~/Library/Containers/com.paperico.native/Data/Library/Application Support/Paperico/logs/`.
+- **Your papers, PDFs and extracted figures** belong to the backend, not the app:
+  - `./start.sh` (repository mode, default) stores everything inside the repository
+    folder (`backend/paperico.db` + `backend/app/storage/`);
+  - `./start.sh --app-data` stores everything in
+    `~/Library/Application Support/Paperico/` — the layout you want once the backend is
+    part of your daily setup. Existing repository data is copied over on first use.
+    The API keys you enter in Settings are stored encrypted (Fernet) in either mode.
+
 ### macOS app
 
 The native client is a single SwiftUI target that talks to the same backend.

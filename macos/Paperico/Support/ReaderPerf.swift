@@ -79,21 +79,45 @@ enum ReaderPerf {
 
     static func dumpSummary() {
         guard isEnabled else { return }
-        log("---- Paperico 阅读页性能摘要 ----")
-        log("  内存 footprint = %.1f MB", memoryFootprintMB())
-        log("  documentBody 求值次数 = %d", documentBody.current)
-        log("  activeBlock 更新次数  = %d", activeBlockUpdates.current)
-        log("  进度回调次数/持久化次数 = %d / %d", progressUpdates.current, progressPersisted.current)
-        log("  Markdown 块缓存 命中/未命中 = %d / %d (未命中累计 %.1f ms)",
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        var lines = ["---- Paperico 阅读页性能摘要 \(timestamp) ----"]
+        lines.append(String(format: "  内存 footprint = %.1f MB", memoryFootprintMB()))
+        lines.append(String(format: "  documentBody 求值次数 = %d", documentBody.current))
+        lines.append(String(format: "  activeBlock 更新次数  = %d", activeBlockUpdates.current))
+        lines.append(String(format: "  进度回调次数/持久化次数 = %d / %d", progressUpdates.current, progressPersisted.current))
+        lines.append(String(
+            format: "  Markdown 块缓存 命中/未命中 = %d / %d (未命中累计 %.1f ms)",
             PaperMarkdown.blockCacheHits.current,
             PaperMarkdown.blockCacheMisses.current,
-            Double(PaperMarkdown.uncachedParseNanos.current) / 1_000_000)
-        log("  AttributedString 缓存 命中/未命中 = %d / %d",
+            Double(PaperMarkdown.uncachedParseNanos.current) / 1_000_000))
+        lines.append(String(
+            format: "  AttributedString 缓存 命中/未命中 = %d / %d",
             PaperMarkdown.attributedCacheHits.current,
-            PaperMarkdown.attributedCacheMisses.current)
+            PaperMarkdown.attributedCacheMisses.current))
         if let fps = frameIntervals.snapshot() {
-            log("  帧间隔 平均=%.1f ms (%.0f FPS) p95=%.1f ms 最大=%.1f ms 样本=%d",
-                fps.averageMs, fps.fps, fps.p95Ms, fps.maxMs, fps.samples)
+            lines.append(String(
+                format: "  帧间隔 平均=%.1f ms (%.0f FPS) p95=%.1f ms 最大=%.1f ms 样本=%d",
+                fps.averageMs, fps.fps, fps.p95Ms, fps.maxMs, fps.samples))
+        }
+        lines.forEach { log("%@", $0) }
+        persistSummary(lines.joined(separator: "\n") + "\n")
+    }
+
+    /// 摘要追加到 Application Support/Paperico/logs/perf-summary.log(超过 2MB 重开)。
+    private static func persistSummary(_ text: String) {
+        guard let data = text.data(using: .utf8) else { return }
+        let url = AppPaths.logs.appendingPathComponent("perf-summary.log")
+        if FileManager.default.fileExists(atPath: url.path),
+           let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url)
+        }
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let size = attrs[.size] as? UInt64, size > 2_000_000 {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 }

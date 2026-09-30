@@ -43,6 +43,20 @@ App 是原生客户端,后端跑在任意一台机器上(`./start.sh`,默认 `:8
 `NSAllowsLocalNetworking` 以支持局域网主机名。App 已启用 App Sandbox
 并授予网络客户端 + 用户选定文件读写(上传 PDF / 导出笔记)。
 
+### 数据存放位置
+
+App 遵循 macOS 标准目录规范,全部写入都在沙盒容器
+`~/Library/Containers/com.paperico.native/` 内:
+
+| 内容 | 位置(容器内) | 写入方 |
+|---|---|---|
+| 偏好 / 阅读进度 / 服务器地址 | `Library/Preferences/com.paperico.native.plist`(UserDefaults) | `LocalPrefs` / `ServerConfig` |
+| 诊断与性能日志 | `Library/Application Support/Paperico/logs/` | `ReaderPerf`(开启追踪时) |
+| 导出的笔记 .md | 用户通过 fileExporter 自选 | `ChatPanel` |
+
+论文 PDF 与数据库属于后端:仓库模式存 `backend/`,或用 `./start.sh --app-data`
+存到 `~/Library/Application Support/Paperico/`(见根 README)。
+
 ## 本地开发循环
 
 - 增删 Swift 文件:工程使用文件系统同步组,**无需**重新生成工程;
