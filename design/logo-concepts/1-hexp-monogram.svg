@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- 概念 A：构造式字母 P，字碗换成苯环（化学 × 论文的单字标） -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3D7BEA"/>
+      <stop offset="1" stop-color="#1F4FBB"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- 字杆 -->
+  <rect x="309" y="304" width="72" height="452" rx="14" fill="#FFFFFF"/>
+  <!-- 苯环字碗 -->
+  <polygon points="541,304 679,384 679,544 541,624 403,544 403,384"
+           fill="none" stroke="#FFFFFF" stroke-width="72" stroke-linejoin="round"/>
+  <!-- 芳香环内圈 -->
+  <circle cx="541" cy="464" r="58" fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="16"/>
+</svg>

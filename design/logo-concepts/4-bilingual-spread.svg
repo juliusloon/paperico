@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- 概念 D：双页对照——灰页是原文，蓝页是精读中的译文/笔记 -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <!-- 后页：原文 -->
+  <rect x="420" y="260" width="300" height="420" rx="26" fill="#E9EDF3"/>
+  <g fill="#A8AFBA">
+    <rect x="464" y="316" width="212" height="16" rx="8"/>
+    <rect x="464" y="364" width="168" height="16" rx="8"/>
+    <rect x="464" y="412" width="212" height="16" rx="8"/>
+    <rect x="464" y="460" width="140" height="16" rx="8"/>
+  </g>
+  <!-- 前页：精读 -->
+  <rect x="304" y="344" width="300" height="420" rx="26" fill="#275DCE"/>
+  <g fill="#FFFFFF" opacity="0.92">
+    <rect x="348" y="400" width="212" height="16" rx="8"/>
+    <rect x="348" y="448" width="164" height="16" rx="8"/>
+    <rect x="348" y="496" width="212" height="16" rx="8"/>
+    <rect x="348" y="544" width="140" height="16" rx="8"/>
+    <rect x="348" y="592" width="188" height="16" rx="8"/>
+  </g>
+</svg>

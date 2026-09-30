@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254">
+  <g id="connector">
+  <path d="M 405 324 L 405 999" fill="none" stroke="#E9ECF1" stroke-width="42" stroke-linecap="round"/>  </g>
+  <g id="bars">
+    
+    <path d="M 405 560 L 758 560" fill="none" stroke="#C8CFDB" stroke-width="88" stroke-linecap="round"/>
+    <path d="M 405 999 L 704 999" fill="none" stroke="#C8CFDB" stroke-width="88" stroke-linecap="round"/>
+  </g>
+  <g id="nodes">
+    <g id="node-1">
+      <circle cx="405" cy="324" r="65" fill="none" stroke="#1057E2" stroke-width="46"/>
+      <circle cx="405" cy="324" r="42" fill="#FFFFFF"/>
+    </g>
+    <g id="node-2">
+      <circle cx="405" cy="560" r="65" fill="none" stroke="#1057E2" stroke-width="46"/>
+      <circle cx="405" cy="560" r="42" fill="#FFFFFF"/>
+    </g>
+    <g id="node-3">
+      <circle cx="405" cy="776" r="65" fill="none" stroke="#C16801" stroke-width="46"/>
+      <circle cx="405" cy="776" r="42" fill="#FFFFFF"/>
+    </g>
+    <g id="node-4">
+      <circle cx="405" cy="999" r="65" fill="none" stroke="#1057E2" stroke-width="46"/>
+      <circle cx="405" cy="999" r="42" fill="#FFFFFF"/>
+    </g>
+  </g>
+</svg>
