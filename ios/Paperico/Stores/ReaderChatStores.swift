@@ -56,32 +56,52 @@ final class ReaderStore {
     func fetchPaper(id: String) async {
         readerRequestVersion += 1
         let version = readerRequestVersion
+        let startedAt = ReaderPerf.start("reader.fetchPaper")
         loading = true
         paper = nil
         error = ""
         attachedContext = []
         activeBlockId = nil
         pendingPdfFocus = nil
+        // 切换论文时释放上一篇正文产生的解析缓存(受 countLimit 兜底,这里是主动回收)。
+        PaperMarkdown.clearCache()
         do {
             let detail = try await client.papersGet(id: id)
             if version == readerRequestVersion {
                 paper = detail
                 loading = false
             }
+            ReaderPerf.end("reader.fetchPaper", startedAt: startedAt)
         } catch {
             if version == readerRequestVersion {
                 loading = false
                 self.error = ApiFailure.wrap(error).errorDescription ?? "论文加载失败，请重试。"
             }
+            ReaderPerf.end("reader.fetchPaper", startedAt: startedAt)
         }
     }
 
     func refreshPaper(id: String) async {
         let version = readerRequestVersion
+        let startedAt = ReaderPerf.start("reader.refreshPaper")
         guard let detail = try? await client.papersGet(id: id) else { return }
         if version == readerRequestVersion, paper?.paper.id == id {
             paper = detail
         }
+        ReaderPerf.end("reader.refreshPaper", startedAt: startedAt)
+    }
+
+    /// 只更新 status / 错误信息,不整篇重载。
+    /// 处理阶段的轮询用它刷新阶段文案,避免周期性把整篇 180+ 个 block 作废重建。
+    func applyStatus(_ status: PaperStatusOut) {
+        guard var detail = paper, detail.paper.id == status.id else { return }
+        guard detail.paper.status != status.status
+                || detail.paper.errorMessage != status.errorMessage
+                || detail.paper.errorCode != status.errorCode else { return }
+        detail.paper.status = status.status
+        detail.paper.errorMessage = status.errorMessage
+        detail.paper.errorCode = status.errorCode
+        paper = detail
     }
 
     func setBilingualMode(_ mode: BilingualMode) {

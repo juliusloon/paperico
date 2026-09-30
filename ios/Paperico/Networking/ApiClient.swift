@@ -322,9 +322,20 @@ final class ApiClient: Sendable {
     }
 
     /// Stored figure/table image.
+    ///
+    /// 后端把 `storage_root` 挂载在 `/api/files`(backend/app/main.py),
+    /// Web 端用的也是 `/api/files/<image_path>`。这里原先写成把 `image_path`
+    /// 直接相对 baseURL 解析(→ `http://host/mineru_output/...`),结果是 404:
+    /// 阅读页每一张图表都取不到,`AsyncImage` 在每次重渲染时无限重试。
     func filesURL(_ imagePath: String) -> URL? {
         guard !imagePath.isEmpty else { return nil }
-        return URL(string: imagePath, relativeTo: ServerConfig.baseURL)
+        let trimmed = imagePath.hasPrefix("/") ? String(imagePath.dropFirst()) : imagePath
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trimmed
+        guard var components = URLComponents(url: ServerConfig.baseURL, resolvingAgainstBaseURL: true) else {
+            return nil
+        }
+        components.percentEncodedPath += "/api/files/" + encoded
+        return components.url
     }
 
     // MARK: Chat

@@ -7,6 +7,7 @@ struct ReaderPage: View {
 
     @Environment(\.palette) private var palette
     @Environment(\.containerWidth) private var containerWidth
+    @Environment(\.apiClient) private var client
     @Environment(ReaderStore.self) private var readerStore
     @Environment(ChatStore.self) private var chatStore
 
@@ -54,19 +55,51 @@ struct ReaderPage: View {
 
     private func bootstrap() async {
         LocalPrefs.lastPaperId = paperId
+        let startedAt = ReaderPerf.start("reader.open(\(paperId))")
         if readerStore.paper?.paper.id != paperId {
             await readerStore.fetchPaper(id: paperId)
         }
         await chatStore.fetchSessions(paperId: paperId)
+        ReaderPerf.end("reader.open(\(paperId))", startedAt: startedAt)
+        await perfLoop()
         await pollLoop()
     }
 
+    /// 轮询改成"轻量 status + 按需整篇重载"。
+    ///
+    /// 原来在论文处于 processing 状态时,每 3.5s 拉一次完整的 paper detail
+    /// (实测 414 KB / 181 block),替换 store 里的整个 `paper` → 文档里每一个
+    /// 视图失效重建。处理中的论文几乎点不动,就是这个循环造成的。
     private func pollLoop() async {
+        var tick = 0
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 3_500_000_000)
-            if let status = paperStatus, status.isActive {
-                await readerStore.refreshPaper(id: paperId)
+            if Task.isCancelled { return }
+            // 已就绪/出错:没有再轮询的必要,直接退出循环。
+            guard let current = paperStatus, current.isActive else { return }
+
+            tick += 1
+            guard let status = try? await client.papersStatus(id: paperId) else { continue }
+            let next = PaperStatus(raw: status.status)
+            // 状态真的变了才整篇重载;否则每 4 个 tick(≈14s)补一次全量,
+            // 保证新解析出来的正文还是会陆续出现。
+            if next == current, tick % 4 != 0 {
+                readerStore.applyStatus(status)
+                continue
             }
+            await readerStore.refreshPaper(id: paperId)
+            if !next.isActive { return }
+        }
+    }
+
+    /// 性能采样输出(默认关闭,见 Support/ReaderPerf.swift)。
+    private func perfLoop() async {
+        guard ReaderPerf.isEnabled else { return }
+        ReaderPerf.frameIntervals.reset()
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if Task.isCancelled { return }
+            ReaderPerf.dumpSummary()
         }
     }
 

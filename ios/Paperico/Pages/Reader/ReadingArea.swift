@@ -126,15 +126,14 @@ struct ReadingArea: View {
             .frame(maxHeight: .infinity, alignment: .bottom)
             .animation(.easeInOut(duration: 0.18), value: activeProgress)
         }
+        // 与其他页面保持一致的红绿灯留白(阅读页原先完全没有这层留白)。
+        // 放在 .background 之前,padding 区域才会被背景色覆盖,不留下缝。
+        .trafficLightTopPadding()
         .background(palette.gray0)
         .animation(.easeInOut(duration: 0.18), value: retranslateActive)
         .animation(.easeInOut(duration: 0.18), value: visibleRetranslateError == nil)
         .onAppear { hydrateLocalState() }
         .onChange(of: paperId) { _, _ in hydrateLocalState() }
-        .onChange(of: readerStore.pendingScrollTarget) { _, target in
-            guard target != nil else { return }
-            readerStore.consumeScrollTarget()
-        }
     }
 
     private var visibleRetranslateError: String? {
@@ -367,6 +366,13 @@ struct ReadingArea: View {
                     outlineResizeHandle
                 }
             }
+            // 逻辑链/实体跳转:原来这里只消费 target 做闪烁,没有任何 scrollTo,
+            // 点目录节点不会真正跳到正文。移到 ScrollViewReader 内部执行滚动。
+            .onChange(of: readerStore.pendingScrollTarget) { _, target in
+                guard let target else { return }
+                readerStore.consumeScrollTarget()
+                proxy.scrollTo(target, anchor: .top)
+            }
         }
     }
 
@@ -382,6 +388,10 @@ struct ReadingArea: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             proxy.scrollTo(blockId, anchor: .top)
             restoredForPaper = paperId
+        }
+        // LazyVStack 下目标行可能还没被创建出来,二次定位兜底。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            proxy.scrollTo(blockId, anchor: .top)
         }
     }
 
@@ -403,12 +413,32 @@ struct ReadingArea: View {
         if abs(textProgress - progress) >= 0.01 {
             textProgress = progress
         }
+        if ReaderPerf.isEnabled {
+            ReaderPerf.progressUpdates.add()
+            // 每次 scroll  preference 更新就是一帧,用它统计滚动流畅度。
+            ReaderPerf.frameIntervals.recordFrame()
+        }
         if restoredForPaper == paperId {
-            LocalPrefs.setTextProgress(progress, paperId: paperId)
+            // 原来每一帧都写 UserDefaults(磁盘 fsync),滚动时会周期性掉帧。
+            // 这里改成"变化超过阈值才写 + 合并到 0.6s 后落盘"。
+            guard abs(lastPersistedProgress - progress) >= 0.05 else { return }
+            lastPersistedProgress = progress
+            persistTextProgress(progress)
         }
     }
 
+    /// 合并写盘:滚动过程中最多每 0.6s 落一次,停下后补最后一次。
+    private func persistTextProgress(_ value: Double) {
+        let id = paperId
+        guard !id.isEmpty else { return }
+        progressPersistItem?.cancel()
+        let item = DispatchWorkItem { LocalPrefs.setTextProgress(value, paperId: id) }
+        progressPersistItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: item)
+    }
+
     private func updateActiveBlock() {
+        if ReaderPerf.isEnabled { ReaderPerf.activeBlockUpdates.add() }
         guard !blockFrames.isEmpty else { return }
         let targetY = min(180, viewportHeight * 0.25)
         var closestId = ""
@@ -463,13 +493,25 @@ struct ReadingArea: View {
     }
 
     @State private var dragStartWidth: CGFloat?
+    /// 阅读进度持久化节流(见 updateTextProgress)。
+    @State private var lastPersistedProgress: Double = -1
+    @State private var progressPersistItem: DispatchWorkItem?
 
     // MARK: document body
 
-    @ViewBuilder
     private func documentBody(proxy: ScrollViewProxy) -> some View {
+        // SwiftUI 每次求值都会经过这里:统计它就能看出"整篇文档"被重算了多少次。
+        if ReaderPerf.isEnabled { ReaderPerf.documentBody.add() }
+        return documentContent(proxy: proxy)
+    }
+
+    @ViewBuilder
+    private func documentContent(proxy: ScrollViewProxy) -> some View {
         if let paper, !blocks.isEmpty {
-            VStack(spacing: 0) {
+            // LazyVStack:只为可见区域内的行创建视图。原来是 VStack + ForEach,
+            // 打开论文的一瞬间就把全部 80~180 个 block(含 Markdown 富文本、
+            // 实体行)一次性构建并布局,而且每一行都会永久留在视图树里参与失效。
+            LazyVStack(spacing: 0) {
                 documentHeader(paper: paper)
                 ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
                     blockRow(block: block, index: index, proxy: proxy)
@@ -552,8 +594,13 @@ struct ReadingArea: View {
         return paper.year.map { "\(authors) · \($0)" } ?? authors
     }
 
+    /// 实体索引。原来在 `blockRow` 内部每个 row 各建一次字典 —— 181 行 × 171 个
+    /// 实体 ≈ 每次 body 求值 31 000 次插入(实测 7.9 ms)。提升到整个文档一次。
+    private var entityMap: [String: MethodEntity] {
+        Dictionary(uniqueKeysWithValues: (readerStore.paper?.entities ?? []).map { ($0.id, $0) })
+    }
+
     private func blockRow(block: Block, index: Int, proxy: ScrollViewProxy) -> some View {
-        let entityMap = Dictionary(uniqueKeysWithValues: (readerStore.paper?.entities ?? []).map { ($0.id, $0) })
         let entities = block.entityRefs.compactMap { entityMap[$0] }
         let isActive = readerStore.activeBlockId == block.id
         let isFlashing = readerStore.flashBlockId == block.id
