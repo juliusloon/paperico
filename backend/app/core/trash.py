@@ -15,7 +15,7 @@ import json
 import shutil
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import insert
@@ -53,7 +53,7 @@ def trash_root() -> Path:
 
 
 def new_batch_id() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:4]
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:4]
 
 
 def _row(row, fields) -> dict:

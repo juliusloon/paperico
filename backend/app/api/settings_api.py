@@ -1,21 +1,25 @@
 """Settings endpoints with encrypted API key storage."""
 
 import uuid
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.crypto import decrypt_or_empty, encrypt, mask_key
 from ..core.database import get_db
 from ..core.models import AppSettingsModel
 from ..core.schemas import (
-    AppSettingsOut, AppSettingsUpdate, ModelProfileOut,
-    MinerUSettings, AppearanceSettings, ChatDefaults, ProfileAssignment,
+    AppearanceSettings,
+    AppSettingsOut,
+    AppSettingsUpdate,
+    ChatDefaults,
+    MinerUSettings,
+    ModelProfileOut,
+    ProfileAssignment,
     TestConnectionResult,
 )
-from ..core.crypto import encrypt, decrypt_or_empty, mask_key
 from ..services.llm import LLMClient
-from ..services.mineru import GRADIO_FN, submit_task
+from ..services.mineru import GRADIO_FN
 
 router = APIRouter()
 

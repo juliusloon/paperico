@@ -6,7 +6,6 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from app.core import crypto
 from app.core.models import _now

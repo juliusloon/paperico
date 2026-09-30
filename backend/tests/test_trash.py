@@ -5,7 +5,7 @@ import os
 import shutil
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -135,14 +135,14 @@ class PurgeTests(unittest.TestCase):
                 for batch in (old_batch, new_batch):
                     (batch / "p1").mkdir(parents=True)
                     (batch / "p1" / "manifest.json").write_text("{}", encoding="utf-8")
-                stamp = (datetime.now(timezone.utc) - timedelta(days=9)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                stamp = (datetime.now(UTC) - timedelta(days=9)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
                 (old_batch / "p1" / "manifest.json").write_text(
                     json.dumps({"deleted_at": stamp}), encoding="utf-8"
                 )
                 # manifest-less batch falls back to directory mtime
                 naked = trash_root() / "naked-batch" / "p2"
                 naked.mkdir(parents=True)
-                old = (datetime.now(timezone.utc) - timedelta(days=30)).timestamp()
+                old = (datetime.now(UTC) - timedelta(days=30)).timestamp()
                 os.utime(trash_root() / "naked-batch", (old, old))
 
                 purged = purge_expired_batches(retention_days=7)

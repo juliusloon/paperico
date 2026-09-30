@@ -10,12 +10,11 @@ import json
 import os
 import sys
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -26,7 +25,6 @@ from app.services.mineru_chem import (  # noqa: E402
     MinerUChemUnavailable,
     inspect_chem_bundle,
 )
-
 
 DEFAULT_BASE_URL = "https://mineru.net/api/v4"
 DEFAULT_DEMO_ID = "demo-6d1a-411e-8092-3f41910f4829"
@@ -79,7 +77,7 @@ async def _download_demo(args: argparse.Namespace) -> int:
     archive_bytes = archive_path.read_bytes()
     manifest = {
         "schema_version": 1,
-        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "downloaded_at": datetime.now(UTC).isoformat(),
         "source_kind": "official_public_chem_demo",
         "status_endpoint": status_url,
         "demo_id": args.demo_id,

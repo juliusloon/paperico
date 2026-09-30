@@ -33,10 +33,7 @@ def clip_text(value: str | None, limit: int) -> str:
 
 
 def _field(block, name: str, default: str = "") -> str:
-    if isinstance(block, dict):
-        value = block.get(name, default)
-    else:
-        value = getattr(block, name, default)
+    value = block.get(name, default) if isinstance(block, dict) else getattr(block, name, default)
     return value if isinstance(value, str) else ("" if value is None else str(value))
 
 

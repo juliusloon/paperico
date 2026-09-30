@@ -2,13 +2,19 @@
 
 import asyncio
 import json
-import zipfile
 import uuid
+import zipfile
 from pathlib import Path
-import httpx
-from ..core.config import settings
 
+import httpx
+
+from ..core.config import settings
 from ..core.status import ErrorCode
+from .mineru_chem import (
+    MinerUChemSchemaError,
+    MinerUChemUnavailable,
+    find_chem_summary,
+)
 
 
 class MinerUServiceError(RuntimeError):
@@ -27,11 +33,6 @@ class MinerUParseFailed(MinerUServiceError):
 
 class MinerUTimeout(TimeoutError):
     error_code = ErrorCode.MINERU_TIMEOUT
-from .mineru_chem import (
-    MinerUChemSchemaError,
-    MinerUChemUnavailable,
-    find_chem_summary,
-)
 
 
 async def submit_task(
@@ -393,7 +394,7 @@ def _flatten_text(value) -> str:
 
 def parse_content_list(content_list_path: str) -> list[dict]:
     """Parse MinerU's content_list.json into internal Block dicts."""
-    with open(content_list_path, "r", encoding="utf-8") as f:
+    with open(content_list_path, encoding="utf-8") as f:
         items = json.load(f)
 
     blocks = []

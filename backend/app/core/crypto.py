@@ -7,8 +7,11 @@ application storage directory (mode 0600) and still allow an environment key
 to override it.
 """
 
+import contextlib
 import os
+
 from cryptography.fernet import Fernet, InvalidToken
+
 from .config import settings
 
 _fernet: Fernet | None = None
@@ -26,10 +29,8 @@ def _get_fernet() -> Fernet:
             else:
                 key = Fernet.generate_key().decode()
                 key_path.write_text(key, encoding="utf-8")
-                try:
+                with contextlib.suppress(OSError):
                     os.chmod(key_path, 0o600)
-                except OSError:
-                    pass
             settings.encryption_key = key
         _fernet = Fernet(key.encode() if isinstance(key, str) else key)
     return _fernet

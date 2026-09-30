@@ -1,12 +1,12 @@
 """Project group CRUD endpoints."""
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from sqlalchemy.orm import noload
 
 from ..core.database import get_db
-from ..core.models import ProjectGroup, Paper
+from ..core.models import Paper, ProjectGroup
 from ..core.schemas import ProjectCreate, ProjectOut
 
 router = APIRouter()

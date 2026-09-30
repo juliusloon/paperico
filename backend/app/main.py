@@ -1,18 +1,19 @@
 """FastAPI application entry point."""
 
+import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import logging
 
-from .core.database import init_db, async_session
+from .api import chat, library, notes, papers, projects, settings_api
+from .core.config import ensure_dirs, settings
+from .core.database import async_session, init_db
 from .core.jobs import JobCenter
 from .core.storage import migrate_storage_references
 from .core.trash import purge_expired_batches
-from .core.config import settings, ensure_dirs
 from .services.reconcile import reconcile_interrupted_papers
-from .api import projects, papers, chat, notes, settings_api, library
 
 
 @asynccontextmanager
