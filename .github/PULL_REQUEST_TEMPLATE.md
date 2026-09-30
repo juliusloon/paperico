@@ -10,9 +10,8 @@
 ## How was this tested?
 
 - [ ] Backend: `pytest` (and `ruff check .`) from `backend/`
-- [ ] Web client: `npm run lint && npm run build` from `frontend/`
-- [ ] macOS client: `xcodebuild -project ios/Paperico.xcodeproj -scheme Paperico -destination 'platform=macOS' build` (only if `ios/` changed)
-- [ ] API schema changed → updated `backend/tests/openapi_snapshot.json` and ran `ios/scripts/check_api_contract.py` until `contract OK`
+- [ ] macOS client: `xcodebuild -project macos/Paperico.xcodeproj -scheme Paperico -destination 'platform=macOS' build` (only if `macos/` changed)
+- [ ] API schema changed → updated `backend/tests/openapi_snapshot.json` and ran `macos/scripts/check_api_contract.py` until `contract OK`
 
 ## Checklist
 

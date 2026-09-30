@@ -3,7 +3,7 @@
 > 依据:`docs/agentero-lessons-for-paperico.md`(下称"指导文件")。
 > 所有"现状"均已于 2026-09-29 在当前代码上**逐条核实**(非照抄指导文件,行号以当前代码为准)。
 > 使用方式:按 Phase 顺序执行;每个任务(T 编号)独立提交,勾选验收项后合入。
-> 全局约定:SQLite 改表前先 `cp paperico.db paperico.db.bak-<date>`;后端改动必须带 pytest;涉及 API schema 的任务必须同 commit 更新 `ios/scripts/check_api_contract.py` 的 SNAPSHOT 并跑通。
+> 全局约定:SQLite 改表前先 `cp paperico.db paperico.db.bak-<date>`;后端改动必须带 pytest;涉及 API schema 的任务必须同 commit 更新 `macos/scripts/check_api_contract.py` 的 SNAPSHOT 并跑通。
 
 ---
 
@@ -210,7 +210,7 @@
 
 - 后端:`tests/test_openapi_snapshot.py` 断言 `json.dumps(app.openapi(), sort_keys=True, ensure_ascii=False)` 与 `tests/openapi_snapshot.json` 一致;`UPDATE_SNAPSHOT=1 pytest` 刷新;**改任何 schema 忘更新快照即红**。
 - 前端(可选):`openapi-typescript` 从快照生成 `src/api/schema.d.ts`,types.ts 逐步对齐(不强制一次替换)。
-- 原生:已有 `ios/scripts/check_api_contract.py`;把"后端改 schema 的 PR 必须同时更新该脚本 SNAPSHOT"写进贡献约定。
+- 原生:已有 `macos/scripts/check_api_contract.py`;把"后端改 schema 的 PR 必须同时更新该脚本 SNAPSHOT"写进贡献约定。
 - **量级**:0.5 天。
 
 ### T4.2 真实论文 opt-in 全管线回归 `- [ ]`
@@ -234,7 +234,7 @@
 - S3/WebDAV 同步、远程 Vault、双链 Wiki 索引
 - 回收站 UI(T1.3 v1 只做脚本恢复)
 
-## 与原生 App(ios/)的联动点汇总
+## 与原生 App(macos/)的联动点汇总
 
 | 后端任务 | 原生 App 动作 |
 |---|---|
@@ -257,7 +257,7 @@
 ## 全局验收清单
 
 - [ ] `pytest backend/tests` 全绿,含新增:profiles / jobs / reconcile / dedup / context 预算 / metadata mock / openapi 快照
-- [ ] `ios/scripts/check_api_contract.py --base http://127.0.0.1:8000` 输出 contract OK
+- [ ] `macos/scripts/check_api_contract.py --base http://127.0.0.1:8000` 输出 contract OK
 - [ ] 真实论文手测脚本(每里程碑跑一遍):上传→解析→阅读→引用跳转(PDF 与译文两种模式)→对话→删除→重启自愈
 - [ ] `grep -rn "_get_llm\|\[:500\]\|\[:3000\]\|\[:2000\]" backend/app` 仅剩合理命中(0 处 _get_llm;[:500] 仅存于文案截断处注释说明)
 - [ ] kill -9 后重启:无僵尸状态论文(或全部自动续跑/置 error 带 INTERRUPTED_BY_RESTART)

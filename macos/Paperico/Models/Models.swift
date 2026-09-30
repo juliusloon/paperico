@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Data types matching backend schemas (mirrors frontend/src/api/types.ts)
+// MARK: - Data types matching backend schemas
 // Decoder uses .convertFromSnakeCase, so Swift names are camelCase mirrors of snake_case fields.
 
 struct ProjectGroup: Codable, Hashable, Identifiable, Sendable {

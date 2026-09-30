@@ -1,8 +1,9 @@
 import SwiftUI
 
-// MARK: - Palette (mirrors frontend/src/index.css CSS variables)
+// MARK: - Palette (design tokens shared with the web client's index.css)
 
-/// Every token mirrors the CSS custom properties in `frontend/src/index.css`.
+/// Every token mirrors the CSS custom properties originally defined in the
+/// web client's `index.css` (web client is local-only now, but keep names in sync).
 /// `accentSoft` = 12% accent on white (light) / 19% on #20242c (dark);
 /// `accentFaint` = 5% / 8%.
 struct Palette {

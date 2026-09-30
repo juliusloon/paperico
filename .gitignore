@@ -23,6 +23,9 @@ backend/storage/
 **/storage/mineru_chem_spike/
 **/storage/images/
 
+# ===== Web 端已下线:本地保留,不入库 =====
+frontend/
+
 # ===== Python =====
 __pycache__/
 *.py[cod]

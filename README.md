@@ -48,40 +48,37 @@ the providers **you** configure (BYOK).
 - **Notes mode** — multi-select blocks, generate structured notes, export Markdown.
 - **Library management** — projects, status filters, dedup on import, batch operations,
   soft-delete with restore.
-- **Two native clients, one backend** — a web client (React + Vite) and a native macOS
-  app (SwiftUI + PDFKit, zero third-party dependencies).
-- **PDF mode** — original PDF rendering alongside the structured view, with progress
-  synced in both directions.
+- **Native macOS client** — SwiftUI + PDFKit, zero third-party dependencies, talking to
+  the same local backend as any API client would.
+- **PDF mode** — original PDF rendering (PDFKit) alongside the structured view, with
+  progress synced in both directions.
 
 ## Architecture
 
 ```text
-┌─────────────┐   ┌─────────────┐   ┌──────────────┐
-│  Web client │   │ macOS app   │   │ (your other  │
-│  React/Vite │   │ SwiftUI     │   │  clients)    │
-└──────┬──────┘   └──────┬──────┘   └──────┬───────┘
-       │  HTTP + SSE     │                 │
-       └────────┬────────┴─────────────────┘
-                ▼
-        ┌───────────────┐   delegates    ┌─────────────────────┐
-        │ FastAPI +     │ ─────────────▶ │ MinerU (cloud or    │
-        │ SQLite, local │                │ self-hosted)        │
-        │ storage of    │ ─────────────▶ │ any OpenAI-compatible│
-        │ PDFs & blocks │                │ LLM endpoint        │
-        └───────────────┘                └─────────────────────┘
+┌──────────────────────┐
+│  macOS app (SwiftUI) │      ← any HTTP client can talk to the API
+└──────────┬───────────┘
+           │  REST + SSE
+           ▼
+   ┌───────────────────┐   delegates    ┌───────────────────────┐
+   │ FastAPI + SQLite, │ ─────────────▶ │ MinerU (cloud or      │
+   │ local storage of  │                │ self-hosted)          │
+   │ PDFs & blocks     │ ─────────────▶ │ any OpenAI-compatible │
+   └───────────────────┘                │ LLM endpoint          │
+                                        └───────────────────────┘
 ```
 
 | Directory | What it is |
 |---|---|
 | [`backend/`](backend) | FastAPI server: jobs, storage, encrypted settings, REST + SSE API |
-| [`frontend/`](frontend) | Web client: React 19, Vite, Tailwind 4, Zustand, pdf.js |
-| [`ios/`](ios) | Native macOS client: SwiftUI + PDFKit (single Xcode target) |
+| [`macos/`](macos) | Native macOS client: SwiftUI + PDFKit (single Xcode target) |
 | [`docs/`](docs) | Engineering notes: bbox coordinates, storage migration, chemistry parsing spike |
 | [`design/`](design) | Logo concepts and icon asset breakdowns |
 
 ## Quickstart
 
-Prerequisites: **Python 3.11+** and **Node 20+**.
+Prerequisites: **Python 3.11+**.
 
 ```bash
 git clone https://github.com/juliusloon/paperico.git
@@ -90,17 +87,15 @@ cd paperico
 ```
 
 `start.sh` creates the Python virtualenv and installs dependencies on first run, then
-starts both processes:
+starts the backend:
 
-- Web client: http://127.0.0.1:5173
 - Backend API: http://127.0.0.1:8000 · interactive docs at http://127.0.0.1:8000/docs
 
-Prefer manual setup? See [`backend/README.md`](backend/README.md) and
-[`frontend/README.md`](frontend/README.md).
+Prefer manual setup? See [`backend/README.md`](backend/README.md).
 
 ### First run
 
-1. Open the web client, go to **Settings**, and fill in your keys:
+1. Launch the macOS app (below), go to **Settings**, and fill in your keys:
    - **LLM**: any OpenAI-compatible endpoint (base URL + key + model). This powers
      translation, outlines, method cards and chat.
    - **MinerU**: a `mineru.net` API key, or point the base URL at your self-hosted
@@ -121,12 +116,12 @@ The native client is a single SwiftUI target that talks to the same backend.
 Prerequisites: macOS 14+, [Xcode 16+](https://developer.apple.com/xcode/).
 
 ```bash
-open ios/Paperico.xcodeproj   # select the Paperico scheme → Run (⌘R)
+open macos/Paperico.xcodeproj   # select the Paperico scheme → Run (⌘R)
 ```
 
 On first launch, set the server address under **Settings → Server** (for example
 `http://127.0.0.1:8000` for a backend on the same machine). Build instructions and the
-API-contract check are described in [`ios/README.md`](ios/README.md).
+API-contract check are described in [`macos/README.md`](macos/README.md).
 
 ## Configuration
 
@@ -151,7 +146,7 @@ variables are useful for headless setups.
 ## Roadmap
 
 - [x] v0.1.0 — initial open-source release: parsing, bilingual reading, evidence-grounded
-      chat, notes, library, web + macOS clients
+      chat, notes, library, backend + macOS client
 - [ ] Batch import (Zotero / arXiv export files)
 - [ ] Multi-paper chat across a project
 - [ ] Optional multi-user mode with authentication

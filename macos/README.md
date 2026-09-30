@@ -1,6 +1,6 @@
 # Paperico 原生 App(macOS)
 
-将 paperico Web UI/功能 1:1 复刻的原生 SwiftUI 应用,只使用原生组件
+Paperico 工作台的原生 SwiftUI 实现,只使用原生组件
 (SwiftUI / PDFKit / URLSession / UserDefaults),**零第三方依赖**,直接对接现有
 FastAPI 后端(`backend/`,不改动)。
 
@@ -37,7 +37,7 @@ App 是原生客户端,后端跑在任意一台机器上(`./start.sh`,默认 `:8
    `http://127.0.0.1:8000`(Mac 本机)或 `http://192.168.x.x:8000`(后端跑在局域网
    另一台机器上)。
 2. 点 ✓ 保存并检测,出现"后端连接正常"即可。
-3. 之后 AI 模型 / MinerU 配置与 Web 端共用同一份数据库配置(读写 `/api/settings`)。
+3. 之后 AI 模型 / MinerU 配置保存在后端的同一份数据库配置中(读写 `/api/settings`)。
 
 明文 HTTP:IP 直连与 localhost 本就豁免 ATS;工程已额外声明
 `NSAllowsLocalNetworking` 以支持局域网主机名。App 已启用 App Sandbox
@@ -66,7 +66,7 @@ App 是原生客户端,后端跑在任意一台机器上(`./start.sh`,默认 `:8
   ./scripts/run_reader_bench.sh
   ```
 
-## 功能对齐(1:1 复刻)
+## 功能覆盖
 
 | 页面 | 覆盖 |
 |---|---|
@@ -78,8 +78,8 @@ App 是原生客户端,后端跑在任意一台机器上(`./start.sh`,默认 `:8
 | PDF | PDFKit 连续滚动、缩放记忆、按页进度记忆、原生划选 → "引用选中内容"加入对话 |
 | 对话 | SSE 流式、会话管理、引用证据 chips(跳块+闪高亮)、附加上下文 chips(选段/方法卡/图表)、预设提示词、笔记模式(多选生成 + 导出 .md) |
 
-## 与 Web 的已声明差异
+## 实现差异说明
 
-全部为"原生等价替换":LaTeX 以等宽样式呈现(无 KaTeX)、译文区按块附加上下文
+以下均为"原生等价实现"的选择:LaTeX 以等宽样式呈现(无 KaTeX)、译文区按块附加上下文
 (附上下文菜单)、PDF 进度按页、原生 ColorPicker/Picker、服务器地址为原生客户端
 必需新增项。
