@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">Paperico</title>
+  <desc id="hero-desc">Paperico 是本地优先、自带 Key 的 macOS 原生论文精读工作台：导入论文 PDF，双语精读、按证据提问，把讨论沉淀为 Markdown 笔记。右侧是 Paperico 应用图标——蓝色的 P 与灰色的 O。</desc>
+
+  <defs>
+    <linearGradient id="p-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#57A3FF"/>
+      <stop offset="1" stop-color="#0088FF"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0.75" y="0.75" width="1198.5" height="398.5" rx="24" fill="#FBFCFD" stroke="#E4E8EE" stroke-width="1.5"/>
+
+  <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+    <text x="72" y="108" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="19" letter-spacing="2.5" fill="#0A72DC">本地优先 · 自带 KEY · MACOS 原生</text>
+    <text x="70" y="192" font-size="86" font-weight="700" fill="#15181E">Paperico</text>
+    <text x="72" y="248" font-size="25" fill="#3E4450">导入论文 PDF，双语精读、按证据提问，</text>
+    <text x="72" y="284" font-size="25" fill="#3E4450">把讨论沉淀为 Markdown 笔记。</text>
+    <g font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="17.5" fill="#3E4450">
+      <rect x="72" y="336" width="132" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="84" y="358">macOS 26+</text>
+      <rect x="216" y="336" width="112" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="228" y="358">自带 KEY</text>
+      <rect x="340" y="336" width="68" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="352" y="358">MIT</text>
+    </g>
+  </g>
+
+  <g id="app-icon-mark">
+    <circle cx="949.7" cy="199.1" r="128.2" fill="#E3E3E3" fill-opacity="0.9"/>
+    <path d="M868.7,346.1L830.7,346.1C809.8,346.1 792.9,329.1 792.9,308.3L792.9,46.2C792.9,46.2 896.0,46.3 941.6,46.3L948.2,46.3C949.0,46.3 949.8,46.3 950.6,46.3C950.6,46.3 950.7,46.3 950.7,46.3C1001.0,48.8 1041.0,90.4 1041.0,141.3C1041.0,193.8 998.5,236.3 946.1,236.5L945.9,236.5L868.7,236.5L868.7,346.1Z" fill="url(#p-grad)" fill-opacity="0.9"/>
+  </g>
+</svg>
