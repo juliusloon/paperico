@@ -3,18 +3,19 @@ import UniformTypeIdentifiers
 
 /// Mirrors projects/LibraryPage.tsx: project sidebar, toolbar, selection bar,
 /// paper card grid, upload sheet, drag-to-project on desktop.
-/// 窄窗口(≤760px,与 web 断点一致)切换为抽屉 + 顶部导航条。
+/// 窄窗口沿用桌面侧栏轨道，展开后点击空白收回。
 struct LibraryPage: View {
     @Environment(\.palette) private var palette
     @Environment(\.containerWidth) private var containerWidth
     @Environment(ProjectsStore.self) private var projectsStore
     @Environment(PapersStore.self) private var papersStore
-    @Environment(SettingsStore.self) private var settingsStore
+    @Environment(AppServices.self) private var services
     @Environment(Router.self) private var router
+    @Environment(\.openWindow) private var openWindow
 
     @State private var showNewProject = false
     @State private var projectSidebarCollapsed = false
-    @State private var mobileSidebarOpen = false
+    @State private var temporarilyExpanded = false
     @State private var newProjectName = ""
     @State private var searchQuery = ""
     @State private var showUpload = false
@@ -38,7 +39,7 @@ struct LibraryPage: View {
     @State private var showFileImporter = false
 
     private var isCompact: Bool { containerWidth < LayoutBreakpoint.workspace }
-    private var sidebarCollapsed: Bool { projectSidebarCollapsed && !isCompact }
+    private var sidebarCollapsed: Bool { isCompact ? !temporarilyExpanded : projectSidebarCollapsed }
 
     // MARK: derived data
 
@@ -64,9 +65,7 @@ struct LibraryPage: View {
     }
 
     private var pipelineReady: Bool {
-        guard let settings = settingsStore.settings else { return false }
-        let llm = settings.modelProfiles.first?.apiKeyConfigured ?? false
-        return llm && settings.mineru.apiKeyConfigured
+        services.pipeline.isConfigured
     }
 
     private var totalProjectPapers: Int {
@@ -76,53 +75,30 @@ struct LibraryPage: View {
     // MARK: body
 
     var body: some View {
-        Group {
-            if isCompact {
-                VStack(spacing: 0) {
-                    CompactTopBar()
-                    mainColumn
-                }
-                .background(palette.gray0)
-                .overlay { if mobileSidebarOpen { drawerLayer } }
-            } else {
-                // 左列:侧栏在上,导航栏贴底收尾(间距与列间距一致);
-                // 侧栏收起时导航栏变纯圆形按钮。
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(spacing: 12) {
-                        sidebar
-                            .frame(maxHeight: .infinity, alignment: .top)
-                        WorkspaceNav(collapsed: projectSidebarCollapsed, opensUpward: true)
-                    }
-                    .frame(width: sidebarCollapsed ? 52 : 224)
-                    .zIndex(1)
-                    mainColumn
-                }
-                .padding(14)
-                .background(palette.gray0)
-            }
+        WorkspaceSplitLayout(compact: isCompact, collapsed: projectSidebarCollapsed, temporarilyExpanded: $temporarilyExpanded) {
+            sidebar
+        } content: {
+            mainColumn
         }
         .task { await projectsStore.fetch(); await papersStore.fetch(); await pollLoop() }
         .sheet(isPresented: $showUpload) { uploadSheet.presentationDetents([.medium]) }
-        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
-            handleImportResult(result)
-        }
         .alert("删除论文", isPresented: .init(get: { paperPendingDelete != nil }, set: { if !$0 { paperPendingDelete = nil } })) {
             Button("取消", role: .cancel) { paperPendingDelete = nil }
             Button("删除", role: .destructive) { if let paper = paperPendingDelete { Task { await deletePaper(paper) } } }
         } message: {
-            Text("确定删除这篇论文?")
+            Text("论文将移入回收站，PDF、解析结果、对话与笔记均可恢复。")
         }
         .alert("删除项目", isPresented: .init(get: { projectPendingDelete != nil }, set: { if !$0 { projectPendingDelete = nil } })) {
             Button("取消", role: .cancel) { projectPendingDelete = nil }
             Button("删除", role: .destructive) { if let project = projectPendingDelete { Task { await deleteProject(project) } } }
         } message: {
-            Text(projectPendingDelete.map { "确定删除项目「\($0.name)」?项目内的论文不会被删除,只会移出该分组。" } ?? "")
+            Text(projectPendingDelete.map { "确定删除项目「\($0.name)」?项目内的论文不会被删除，只会移出该分组。" } ?? "")
         }
         .alert("批量删除", isPresented: $showBatchDeleteConfirm) {
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) { Task { await batchDelete() } }
         } message: {
-            Text("确定删除选中的 \(selectedIds.count) 篇论文?此操作会同时删除对应的解析数据。")
+            Text("确定删除选中的 \(selectedIds.count) 篇论文？论文及对应的数据会保留在回收站中。")
         }
     }
 
@@ -131,24 +107,9 @@ struct LibraryPage: View {
     private func pollLoop() async {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if Task.isCancelled { return }
             if hasActivePapers {
                 await papersStore.fetch()
-            }
-        }
-    }
-
-    // MARK: chrome
-
-    private var drawerLayer: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Color(hex: "#111419")!.opacity(0.38)
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { mobileSidebarOpen = false } }
-                sidebar
-                    .frame(width: min(300, geo.size.width * 0.84))
-                    .transition(.move(edge: .leading))
-                    .padding(.vertical, 8)
-                    .padding(.leading, 8)
             }
         }
     }
@@ -162,22 +123,25 @@ struct LibraryPage: View {
                     Text("项目分组")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(palette.gray800)
+                        .transition(.identity)
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 2) {
                     if !sidebarCollapsed {
-                        RoundIconButton(systemName: Ic.folderPlus, size: 30, title: "新建项目") {
+                        RoundIconButton(systemName: Ic.plus, size: 30, title: "新建项目") {
                             withAnimation(.easeInOut(duration: 0.15)) { showNewProject = true }
                         }
                         .tint(palette.accent)
+                        .transition(.identity)
                     }
                     RoundIconButton(
-                        systemName: isCompact ? Ic.close : (sidebarCollapsed ? Ic.panelLeft : Ic.panelLeftClose),
+                        systemName: Ic.panelLeft,
                         size: 30,
-                        title: isCompact ? "关闭项目分组" : (sidebarCollapsed ? "展开项目分组" : "收起项目分组")
+                        title: sidebarCollapsed ? "展开项目分组" : "收起项目分组",
+                        animatesSymbolChange: false
                     ) {
                         if isCompact {
-                            withAnimation(.easeInOut(duration: 0.18)) { mobileSidebarOpen = false }
+                            temporarilyExpanded.toggle()
                         } else {
                             withAnimation(.easeInOut(duration: 0.18)) { projectSidebarCollapsed.toggle() }
                             if projectSidebarCollapsed { showNewProject = false }
@@ -185,13 +149,14 @@ struct LibraryPage: View {
                     }
                 }
             }
-            .padding(.horizontal, 15)
+            .padding(.horizontal, sidebarCollapsed ? 11 : 15)
             .frame(minHeight: 50)
 
             if !sidebarCollapsed && showNewProject {
                 newProjectForm
                     .padding(.horizontal, 8)
                     .padding(.bottom, 6)
+                    .transition(.identity)
             }
 
             if !sidebarCollapsed {
@@ -204,12 +169,13 @@ struct LibraryPage: View {
                     }
                     .padding(8)
                 }
+                .transition(.identity)
             } else {
                 Spacer(minLength: 0)
             }
         }
-        .trafficLightTopPadding()
-        .liquidPanel(cornerRadius: 14)
+        .clipped()
+        .liquidPanel()
     }
 
     private var newProjectForm: some View {
@@ -223,8 +189,7 @@ struct LibraryPage: View {
                 .font(.system(size: 13))
                 .padding(.horizontal, 10)
                 .frame(height: 36)
-                .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray300))
+                .liquidInset(cornerRadius: CornerRadius.inset)
                 .onSubmit { Task { await createProject() } }
             HStack(spacing: 6) {
                 Button {
@@ -235,9 +200,9 @@ struct LibraryPage: View {
                         Text("创建")
                     }
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.accentForeground)
                     .frame(maxWidth: .infinity, minHeight: 32)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(newProjectName.trimmingCharacters(in: .whitespaces).isEmpty ? palette.accent.opacity(0.42) : palette.accent))
+                    .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(newProjectName.trimmingCharacters(in: .whitespaces).isEmpty ? palette.accent.opacity(0.42) : palette.accent))
                 }
                 .buttonStyle(.plain)
                 .disabled(newProjectName.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -250,15 +215,13 @@ struct LibraryPage: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(palette.gray600)
                         .frame(maxWidth: .infinity, minHeight: 32)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.gray200))
+                        .liquidInset(cornerRadius: CornerRadius.inset)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(palette.accentFaint))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(palette.accent.opacity(0.2)))
+        .liquidInset(tint: palette.accentFaint)
     }
 
     private var allPapersRow: some View {
@@ -274,7 +237,7 @@ struct LibraryPage: View {
             }
             .padding(.horizontal, 10)
             .frame(minHeight: 42)
-            .background(RoundedRectangle(cornerRadius: 8).fill(papersStore.filter.projectId == nil ? palette.accentSoft : Color.clear))
+            .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(papersStore.filter.projectId == nil ? palette.accentSoft : Color.clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -289,22 +252,21 @@ struct LibraryPage: View {
                         .font(.system(size: 12))
                         .padding(.horizontal, 8)
                         .frame(height: 30)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(palette.gray0))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(palette.accent))
+                        .liquidInset(cornerRadius: CornerRadius.chip)
+                        .overlay(RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous).stroke(palette.accent))
                         .onSubmit { Task { await confirmRenameProject() } }
                     HStack(spacing: 4) {
                         Button { Task { await confirmRenameProject() } } label: {
-                            Image.ic(Ic.check).font(.system(size: 11)).foregroundStyle(.white)
+                            Image.ic(Ic.check).font(.system(size: 11)).foregroundStyle(palette.accentForeground)
                                 .frame(width: 26, height: 26)
-                                .background(RoundedRectangle(cornerRadius: 6).fill(palette.accent))
+                                .background(RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous).fill(palette.accent))
                         }
                         .buttonStyle(.plain)
                         .disabled(renamingProjectName.trimmingCharacters(in: .whitespaces).isEmpty)
                         Button { cancelRenameProject() } label: {
                             Image.ic(Ic.close).font(.system(size: 11)).foregroundStyle(palette.gray600)
                                 .frame(width: 26, height: 26)
-                                .background(RoundedRectangle(cornerRadius: 6).fill(palette.gray0))
-                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(palette.gray200))
+                                .liquidInset(cornerRadius: CornerRadius.chip)
                         }
                         .buttonStyle(.plain)
                         Spacer(minLength: 0)
@@ -349,12 +311,12 @@ struct LibraryPage: View {
                     }
                     .padding(.horizontal, 10)
                     .frame(minHeight: 42)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(papersStore.filter.projectId == project.id ? palette.accentSoft : Color.clear))
+                    .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(papersStore.filter.projectId == project.id ? palette.accentSoft : Color.clear))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 #if os(macOS)
-                .onDrop(of: [.text], delegate: ProjectDropDelegate(projectId: project.id) { ids in
+                .onDrop(of: [.text], delegate: ProjectDropDelegate { ids in
                     Task { await move(ids: ids, projectId: project.id) }
                 })
                 #endif
@@ -367,27 +329,51 @@ struct LibraryPage: View {
     private var mainColumn: some View {
         VStack(spacing: 0) {
             toolbar
+            HStack(spacing: 8) {
+                ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
+                    openUpload()
+                }
+                PillIconButton(title: selectionMode ? "退出选择" : "选择论文", icon: Ic.cursor, active: selectionMode) {
+                    withAnimation(.smooth(duration: 0.24)) {
+                        selectionMode.toggle()
+                        if !selectionMode { selectedIds = [] }
+                    }
+                }
+                Text("\(papersStore.papers.count) 篇论文")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 0)
+                if containerWidth < 620 {
+                    PillIconButton(title: "处理任务", icon: "list.bullet.rectangle") { openWindow(id: "library-tasks") }
+                    PillIconButton(title: "回收站", icon: Ic.trash) { openWindow(id: "library-trash") }
+                } else {
+                ToolbarButton(title: "处理任务", icon: "list.bullet.rectangle") {
+                    openWindow(id: "library-tasks")
+                }
+                ToolbarButton(title: "回收站", icon: Ic.trash) {
+                    openWindow(id: "library-trash")
+                }
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
             if selectionMode || !selectedIds.isEmpty {
                 selectionBar
             }
-            contentArea
+            contentArea.mask { ScrollTitleFade() }
         }
-        .trafficLightTopPadding()
-        .liquidPanel(cornerRadius: 14)
-        .padding(isCompact ? 8 : 0)
+        .liquidPanel()
     }
 
     private var toolbarTitle: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("LIBRARY").font(.mono(8, weight: .bold)).kerning(1.2).foregroundStyle(palette.accent)
+            Text("LIBRARY").font(.system(size: 8, weight: .bold)).kerning(1.2).foregroundStyle(palette.accent)
             Text("论文库").font(.reading(22, weight: .medium)).foregroundStyle(palette.gray900)
         }
-        .frame(width: 118, alignment: .leading)
+        .frame(width: 90, alignment: .leading)
     }
 
     private var libraryPickers: some View {
-        HStack(spacing: 8) {
-            PillPicker(icon: Ic.listFilter, selection: $statusFilter, options: [
+        HStack(spacing: 6) {
+            PillIconMenu(title: "筛选论文状态", icon: Ic.listFilter, selection: $statusFilter, options: [
                 ("all", "全部状态"),
                 ("uploaded", "待解析"),
                 ("ready", "已就绪"),
@@ -397,74 +383,23 @@ struct LibraryPage: View {
                 ("reducing", "归纳中"),
                 ("parsing", "解析中"),
                 ("error", "出错"),
-            ], width: 138)
+            ], active: statusFilter != "all")
 
-            PillPicker(selection: $sortMode, options: [
+            PillIconMenu(title: "排序论文", icon: "arrow.up.arrow.down", selection: $sortMode, options: [
                 ("recent", "最近添加"),
                 ("title", "标题排序"),
                 ("year", "年份排序"),
                 ("status", "状态排序"),
-            ], width: 122)
+            ], active: sortMode != "recent")
         }
     }
 
     private var toolbar: some View {
-        Group {
-            if isCompact {
-                HStack(spacing: 12) {
-                    RoundIconButton(systemName: Ic.folderInput, size: 38, title: "项目分组") {
-                        withAnimation(.easeInOut(duration: 0.18)) { mobileSidebarOpen = true }
-                    }
-                    PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", maxWidth: .infinity, onSubmit: handleSearch)
-                    ToolbarButton(title: "选择", icon: Ic.cursor, active: selectionMode) {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selectionMode.toggle()
-                            if !selectionMode { selectedIds = [] }
-                        }
-                    }
-                    ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
-                        openUpload()
-                    }
-                }
-            } else if containerWidth < 1080 {
-                // 窄桌面窗口:工具栏折两行(状态/排序换行),避免溢出
-                VStack(spacing: 6) {
-                    HStack(spacing: 12) {
-                        toolbarTitle
-                        PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", onSubmit: handleSearch)
-                        Spacer(minLength: 0)
-                        ToolbarButton(title: "选择", icon: Ic.cursor, active: selectionMode) {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                selectionMode.toggle()
-                                if !selectionMode { selectedIds = [] }
-                            }
-                        }
-                        ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
-                            openUpload()
-                        }
-                    }
-                    HStack(spacing: 8) {
-                        libraryPickers
-                        Spacer(minLength: 0)
-                    }
-                }
-            } else {
-                HStack(spacing: 12) {
-                    toolbarTitle
-                    PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", onSubmit: handleSearch)
-                    libraryPickers
-                    Spacer(minLength: 0)
-                    ToolbarButton(title: "选择", icon: Ic.cursor, active: selectionMode) {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selectionMode.toggle()
-                            if !selectionMode { selectedIds = [] }
-                        }
-                    }
-                    ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
-                        openUpload()
-                    }
-                }
-            }
+        HStack(spacing: 8) {
+            toolbarTitle
+            Spacer(minLength: 0)
+            libraryPickers
+            PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", onSubmit: handleSearch)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -472,65 +407,39 @@ struct LibraryPage: View {
     }
 
     private func openUpload() {
-        if !pipelineReady {
-            uploadError = "上传前需要先配置并测试 AI 模型 API Key 与 MinerU Token。"
-            showUpload = true
-            return
-        }
         uploadError = ""
         showUpload = true
     }
 
     private var selectionBar: some View {
-        HStack(spacing: 8) {
-            Button { toggleSelectAll() } label: {
-                HStack(spacing: 5) {
-                    Image.ic(allVisibleSelected ? Ic.checkSquare : Ic.square).font(.system(size: 14))
-                    Text("选择当前结果")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Button { toggleSelectAll() } label: {
+                    Label("选择当前结果", systemImage: allVisibleSelected ? Ic.checkSquare : Ic.square)
+                        .font(.system(size: 12)).foregroundStyle(palette.accent)
+                }.buttonStyle(.plain).noFocusRing()
+                Text(selectedIds.isEmpty ? "点击论文进行选择" : "已选择 \(selectedIds.count) 篇")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                RoundIconButton(systemName: Ic.close, size: 24, title: "完成选择") { clearSelection() }
+            }
+            HStack(spacing: 8) {
+                PillPicker(selection: $targetProjectId, options: [
+                    ("", "移出项目分组"),
+                ] + projectsStore.projects.map { ($0.id, "移动到：\($0.name)") }, maxWidth: 240)
+                Spacer(minLength: 0)
+                ToolbarButton(title: "移动", icon: Ic.folderInput, kind: .primary, busy: moving, disabled: selectedIds.isEmpty) {
+                    Task { await move(ids: Array(selectedIds), projectId: targetProjectId.isEmpty ? nil : targetProjectId) }
                 }
-                .font(.system(size: 12))
-                .foregroundStyle(palette.accent)
-                .lineLimit(1)
-            }
-            .buttonStyle(.plain)
-
-            if !selectedIds.isEmpty {
-                Text("已选择 \(selectedIds.count) 篇")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.gray700)
-                    .lineLimit(1)
-            } else if !isCompact {
-                Text("点击条目或复选框进行选择")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.gray700)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            PillPicker(selection: $targetProjectId, options: [
-                ("", "移出项目分组"),
-            ] + projectsStore.projects.map { ($0.id, "移动到:\($0.name)") }, maxWidth: 240)
-
-            ToolbarButton(title: "移动", icon: Ic.folderInput, kind: .primary, busy: moving, disabled: selectedIds.isEmpty) {
-                Task { await move(ids: Array(selectedIds), projectId: targetProjectId.isEmpty ? nil : targetProjectId) }
-            }
-
-            ToolbarButton(title: "删除", icon: Ic.trash, kind: .danger, busy: deleting, disabled: selectedIds.isEmpty) {
-                showBatchDeleteConfirm = true
-            }
-
-            if !isCompact && containerWidth >= 980 {
-                ToolbarButton(title: "完成") {
-                    clearSelection()
+                ToolbarButton(title: "删除", icon: Ic.trash, kind: .danger, busy: deleting, disabled: selectedIds.isEmpty) {
+                    showBatchDeleteConfirm = true
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .frame(minHeight: 52)
-        .background(palette.accentFaint.opacity(0.52))
-        .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
+        .padding(12)
+        .liquidInset(cornerRadius: 16)
+        .padding(.horizontal, 10).padding(.bottom, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     private var allVisibleSelected: Bool {
@@ -557,6 +466,7 @@ struct LibraryPage: View {
                     paperGrid
                 }
             }
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
@@ -581,15 +491,14 @@ struct LibraryPage: View {
                 .foregroundStyle(palette.danger)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 8).stroke(palette.danger))
+                .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).stroke(palette.danger))
             }
             .buttonStyle(.plain)
         }
         .foregroundStyle(palette.danger)
         .padding(.horizontal, 11)
         .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 9).fill(palette.danger.opacity(0.06)))
-        .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.danger.opacity(0.22)))
+        .liquidInset(tint: palette.danger.opacity(0.08))
     }
 
     private var errorState: some View {
@@ -607,7 +516,7 @@ struct LibraryPage: View {
                 .font(.system(size: 12))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 8).stroke(palette.gray500))
+                .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).stroke(palette.gray500))
             }
             .buttonStyle(.plain)
         }
@@ -622,14 +531,14 @@ struct LibraryPage: View {
                 .font(.system(size: 44))
                 .foregroundStyle(palette.gray400.opacity(0.3))
             Text("没有符合条件的论文").font(.system(size: 16.5)).foregroundStyle(palette.gray600)
-            Text("调整筛选条件,或上传 PDF 开始阅读").font(.system(size: 13)).foregroundStyle(palette.gray500)
+            Text("调整筛选条件，或上传 PDF 开始阅读").font(.system(size: 13)).foregroundStyle(palette.gray500)
         }
         .frame(maxWidth: .infinity, minHeight: 380)
         .padding(.top, 40)
     }
 
     private var paperGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 12)], spacing: 12) {
             ForEach(visiblePapers) { paper in
                 PaperCard(
                     paper: paper,
@@ -655,6 +564,7 @@ struct LibraryPage: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: actions
@@ -683,12 +593,13 @@ struct LibraryPage: View {
         f.projectId = projectId
         papersStore.setFilter(f)
         Task { await papersStore.fetch() }
-        withAnimation(.easeInOut(duration: 0.18)) { mobileSidebarOpen = false }
+        withAnimation(.easeInOut(duration: 0.18)) { temporarilyExpanded = false }
     }
 
     private func handleSearch() {
         var f = papersStore.filter
-        f.q = searchQuery.isEmpty ? nil : searchQuery
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        f.q = query.isEmpty ? nil : query
         papersStore.setFilter(f)
         Task { await papersStore.fetch() }
     }
@@ -696,7 +607,8 @@ struct LibraryPage: View {
     private func createProject() async {
         let name = newProjectName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        try? await projectsStore.create(name: name)
+        do { _ = try await projectsStore.create(name: name) }
+        catch { actionError = ApiFailure.wrap(error).localizedDescription; return }
         newProjectName = ""
         withAnimation(.easeInOut(duration: 0.15)) { showNewProject = false }
     }
@@ -704,7 +616,8 @@ struct LibraryPage: View {
     private func confirmRenameProject() async {
         let name = renamingProjectName.trimmingCharacters(in: .whitespaces)
         guard let id = renamingProjectId, !name.isEmpty else { return }
-        try? await projectsStore.renameProject(id: id, name: name)
+        do { try await projectsStore.renameProject(id: id, name: name) }
+        catch { actionError = ApiFailure.wrap(error).localizedDescription; return }
         renamingProjectId = nil
         renamingProjectName = ""
     }
@@ -715,7 +628,8 @@ struct LibraryPage: View {
     }
 
     private func deleteProject(_ project: ProjectGroup) async {
-        try? await projectsStore.deleteProject(id: project.id)
+        do { try await projectsStore.deleteProject(id: project.id) }
+        catch { actionError = ApiFailure.wrap(error).localizedDescription; return }
         if papersStore.filter.projectId == project.id {
             filterByProject(nil)
         }
@@ -725,13 +639,15 @@ struct LibraryPage: View {
     private func confirmRenamePaper() async {
         let title = renamingPaperTitle.trimmingCharacters(in: .whitespaces)
         guard let id = renamingPaperId, !title.isEmpty else { return }
-        try? await papersStore.renamePaper(id: id, title: title)
+        do { try await papersStore.renamePaper(id: id, title: title) }
+        catch { actionError = ApiFailure.wrap(error).localizedDescription; return }
         renamingPaperId = nil
         renamingPaperTitle = ""
     }
 
     private func deletePaper(_ paper: PaperListItem) async {
-        try? await papersStore.deletePaper(id: paper.id)
+        do { try await papersStore.deletePaper(id: paper.id) }
+        catch { actionError = ApiFailure.wrap(error).localizedDescription; return }
         selectedIds.remove(paper.id)
         await projectsStore.fetch()
         paperPendingDelete = nil
@@ -747,7 +663,7 @@ struct LibraryPage: View {
             await projectsStore.fetch()
             clearSelection()
         } catch {
-            actionError = ApiFailure.wrap(error).errorDescription ?? "移动论文失败,请重试。"
+            actionError = ApiFailure.wrap(error).errorDescription ?? "移动论文失败，请重试。"
         }
     }
 
@@ -758,7 +674,8 @@ struct LibraryPage: View {
         actionError = ""
         defer { deleting = false }
         for id in ids {
-            try? await papersStore.deletePaper(id: id)
+            do { try await papersStore.deletePaper(id: id) }
+            catch { actionError = ApiFailure.wrap(error).localizedDescription; break }
         }
         await projectsStore.fetch()
         clearSelection()
@@ -767,28 +684,37 @@ struct LibraryPage: View {
     // MARK: upload
 
     private func handleImportResult(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, !urls.isEmpty else { return }
-        Task { await uploadFiles(urls) }
+        switch result {
+        case .success(let urls):
+            guard !urls.isEmpty, !uploading else { return }
+            Task { await uploadFiles(urls) }
+        case .failure(let error):
+            let failure = error as NSError
+            guard !(failure.domain == NSCocoaErrorDomain && failure.code == NSUserCancelledError) else { return }
+            uploadError = "无法选择 PDF：\(error.localizedDescription)"
+        }
     }
 
     private func uploadFiles(_ urls: [URL]) async {
         uploading = true
         uploadError = ""
-        var succeeded = false
+        var failures: [String] = []
         defer { uploading = false }
-        do {
-            for url in urls {
-                let secured = url.startAccessingSecurityScopedResource()
-                defer { if secured { url.stopAccessingSecurityScopedResource() } }
-                let data = try Data(contentsOf: url)
+        for url in urls {
+            let secured = url.startAccessingSecurityScopedResource()
+            defer { if secured { url.stopAccessingSecurityScopedResource() } }
+            do {
+                // Read large PDFs away from the UI executor.
+                let data = try await Task.detached(priority: .userInitiated) { try Data(contentsOf: url) }.value
                 _ = try await papersStore.upload(fileData: data, fileName: url.lastPathComponent, projectId: papersStore.filter.projectId)
+            } catch {
+                failures.append("\(url.lastPathComponent)：\(ApiFailure.wrap(error).localizedDescription)")
             }
-            await papersStore.fetch()
-            succeeded = true
-        } catch {
-            uploadError = ApiFailure.wrap(error).errorDescription ?? "上传失败"
         }
-        if succeeded { showUpload = false }
+        await papersStore.fetch()
+        await projectsStore.fetch()
+        uploadError = failures.joined(separator: "\n")
+        if failures.isEmpty { showUpload = false }
     }
 
     private var uploadSheet: some View {
@@ -797,6 +723,7 @@ struct LibraryPage: View {
                 Text("上传论文").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.gray800)
                 Spacer(minLength: 0)
                 RoundIconButton(systemName: Ic.close, size: 28) { showUpload = false }
+                    .disabled(uploading)
             }
             Button {
                 showFileImporter = true
@@ -812,19 +739,22 @@ struct LibraryPage: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 130)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous)
                         .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                         .foregroundStyle(palette.gray300)
                 )
             }
             .buttonStyle(.plain)
+            .noFocusRing()
+            .disabled(uploading)
 
             if !pipelineReady {
                 HStack(alignment: .top, spacing: 8) {
-                    Image.ic(Ic.shieldAlert).font(.system(size: 14)).foregroundStyle(palette.amber)
+                    Image.ic(Ic.fileText).font(.system(size: 14)).foregroundStyle(palette.gray500)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("处理流程尚未配置").font(.system(size: 12, weight: .medium)).foregroundStyle(palette.amber)
-                        Text("需要模型 API Key 和 MinerU Token。").font(.system(size: 10)).foregroundStyle(palette.amber.opacity(0.85))
+                        Text("可直接导入本地论文库").font(.system(size: 12, weight: .medium)).foregroundStyle(palette.gray700)
+                        Text("配置 AI 模型和 PDF 解析服务后，可在处理任务中开始解析。")
+                            .font(.system(size: 11)).foregroundStyle(palette.gray500)
                     }
                     Spacer(minLength: 0)
                     Button {
@@ -836,12 +766,14 @@ struct LibraryPage: View {
                             Image.ic(Ic.arrowRight).font(.system(size: 10))
                         }
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(palette.amber)
+                        .foregroundStyle(palette.accent)
                     }
                     .buttonStyle(.plain)
+                    .noFocusRing()
+                    .disabled(uploading)
                 }
                 .padding(12)
-                .background(RoundedRectangle(cornerRadius: 8).fill(palette.amber.opacity(0.09)))
+                .liquidInset(cornerRadius: CornerRadius.inset)
             }
 
             if !uploadError.isEmpty {
@@ -851,14 +783,19 @@ struct LibraryPage: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Text("当前项目: \(projectsStore.projects.first { $0.id == papersStore.filter.projectId }?.name ?? "未选择")")
+            Text("导入到： \(projectsStore.projects.first { $0.id == papersStore.filter.projectId }?.name ?? "全部论文")")
                 .font(.system(size: 12))
                 .foregroundStyle(palette.gray500)
                 .frame(maxWidth: .infinity)
         }
         .padding(20)
         .frame(width: 384)
-        .background(palette.gray0)
+        .background(Color.clear)
+        .interactiveDismissDisabled(uploading)
+        // 文件面板必须由当前活动的 sheet 呈现;主页面已有 sheet 时无法再次呈现。
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.pdf], allowsMultipleSelection: true) {
+            handleImportResult($0)
+        }
     }
 }
 
@@ -882,21 +819,11 @@ struct PaperCard: View {
     let onClick: () -> Void
 
     @State private var hovered = false
+    @State private var cornerHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 9) {
-                if showSelector {
-                    Button(action: onToggle) {
-                        Image.ic(selected ? Ic.checkSquare : Ic.square)
-                            .font(.system(size: 15))
-                            .foregroundStyle(selected ? palette.accent : palette.gray300)
-                            .frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .help(selected ? "取消选择" : "选择")
-                }
-
                 if renaming {
                     renameField
                 } else {
@@ -916,34 +843,10 @@ struct PaperCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if !renaming {
-                    HStack(spacing: 2) {
-                        if hovered || selectionMode {
-                            Image.ic(Ic.grip).font(.system(size: 13)).foregroundStyle(palette.gray300)
-                            Button(action: onStartRename) {
-                                Image.ic(Ic.pencil).font(.system(size: 12)).foregroundStyle(palette.gray400)
-                                    .frame(width: 25, height: 25)
-                            }
-                            .buttonStyle(.plain)
-                            .help("重命名")
-                            Button(action: onDelete) {
-                                Image.ic(Ic.trash).font(.system(size: 12)).foregroundStyle(palette.gray400)
-                                    .frame(width: 25, height: 25)
-                            }
-                            .buttonStyle(.plain)
-                            .help("删除")
-                        }
-                    }
-                }
+
             }
 
             HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    StatusDot(status: paper.statusEnum)
-                    Text(paper.statusEnum.label == "未知" ? paper.status : paper.statusEnum.label)
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(palette.gray500)
                 if let firstAuthor = paper.authors.first {
                     Text("\(firstAuthor)\(paper.authors.count > 1 ? " 等" : "")")
                         .font(.system(size: 12))
@@ -959,39 +862,65 @@ struct PaperCard: View {
                         .foregroundStyle(palette.gray500)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(palette.gray50))
-                        .overlay(Capsule().stroke(palette.gray200))
+                        .liquidInset(cornerRadius: ControlSpec.radius)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.top, 13)
+            .padding(.top, paper.authors.isEmpty && paper.year == nil && projectName.isEmpty ? 0 : 13)
 
-            if !paper.domainTags.isEmpty {
-                HStack(spacing: 5) {
-                    ForEach(paper.domainTags.prefix(3), id: \.self) { tag in
-                        Text(tag)
-                            .font(.system(size: 11))
-                            .foregroundStyle(palette.accent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(palette.accentSoft))
+            Spacer(minLength: 11)
+            HStack(alignment: .bottom, spacing: 12) {
+                if !paper.domainTags.isEmpty {
+                    FlowChips {
+                        ForEach(paper.domainTags.prefix(3), id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 11))
+                                .foregroundStyle(palette.accent)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous).fill(palette.accentSoft))
+                        }
                     }
-                    Spacer(minLength: 0)
                 }
-                .padding(.top, 11)
+                Spacer(minLength: 0)
+                HStack(spacing: 4) {
+                    StatusDot(status: paper.statusEnum)
+                    Text(paper.statusEnum.label == "未知" ? paper.status : paper.statusEnum.label)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(palette.gray500)
+                .fixedSize()
+                .padding(.vertical, 4)
             }
         }
+        .frame(minHeight: 108, alignment: .topLeading)
         .padding(17)
-        .frame(minHeight: 142, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(cardBackground))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(borderColor))
-        .shadow(color: palette.shadowCard, radius: hovered ? 6 : 2, y: hovered ? 3 : 1)
-        .offset(y: hovered && !renaming ? -1 : 0)
-        .contentShape(RoundedRectangle(cornerRadius: 12))
-        .onHover { hovered = $0 }
+        .mask(CardCornerContentMask(active: cornerHovered && !renaming))
+        .liquidPanel(tint: renaming || selected ? palette.accentFaint : nil)
+        .overlay(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+            .stroke(renaming || selected ? palette.accent.opacity(0.6) : (hovered ? palette.gray300 : Color.clear)))
+        .overlay(alignment: .topTrailing) {
+            if !renaming {
+                CardCornerActions(hovered: $cornerHovered) {
+                    RoundIconButton(systemName: selected ? Ic.checkSquare : Ic.square, size: 30, title: selected ? "取消选择" : "选择", action: onToggle)
+                    RoundIconButton(systemName: Ic.pencil, size: 30, title: "重命名", action: onStartRename)
+                    RoundIconButton(systemName: Ic.trash, size: 30, title: "删除", action: onDelete)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
+        .onHover { hovered = $0; if !$0 { cornerHovered = false } }
         .onTapGesture {
             if !renaming { onClick() }
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { if !renaming { onClick() } }
+        .contextMenu {
+            Button(selected ? "取消选择" : "选择", action: onToggle)
+            Button("重命名", action: onStartRename)
+            Button("删除", role: .destructive, action: onDelete)
         }
         #if os(macOS)
         .onDrag {
@@ -1003,21 +932,6 @@ struct PaperCard: View {
     /// Dragging a selected card drags the whole selection; otherwise just this card.
     var dragIds: [String] = []
 
-    private var showSelector: Bool { selectionMode || selected || hovered }
-
-    private var cardBackground: Color {
-        if renaming { return palette.accentFaint.opacity(0.34) }
-        if selected { return palette.accentFaint.opacity(0.42) }
-        return palette.gray0
-    }
-
-    private var borderColor: Color {
-        if renaming { return palette.accent.opacity(0.52) }
-        if selected { return palette.accent.opacity(0.58) }
-        if hovered { return palette.accent.opacity(0.42) }
-        return palette.gray300.opacity(0.66)
-    }
-
     private var renameField: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("论文标题", text: Binding(get: { renameValue }, set: onRenameChange))
@@ -1025,8 +939,8 @@ struct PaperCard: View {
                 .font(.reading(15, weight: .medium))
                 .padding(.horizontal, 10)
                 .frame(minHeight: 36)
-                .background(RoundedRectangle(cornerRadius: 8).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.accent))
+                .liquidInset(cornerRadius: CornerRadius.inset)
+                .overlay(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).stroke(palette.accent))
                 .onSubmit { onConfirmRename() }
             HStack(spacing: 5) {
                 Button(action: onConfirmRename) {
@@ -1035,10 +949,10 @@ struct PaperCard: View {
                         Text("保存")
                     }
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.accentForeground)
                     .padding(.horizontal, 8)
                     .frame(minHeight: 28)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(palette.accent))
+                    .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(palette.accent))
                 }
                 .buttonStyle(.plain)
                 .disabled(renameValue.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -1051,8 +965,7 @@ struct PaperCard: View {
                     .foregroundStyle(palette.gray600)
                     .padding(.horizontal, 8)
                     .frame(minHeight: 28)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(palette.gray0))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(palette.gray200))
+                    .liquidInset(cornerRadius: CornerRadius.inset)
                 }
                 .buttonStyle(.plain)
             }
@@ -1063,7 +976,6 @@ struct PaperCard: View {
 #if os(macOS)
 /// Decodes the paper-id list dragged from a card onto a project row.
 struct ProjectDropDelegate: DropDelegate {
-    let projectId: String
     let onDropIds: ([String]) -> Void
 
     func performDrop(info: DropInfo) -> Bool {

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Mirrors settings/SettingsPage.tsx — three tabs (AI 模型 / PDF 解析 / 阅读外观),
 /// readiness card, test-connection actions, bottom notice.
-/// 窄窗口(≤800px,与 web 断点一致)切换为单栏 + 横向 tab。
+/// 窄窗口保留桌面布局,侧栏收成三个圆形图标。
 struct SettingsPage: View {
     @Environment(\.palette) private var palette
     @Environment(\.containerWidth) private var containerWidth
@@ -18,14 +18,23 @@ struct SettingsPage: View {
     @State private var showMineruKey = false
     @State private var showAccentPicker = false
 
-    // LLM form (mirrors llmForm)
+    // LLM form (mirrors llmForm) — 连接三项默认留空,由 placeholder 承载提示;
+    // 思考强度/单次最大输出在「测试连通性」成功后才解锁选择。
     @State private var llmId = "primary"
-    @State private var llmName = "主要模型"
-    @State private var llmBaseUrl = "https://api.openai.com/v1"
+    @State private var llmName = ""
+    @State private var llmBaseUrl = ""
     @State private var llmApiKey = ""
-    @State private var llmModel = "gpt-4o-mini"
+    @State private var llmModel = ""
     @State private var llmMaxTokens = 8192
     @State private var llmReasoning = "medium"
+    @State private var llmCaps: LLMCaps?
+    @State private var llmTestedKey: String?
+
+    /// 测试连通性后拿到的模型能力(思考强度档位与默认单次最大输出)。
+    private struct LLMCaps: Equatable {
+        let levels: [String]
+        let maxOutputDefault: Int?
+    }
 
     // MinerU form (mirrors mineruForm)
     @State private var mineruMode = "cloud"
@@ -35,7 +44,6 @@ struct SettingsPage: View {
     @State private var mineruIsOcr = false
     @State private var mineruEnableFormula = true
     @State private var mineruEnableTable = true
-    @State private var mineruLanguage = "en"
     @State private var mineruModelBackend = "vlm"
 
     // Appearance form
@@ -84,65 +92,38 @@ struct SettingsPage: View {
         return settingsStore.settings?.mineru.apiKeyConfigured ?? false
     }
 
-    private var readyCount: Int { (llmReady ? 1 : 0) + (mineruReady ? 1 : 0) }
-
-    var body: some View {
-        Group {
-            if isCompact {
-                VStack(spacing: 0) {
-                    CompactTopBar()
-                    ScrollView {
-                        VStack(spacing: 12) {
-                            compactTabBar
-                            sectionCard
-                        }
-                        .padding(8)
-                    }
-                }
-                .background(palette.gray0)
-            } else {
-                // 左列:设置侧栏在上,导航栏贴底收尾
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(spacing: 12) {
-                        sidebarCard
-                            .frame(maxHeight: .infinity, alignment: .top)
-                        WorkspaceNav(opensUpward: true)
-                    }
-                    .frame(width: 224)
-                    .zIndex(1)
-                    sectionCard
-                }
-                .padding(14)
-                .background(palette.gray0)
-            }
-        }
-        .task { hydrateFromSettings() }
-        .overlay(alignment: .bottomTrailing) { noticeOverlay }
+    /// 连接三项(Base URL/模型/API Key)的签名;与最近一次成功测试一致才解锁能力选项。
+    private var llmConnectionKey: String {
+        let base = llmBaseUrl.trimmingCharacters(in: .whitespaces)
+        let model = llmModel.trimmingCharacters(in: .whitespaces)
+        let typedKey = llmApiKey.trimmingCharacters(in: .whitespaces)
+        return "\(base)|\(model)|\(typedKey.isEmpty ? "saved" : typedKey)"
     }
 
-    /// 紧凑宽度:三个设置 tab 变成横向分段条(web ≤800px)。
-    private var compactTabBar: some View {
-        HStack(spacing: 3) {
-            ForEach(Tab.allCases, id: \.self) { item in
-                Button {
-                    tab = item
-                } label: {
-                    HStack(spacing: 6) {
-                        Image.ic(item.icon).font(.system(size: 13))
-                        Text(item.label).font(.system(size: 12.5, weight: .semibold))
-                    }
-                    .foregroundStyle(tab == item ? .white : palette.gray500)
-                    .frame(maxWidth: .infinity, minHeight: 38)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(tab == item ? palette.accent : Color.clear))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .noFocusRing()
-            }
+    private var llmGateOpen: Bool { llmCaps != nil && llmTestedKey == llmConnectionKey }
+
+    private var reasoningOptions: [(String, String)] {
+        let labels = ["off": "关闭", "none": "关闭", "minimal": "最低", "low": "低", "medium": "中", "high": "高", "xhigh": "最高"]
+        let levels = llmGateOpen ? (llmCaps?.levels ?? ["off", "low", "medium", "high"]) : ["off", "low", "medium", "high"]
+        return levels.map { ($0, labels[$0] ?? $0) }
+    }
+
+    private var maxOutputRange: ClosedRange<Int> {
+        guard let limit = llmCaps?.maxOutputDefault, limit > 256 else { return 256...32768 }
+        return 256...limit
+    }
+
+    var body: some View {
+        WorkspaceSplitLayout(compact: isCompact, collapsed: false, temporarilyExpanded: .constant(false)) {
+            sidebarCard
+        } content: {
+            sectionCard
         }
-        .padding(3)
-        .background(RoundedRectangle(cornerRadius: 12).fill(palette.gray50))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.gray200))
+        .task {
+            hydrateAppearance()
+            hydrateFromSettings()
+        }
+        .overlay(alignment: .bottomTrailing) { noticeOverlay }
     }
 
     // MARK: sidebar
@@ -153,71 +134,134 @@ struct SettingsPage: View {
                 Button {
                     tab = item
                 } label: {
-                    HStack(spacing: 7) {
+                    if isCompact {
                         Image.ic(item.icon)
-                            .font(.system(size: 14))
-                            .frame(width: 22)
+                            .font(.system(size: 16))
                             .foregroundStyle(tab == item ? palette.accent : palette.gray500)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.label).font(.system(size: 15, weight: tab == item ? .semibold : .regular))
+                            .frame(width: 40, height: 40)
+                            .background(tab == item ? palette.accentSoft : Color.clear, in: Circle())
+                            .contentShape(Circle())
+                    } else {
+                        HStack(spacing: 7) {
+                            Image.ic(item.icon)
+                                .font(.system(size: 14))
+                                .frame(width: 22)
                                 .foregroundStyle(tab == item ? palette.accent : palette.gray500)
-                            if !isCompact {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.label).font(.system(size: 15, weight: tab == item ? .semibold : .regular))
+                                    .foregroundStyle(tab == item ? palette.accent : palette.gray500)
                                 Text(item.description).font(.system(size: 12)).foregroundStyle(palette.gray400)
                             }
-                        }
-                        Spacer(minLength: 0)
-                        if !isCompact {
+                            Spacer(minLength: 0)
                             Image.ic(Ic.chevronRight).font(.system(size: 12)).foregroundStyle(palette.gray400)
                         }
+                        .padding(9)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                        .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(tab == item ? palette.accentSoft : Color.clear))
+                        .contentShape(Rectangle())
                     }
-                    .padding(9)
-                    .frame(minHeight: 54)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(tab == item ? palette.accentSoft : Color.clear))
-                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .noFocusRing()
+                .help(item.label).accessibilityLabel(item.label)
             }
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 9) {
-                Image.ic(Ic.shieldAlert).font(.system(size: 16)).foregroundStyle(palette.accent)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("流程就绪度 \(readyCount)/2").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.gray700)
-                    Text(readyCount == 2 ? "可以上传并处理论文" : "需要补齐下方连接").font(.system(size: 12)).foregroundStyle(palette.gray500)
+            if !isCompact {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 9) {
+                    Image.ic(settingsKnown && llmReady && mineruReady ? Ic.check : Ic.shieldAlert)
+                        .font(.system(size: 16))
+                        .foregroundStyle(settingsKnown && llmReady && mineruReady ? palette.success : palette.accent)
+                    Text("使用前置条件").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.gray700)
                 }
+                readinessRow("AI 模型", ready: settingsKnown ? llmReady : nil)
+                readinessRow("PDF 解析", ready: settingsKnown ? mineruReady : nil)
+                Text("PDF 可以先导入本地。配置完成后，在处理任务中开始解析、翻译与问答。")
+                    .font(.system(size: 11.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(palette.gray400)
             }
             .padding(11)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 9).fill(palette.accentFaint))
-            .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray200))
+            .liquidInset(tint: palette.accentFaint)
+            }
         }
-        .padding(18)
-        .trafficLightTopPadding()
-        .liquidPanel(cornerRadius: 14)
+        .padding(isCompact ? 6 : 18)
+        .liquidPanel()
+    }
+
+    private var settingsKnown: Bool { settingsStore.settings != nil }
+
+    /// 就绪清单行:配置完成显示绿色对勾,否则提示待配置;设置读不到时无法确认。
+    private func readinessRow(_ label: String, ready: Bool?) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.system(size: 12.5)).foregroundStyle(palette.gray600)
+            Spacer(minLength: 0)
+            switch ready {
+            case .some(true):
+                HStack(spacing: 4) {
+                    Image.ic(Ic.check).font(.system(size: 11, weight: .semibold))
+                    Text("已就绪").font(.system(size: 12))
+                }
+                .foregroundStyle(palette.success)
+            case .some(false):
+                Text("待配置").font(.system(size: 12)).foregroundStyle(palette.gray400)
+            case .none:
+                Text("无法确认").font(.system(size: 12)).foregroundStyle(palette.gray400)
+            }
+        }
     }
 
     // MARK: content
 
     private var sectionCard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                sectionHeader
-                Group {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if settingsStore.credentialsNeedAuthorization || (!llmReady && !settingsStore.llmProfile.model.isEmpty) {
+                        credentialAccessNotice
+                    }
+                    sectionHeader
+                    Group {
+                        switch tab {
+                        case .model: modelSection
+                        case .parser: parserSection
+                        case .appearance: appearanceSection
+                        }
+                    }
+                }.padding(containerWidth < 650 ? 16 : 30).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack {
+                ToolbarButton(title: "保存配置", icon: Ic.save, kind: .primary, busy: saving) {
                     switch tab {
-                    case .model: modelSection
-                    case .parser: parserSection
-                    case .appearance: appearanceSection
+                    case .model: saveLLM()
+                    case .parser: saveMinerU()
+                    case .appearance: saveAppearance()
                     }
                 }
+                Spacer(minLength: 0)
+            }.padding(.horizontal, containerWidth < 650 ? 16 : 30).padding(.top, 18).padding(.bottom, 66)
+        }.liquidPanel().frame(maxHeight: .infinity)
+    }
+
+    private var credentialAccessNotice: some View {
+        HStack(spacing: 12) {
+            Text(settingsStore.credentialsNeedAuthorization
+                 ? "已保存的凭据需要钥匙串授权，本地论文库仍可正常使用。"
+                 : "如果以前保存过 API Key，可重新读取系统钥匙串中的凭据。")
+                .font(.system(size: 12)).foregroundStyle(palette.gray600)
+            Spacer(minLength: 0)
+            Button(settingsStore.readingCredentials ? "正在读取…" : "读取已保存凭据") {
+                Task { await settingsStore.readSavedCredentials(allowInteraction: true) }
             }
-            .padding(30)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.bordered)
+            .disabled(settingsStore.readingCredentials)
         }
-        .trafficLightTopPadding()
-        .liquidPanel(cornerRadius: 14)
-        .frame(maxHeight: .infinity)
+        .padding(12)
+        .liquidInset(cornerRadius: CornerRadius.inset)
+        .padding(.bottom, 20)
     }
 
     @ViewBuilder
@@ -226,35 +270,33 @@ struct SettingsPage: View {
             switch tab {
             case .model:
                 return ("MODEL CONNECTION", "AI 模型连接",
-                        "使用 OpenAI-compatible Chat Completions 接口。配置仅保存在本机数据库中,并使用稳定的本机密钥加密;一个配置会自动用于翻译、逻辑归纳、Chatbot 和笔记生成。", llmReady)
+                        "使用 OpenAI-compatible Chat Completions 接口。API Key 保存在本机钥匙串中，一个配置自动用于翻译、逻辑归纳、Chatbot 和笔记生成。", llmReady)
             case .parser:
                 let local = mineruMode == "local"
                 return ("DOCUMENT PARSER", "MinerU 精准解析",
-                        local ? "调用本机部署的 MinerU Gradio 服务(如 Docker 版 mineru-gradio),无需 Token;MinerU.Chem 化学解析目前仅云端提供。"
-                              : "MinerU Token 仅保存在本机数据库中,并使用稳定的本机密钥加密。本地 PDF 会申请官方签名上传地址,上传后自动轮询批任务。",
+                        local ? "调用本机部署的 MinerU Gradio 服务（如 Docker 版 mineru-gradio），无需 Token；MinerU.Chem 化学解析目前仅云端提供。"
+                              : "MinerU Token 保存在本机钥匙串中。本地 PDF 会申请官方签名上传地址，上传后自动轮询批任务。",
                         mineruReady)
             case .appearance:
-                return ("READING APPEARANCE", "阅读外观", "这些设置只影响界面,不会改变论文数据。", true)
+                return ("READING APPEARANCE", "阅读外观", "保存在本机 App 中，只影响界面显示，修改即时生效。", true)
             }
         }()
 
-        HStack(alignment: .top, spacing: 30) {
+        HStack(alignment: .top, spacing: containerWidth < 650 ? 12 : 30) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(kicker).font(.mono(10, weight: .bold)).kerning(1.6).foregroundStyle(palette.accent)
-                Text(title).font(.reading(30, weight: .medium)).foregroundStyle(palette.gray900).padding(.vertical, 4)
+                Text(kicker).font(.system(size: 10, weight: .bold)).kerning(1.6).foregroundStyle(palette.accent)
+                Text(title).font(.reading(containerWidth < 650 ? 24 : 30, weight: .medium)).foregroundStyle(palette.gray900).padding(.vertical, 4)
                 Text(description).font(.system(size: 14.5)).lineSpacing(6).foregroundStyle(palette.gray500)
             }
             .frame(maxWidth: 620, alignment: .leading)
             Spacer(minLength: 0)
-            HStack(spacing: 5) {
-                Image.ic(configured ? Ic.check : Ic.close).font(.system(size: 10))
-                Text(configured ? "已配置" : "需要配置")
-            }
-            .font(.system(size: 12))
+            Label(configured ? "已配置" : "需要配置", systemImage: configured ? Ic.check : "exclamationmark.circle")
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(configured ? palette.success : palette.danger)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 5).fill(configured ? palette.success.opacity(0.1) : palette.danger.opacity(0.09)))
+            .padding(.horizontal, 12)
+            .frame(height: 30, alignment: .center)
+            .fixedSize(horizontal: true, vertical: false)
+            .liquidTool(tint: (configured ? palette.success : palette.danger).opacity(0.1))
         }
         .padding(.bottom, 24)
         .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
@@ -276,22 +318,16 @@ struct SettingsPage: View {
     }
 
     /// 两列并排的字段(窄屏收为单列)。
-    private func fieldRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        Group {
-            if isCompact {
-                VStack(alignment: .leading, spacing: 14) { content() }
-            } else {
-                HStack(alignment: .center, spacing: 18) { content() }
-            }
+    @ViewBuilder private func fieldRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if containerWidth < 720 {
+            VStack(alignment: .leading, spacing: 18) { content() }
+        } else {
+            HStack(alignment: .center, spacing: 18) { content() }
         }
     }
 
     private func textFieldBinding(_ text: Binding<String>, placeholder: String) -> some View {
         FormTextField(text: text, placeholder: placeholder)
-    }
-
-    private func pickerBinding(_ value: Binding<String>, options: [(String, String)]) -> some View {
-        PillPicker(selection: value, options: options)
     }
 
     private func secretField(_ text: Binding<String>, placeholder: String, visible: Binding<Bool>) -> some View {
@@ -304,37 +340,51 @@ struct SettingsPage: View {
         VStack(alignment: .leading, spacing: 22) {
             fieldRow {
                 field("配置名称") {
-                    textFieldBinding($llmName, placeholder: "主要模型")
+                    textFieldBinding($llmName, placeholder: "例如：主要模型")
                 }
                 field("模型名称") {
-                    textFieldBinding($llmModel, placeholder: "必须与服务商控制台中的 model id 完全一致")
+                    textFieldBinding($llmModel, placeholder: "与服务商控制台的 model id 完全一致")
                 }
             }
             field("Base URL") {
-                textFieldBinding($llmBaseUrl, placeholder: "填写到 /v1,应用会自动追加 /chat/completions")
+                textFieldBinding($llmBaseUrl, placeholder: "填写到 /v1，例如 https://api.openai.com/v1")
             }
             field("API Key") {
-                secretField(
-                    $llmApiKey,
-                    placeholder: llmReady
-                        ? "已保存:\(settingsStore.settings?.modelProfiles.first?.apiKeyMasked ?? "")。留空会继续使用,不会覆盖。"
-                        : "测试时会先安全保存当前配置。",
-                    visible: $showLlmKey
-                )
+                HStack(spacing: 9) {
+                    secretField(
+                        $llmApiKey,
+                        placeholder: llmReady
+                            ? "已保存：\(settingsStore.settings?.modelProfiles.first?.apiKeyMasked ?? "")。留空会继续使用，不会覆盖。"
+                            : "填入服务商提供的 API Key，仅保存在本机钥匙串",
+                        visible: $showLlmKey
+                    )
+                    ToolbarButton(title: "测试连通性", icon: Ic.testTube, busy: testingLlm) {
+                        testLLM()
+                    }
+                }
             }
             fieldRow {
                 field("思考强度") {
-                    pickerBinding($llmReasoning, options: [("off", "关闭"), ("low", "低"), ("medium", "中"), ("high", "高")])
+                    ReasoningSlider(selection: $llmReasoning, options: reasoningOptions)
+                        .disabled(!llmGateOpen)
+                        .opacity(llmGateOpen ? 1 : 0.55)
                 }
-                field("单次最大输出") {
-                    FormStepper(title: "\(llmMaxTokens)", value: $llmMaxTokens, range: 256...32768, step: 256)
+                field("输出上限") {
+                    FormStepper(title: "\(llmMaxTokens)", value: $llmMaxTokens, range: maxOutputRange, step: 256)
+                        .disabled(!llmGateOpen)
+                        .opacity(llmGateOpen ? 1 : 0.55)
                 }
             }
-            actionRow(testing: $testingLlm, saveTitle: "保存配置", testTitle: "保存并测试") {
-                saveLLM()
-            } onTest: {
-                testLLM()
-            }
+            Text(llmGateOpen
+                 ? "已获取该模型能力，确认思考强度与对话输出上限后，点击「保存配置」生效。"
+                 : "填好配置名称、模型、Base URL 与 API Key，点击「测试连通性」后即可选择思考强度与对话输出上限。")
+                .font(.system(size: 12.5))
+                .lineSpacing(4)
+                .foregroundStyle(palette.gray400)
+            Text("全文翻译与分析合并为一次请求，输出容量按论文长度估算并受模型上限限制。")
+                .font(.system(size: 12.5))
+                .foregroundStyle(palette.gray400)
+
         }
     }
 
@@ -343,50 +393,53 @@ struct SettingsPage: View {
     private var parserSection: some View {
         VStack(alignment: .leading, spacing: 22) {
             field("解析方式") {
-                pickerBinding($mineruMode, options: [("cloud", "MinerU 云端 API"), ("local", "本地部署(Gradio 服务)")])
+                SlidingChoice(selection: $mineruMode, options: [("cloud", "MinerU 云端 API"), ("local", "本地部署（Gradio 服务）")])
             }
             if mineruMode == "local" {
                 field("本地服务地址") {
-                    textFieldBinding($mineruLocalUrl, placeholder: "指向 mineru-gradio 的 HTTP 地址,例如 http://127.0.0.1:7860")
+                    HStack(spacing: 9) {
+                        textFieldBinding($mineruLocalUrl, placeholder: "指向 mineru-gradio 的 HTTP 地址，例如 http://127.0.0.1:7860")
+                        ToolbarButton(title: "测试连接", icon: Ic.testTube, busy: testingMineru) {
+                            testMinerU()
+                        }
+                    }
                 }
             } else {
                 field("Base URL") {
                     textFieldBinding($mineruBaseUrl, placeholder: "https://mineru.net/api/v4")
                 }
                 field("MinerU Token") {
-                    secretField(
-                        $mineruApiKey,
-                        placeholder: settingsStore.settings?.mineru.apiKeyConfigured == true
-                            ? "已保存。留空保存不会覆盖。"
-                            : "在 MinerU API 管理页面创建 Token(只填写 Token 本身)",
-                        visible: $showMineruKey
-                    )
-                }
-            }
-            fieldRow {
-                field("解析模型") {
-                    if mineruMode == "local" {
-                        pickerBinding($mineruModelBackend, options: [("pipeline", "Pipeline"), ("vlm", "VLM Engine"), ("hybrid-engine", "Hybrid Engine")])
-                    } else {
-                        pickerBinding($mineruModelBackend, options: [("vlm", "VLM(推荐)"), ("pipeline", "Pipeline")])
+                    HStack(spacing: 9) {
+                        secretField(
+                            $mineruApiKey,
+                            placeholder: settingsStore.settings?.mineru.apiKeyConfigured == true
+                                ? "已保存。留空保存不会覆盖。"
+                                : "粘贴在 MinerU API 管理页面创建的 Token",
+                            visible: $showMineruKey
+                        )
+                        ToolbarButton(title: "测试连接", icon: Ic.testTube, busy: testingMineru) {
+                            testMinerU()
+                        }
                     }
                 }
-                field("论文语言") {
-                    pickerBinding($mineruLanguage, options: [("en", "英文"), ("ch", "中文"), ("japan", "日文"), ("korean", "韩文")])
+            }
+            field("解析模型") {
+                if mineruMode == "local" {
+                    SlidingChoice(selection: $mineruModelBackend, options: [("pipeline", "Pipeline"), ("vlm", "VLM Engine"), ("hybrid-engine", "Hybrid Engine")])
+                } else {
+                    SlidingChoice(selection: $mineruModelBackend, options: [("vlm", "VLM（推荐）"), ("pipeline", "Pipeline")])
                 }
             }
 
-            HStack(spacing: 22) {
+            FlowChips(spacing: 16) {
                 Toggle("公式识别", isOn: $mineruEnableFormula).toggleStyle(.switch).font(.system(size: 13))
                 Toggle("表格识别", isOn: $mineruEnableTable).toggleStyle(.switch).font(.system(size: 13))
                 Toggle("强制 OCR", isOn: $mineruIsOcr).toggleStyle(.switch).font(.system(size: 13))
-                Spacer(minLength: 0)
             }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-            .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray200))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 52)
 
-            Text("你的示例是可检索文字型 PDF,建议关闭“强制 OCR”;公式和表格识别保持开启。")
+            Text("对于可检索文字型 PDF，建议关闭“强制 OCR”，公式与表格识别保持开启；对于扫描版或图片型 PDF，建议开启“强制 OCR”。")
                 .font(.system(size: 13))
                 .lineSpacing(4)
                 .foregroundStyle(palette.gray500)
@@ -394,11 +447,6 @@ struct SettingsPage: View {
                 .overlay(alignment: .leading) { Rectangle().fill(palette.accent).frame(width: 2) }
                 .padding(.vertical, 11)
 
-            actionRow(testing: $testingMineru, saveTitle: "保存配置", testTitle: "测试连接") {
-                saveMinerU()
-            } onTest: {
-                testMinerU()
-            }
         }
     }
 
@@ -408,10 +456,25 @@ struct SettingsPage: View {
         VStack(alignment: .leading, spacing: 22) {
             fieldRow {
                 field("主题") {
-                    pickerBinding($appearanceTheme, options: [("light", "亮色"), ("dark", "暗色"), ("system", "跟随系统")])
+                    SlidingChoice(selection: $appearanceTheme, options: [("light", "亮色"), ("dark", "暗色"), ("system", "跟随系统")], icons: ["light": "sun.max", "dark": "moon", "system": "display"])
                 }
                 field("正文字号") {
                     FormStepper(title: "\(appearanceFontSize)", value: $appearanceFontSize, range: 13...23)
+                }
+            }
+            field("背景透明度") {
+                HStack(spacing: 12) {
+                    Slider(value: transparencyBinding, in: 0...50, step: 1)
+                        .accessibilityLabel("背景透明度")
+                    TextField("百分比", value: transparencyBinding, format: .number.precision(.fractionLength(0)))
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .font(.system(size: 13))
+                        .frame(width: 44)
+                        .padding(8)
+                        .liquidInset(cornerRadius: ControlSpec.radius)
+                        .accessibilityLabel("背景透明度百分比")
+                    Text("%").foregroundStyle(palette.gray500)
                 }
             }
             field("强调色") {
@@ -420,32 +483,43 @@ struct SettingsPage: View {
                     textFieldBinding($appearanceAccent, placeholder: "#275DCE")
                 }
             }
-            actionRow(testing: .constant(false), saveTitle: "保存配置", testTitle: nil) {
-                saveAppearance()
-            } onTest: {}
+            field("玻璃透明度") {
+                HStack(spacing: 12) {
+                    Slider(value: glassTransparencyBinding, in: 0...30, step: 1)
+                        .accessibilityLabel("液态玻璃组件透明度")
+                    TextField("百分比", value: glassTransparencyBinding, format: .number.precision(.fractionLength(0)))
+                        .textFieldStyle(.plain).multilineTextAlignment(.trailing)
+                        .font(.system(size: 13)).frame(width: 44)
+                        .padding(8).liquidInset(cornerRadius: ControlSpec.radius)
+                        .accessibilityLabel("液态玻璃透明度百分比")
+                    Text("%").foregroundStyle(palette.gray500)
+                }
+            }
         }
     }
 
-    /// 强调色示例块:与字段框同规格的圆角矩形,点按弹出预设色板 + 系统拾色器。
+    private var transparencyBinding: Binding<Double> {
+        Binding(get: { appStore.backgroundTransparency }, set: { appStore.setBackgroundTransparency($0) })
+    }
+
+    private var glassTransparencyBinding: Binding<Double> {
+        Binding(get: { appStore.glassTransparency }, set: { appStore.setGlassTransparency($0) })
+    }
+
+    /// 与保存按钮使用同一强调色和原生玻璃样式,避免预览与实际按钮颜色不同。
     private var accentSwatch: some View {
-        Button {
+        let previewAccent = Palette.default(accentHex: appearanceAccent, dark: palette.dark).accent
+        return Button {
             showAccentPicker = true
         } label: {
-            RoundedRectangle(cornerRadius: ControlSpec.radius)
-                .fill(Color(hex: appearanceAccent) ?? palette.accent)
-                .overlay(
-                    RoundedRectangle(cornerRadius: ControlSpec.radius)
-                        .strokeBorder(palette.gray300, lineWidth: 1)
-                        .opacity(0.6)
-                )
-                .overlay(alignment: .center) {
-                    Image.ic(Ic.penLine)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                }
-                .frame(width: 44, height: ControlSpec.height)
+            Image.ic(Ic.penLine)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 24, height: 24)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LiquidActionButtonStyle(prominent: true, tint: previewAccent, horizontalPadding: 8, verticalPadding: 8))
+        .controlSize(.large)
+        .tint(previewAccent)
+        .frame(width: ControlSpec.height, height: ControlSpec.height)
         .noFocusRing()
         .help("选取强调色")
         .popover(isPresented: $showAccentPicker, arrowEdge: .bottom) {
@@ -464,10 +538,10 @@ struct SettingsPage: View {
                     Button {
                         appearanceAccent = hex
                     } label: {
-                        RoundedRectangle(cornerRadius: 7)
+                        RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous)
                             .fill(Color(hex: hex) ?? palette.accent)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 7)
+                                RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous)
                                     .stroke(appearanceAccent.caseInsensitiveCompare(hex) == .orderedSame ? palette.gray800 : palette.gray300, lineWidth: appearanceAccent.caseInsensitiveCompare(hex) == .orderedSame ? 2 : 1)
                                     .opacity(0.8)
                             )
@@ -502,32 +576,17 @@ struct SettingsPage: View {
          "#B66A12", "#D97706", "#B64235", "#DB2777", "#237A52", "#515762"]
     }
 
-    // MARK: shared actions row
-
-    private func actionRow(testing: Binding<Bool>, saveTitle: String, testTitle: String?, onSave: @escaping () -> Void, onTest: @escaping () -> Void) -> some View {
-        HStack(spacing: 9) {
-            ToolbarButton(title: saveTitle, icon: Ic.save, kind: .primary, busy: saving || testing.wrappedValue) {
-                onSave()
-            }
-
-            if let testTitle {
-                ToolbarButton(title: testTitle, icon: Ic.testTube, busy: testing.wrappedValue) {
-                    onTest()
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.top, 22)
-        .overlay(alignment: .top) { Rectangle().fill(palette.gray200).frame(height: 1) }
-    }
-
     // MARK: actions
+
+    /// 外观表单从客户端本地真身(AppStore/LocalPrefs)回填,与服务是否可达无关。
+    private func hydrateAppearance() {
+        appearanceAccent = appStore.accentColor
+        appearanceTheme = appStore.theme
+        appearanceFontSize = LocalPrefs.readingFontSize ?? settingsStore.settings?.appearance.readingFontSize ?? 18
+    }
 
     private func hydrateFromSettings() {
         guard let settings = settingsStore.settings else { return }
-        appearanceAccent = settings.appearance.accentColor
-        appearanceTheme = settings.appearance.themeMode
-        appearanceFontSize = settings.appearance.readingFontSize
 
         let mineru = settings.mineru
         mineruMode = mineru.mode
@@ -537,7 +596,6 @@ struct SettingsPage: View {
         mineruIsOcr = options.isOcr
         mineruEnableFormula = options.enableFormula
         mineruEnableTable = options.enableTable
-        mineruLanguage = options.language
         mineruModelBackend = options.modelBackend
 
         if let profile = settings.modelProfiles.first {
@@ -572,8 +630,10 @@ struct SettingsPage: View {
             let profile = normalizedProfile()
             try await settingsStore.saveLLMProfile(profile: profile)
             llmApiKey = ""
-            notice = Notice(success: true, message: "模型配置已保存,并已分配给解析、总结、对话和笔记流程。")
+            notice = Notice(success: true, message: "模型配置已保存，并已分配给解析、总结、对话和笔记流程。")
             hydrateFromSettings()
+            // 保存后密钥从"已输入"转为"留空用已存";连接未变时保持能力选项解锁。
+            if llmGateOpen { llmTestedKey = llmConnectionKey }
         }
     }
 
@@ -589,7 +649,6 @@ struct SettingsPage: View {
                     isOcr: mineruIsOcr,
                     enableFormula: mineruEnableFormula,
                     enableTable: mineruEnableTable,
-                    language: mineruLanguage,
                     modelBackend: mineruModelBackend
                 )
             )
@@ -599,39 +658,50 @@ struct SettingsPage: View {
         }
     }
 
+    /// 外观属于客户端本地设置:写入 UserDefaults 即时生效,与任何服务无关。
     private func saveAppearance() {
-        runAction {
-            let appearance = AppearanceSettings(
-                accentColor: appearanceAccent,
-                themeMode: appearanceTheme,
-                readingFontSize: appearanceFontSize,
-                bilingualLayout: "stacked"
-            )
-            try await settingsStore.saveAppearance(appearance)
-            appStore.setAccent(appearanceAccent)
-            appStore.setTheme(appearanceTheme)
-            notice = Notice(success: true, message: "阅读外观已保存。")
-        }
+        let accent = appearanceAccent.trimmingCharacters(in: .whitespaces)
+        appStore.setAccent(accent)
+        appStore.setTheme(appearanceTheme)
+        LocalPrefs.readingFontSize = appearanceFontSize
+        notice = Notice(success: true, message: "阅读外观已保存。")
     }
 
+    /// 测试连通性:直接探测模型服务(不落库);成功后记录能力并解锁思考强度/输出上限。
     private func testLLM() {
         notice = nil
+        let profile = normalizedProfile()
+        if profile.baseUrl.isEmpty {
+            notice = Notice(success: false, message: "请先填写 Base URL。")
+            return
+        }
+        if profile.model.isEmpty {
+            notice = Notice(success: false, message: "请先填写模型名称。")
+            return
+        }
+        if profile.apiKey.isEmpty && !llmReady {
+            notice = Notice(success: false, message: "请先填写 API Key，再测试连通性。")
+            return
+        }
         testingLlm = true
         Task {
             defer { testingLlm = false }
-            let profile = normalizedProfile()
-            if profile.apiKey.isEmpty && !llmReady {
-                notice = Notice(success: false, message: "请先填写 API Key,再保存并测试。")
-                return
-            }
-            do {
-                try await settingsStore.saveLLMProfile(profile: profile)
-                llmApiKey = ""
-                let result = try await ApiClient().settingsTestLLM(baseUrl: profile.baseUrl, apiKey: "", model: profile.model, profileId: profile.id ?? "primary")
-                notice = Notice(success: result.success, message: result.message)
-                hydrateFromSettings()
-            } catch {
-                notice = Notice(success: false, message: ApiFailure.wrap(error).errorDescription ?? "操作失败,请检查配置后重试。")
+            let result = await settingsStore.testLLM(
+                baseUrl: profile.baseUrl, apiKey: profile.apiKey, model: profile.model
+            )
+            notice = Notice(success: result.success, message: result.message)
+            guard result.success else { return }
+            let levels = result.supportsReasoning == false
+                ? ["off"]
+                : (result.reasoningLevels ?? ["off", "low", "medium", "high"])
+            llmCaps = LLMCaps(
+                levels: levels,
+                maxOutputDefault: result.defaultMaxOutputTokens
+            )
+            llmTestedKey = llmConnectionKey
+            if result.supportsReasoning == false { llmReasoning = "off" }
+            if let limit = result.defaultMaxOutputTokens, limit > 0 {
+                llmMaxTokens = limit
             }
         }
     }
@@ -641,17 +711,13 @@ struct SettingsPage: View {
         testingMineru = true
         Task {
             defer { testingMineru = false }
-            do {
-                let result = try await ApiClient().settingsTestMinerU(
-                    mode: mineruMode,
-                    baseUrl: mineruBaseUrl.trimmingCharacters(in: .whitespaces),
-                    localUrl: mineruLocalUrl.trimmingCharacters(in: .whitespaces),
-                    apiKey: mineruApiKey.trimmingCharacters(in: .whitespaces)
-                )
-                notice = Notice(success: result.success, message: result.message)
-            } catch {
-                notice = Notice(success: false, message: ApiFailure.wrap(error).errorDescription ?? "操作失败,请检查配置后重试。")
-            }
+            let result = await settingsStore.testMinerU(
+                mode: mineruMode,
+                baseUrl: mineruBaseUrl.trimmingCharacters(in: .whitespaces),
+                localUrl: mineruLocalUrl.trimmingCharacters(in: .whitespaces),
+                apiKey: mineruApiKey.trimmingCharacters(in: .whitespaces)
+            )
+            notice = Notice(success: result.success, message: result.message)
         }
     }
 
@@ -662,7 +728,7 @@ struct SettingsPage: View {
             do {
                 try await action()
             } catch {
-                notice = Notice(success: false, message: ApiFailure.wrap(error).errorDescription ?? "操作失败,请检查配置后重试。")
+                notice = Notice(success: false, message: ApiFailure.wrap(error).errorDescription ?? "操作失败，请检查配置后重试。")
             }
         }
     }
@@ -672,34 +738,32 @@ struct SettingsPage: View {
     private var noticeOverlay: some View {
         Group {
             if let notice {
-                HStack(spacing: 8) {
-                    Image.ic(notice.success ? Ic.check : Ic.close).font(.system(size: 13))
-                    Text(notice.message).font(.system(size: 12)).lineSpacing(3).frame(maxWidth: .infinity, alignment: .leading)
-                    Button {
-                        self.notice = nil
-                    } label: {
-                        Image.ic(Ic.close).font(.system(size: 10)).foregroundStyle(palette.gray500)
-                    }
-                    .buttonStyle(.plain)
+                ViewThatFits(in: .horizontal) {
+                    noticeContent(notice).fixedSize(horizontal: true, vertical: true)
+                    noticeContent(notice)
                 }
-                .foregroundStyle(notice.success ? palette.success : palette.danger)
                 .padding(13)
-                .frame(width: 420)
-                .background(
-                    RoundedRectangle(cornerRadius: 9)
-                        .fill((notice.success ? palette.success : palette.danger).opacity(0.08))
-                        .background(palette.gray0, in: RoundedRectangle(cornerRadius: 9))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 9)
-                        .stroke((notice.success ? palette.success : palette.danger).opacity(0.3))
-                )
-                .shadow(color: palette.shadowCard, radius: 10, y: 4)
+                .liquidPanel()
+                .frame(maxWidth: min(320, containerWidth - 40), alignment: .trailing)
                 .padding(20)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .animation(.easeInOut(duration: 0.2), value: notice)
+    }
+
+    private func noticeContent(_ notice: Notice) -> some View {
+        HStack(spacing: 8) {
+            Image.ic(notice.success ? Ic.check : Ic.close).font(.system(size: 13))
+            Text(notice.message).font(.system(size: 12)).lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Button { self.notice = nil } label: {
+                Image.ic(Ic.close).font(.system(size: 10)).foregroundStyle(palette.gray500)
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain).noFocusRing().accessibilityLabel("关闭提示")
+        }
+        .foregroundStyle(notice.success ? palette.success : palette.danger)
     }
 }
 

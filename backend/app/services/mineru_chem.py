@@ -19,13 +19,13 @@ CHEM_MOLECULE_RAW_FILENAME = "apicall_mol.json"
 
 
 class MinerUChemUnavailable(RuntimeError):
-    error_code = ErrorCode.MINERU_SUBMIT_FAILED
     """Raised when MinerU accepted a normal task but did not start Chem."""
+    error_code = ErrorCode.MINERU_SUBMIT_FAILED
 
 
 class MinerUChemSchemaError(ValueError):
-    error_code = ErrorCode.JSON_PARSE_FAILED
     """Raised when a downloaded Chem bundle does not match the observed schema."""
+    error_code = ErrorCode.JSON_PARSE_FAILED
 
 
 def find_chem_summary(output_dir: str | Path) -> str:

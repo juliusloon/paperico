@@ -1,99 +1,87 @@
-# Paperico 原生 App(macOS)
+# Paperico 原生 App
 
-Paperico 工作台的原生 SwiftUI 实现,只使用原生组件
-(SwiftUI / PDFKit / URLSession / UserDefaults),**零第三方依赖**,直接对接现有
-FastAPI 后端(`backend/`,不改动)。
+v0.2.4 是独立 SwiftUI 应用。PDF、解析结构、对话和笔记由原生代码持久化；解析与模型请求
+直连用户配置的服务。运行 App 不需要 Python。当前 target 为 macOS 26+，构建需要 Xcode 26+。
 
-- 源码:`Paperico/`(Swift),工程:`Paperico.xcodeproj`
-- 后端契约防漂移:`scripts/check_api_contract.py`
+## 构建、运行和验证
 
-## 环境要求
-
-- macOS 14.0+
-- **Xcode 16 及以上**(工程使用 objectVersion 77 文件系统同步组格式)
-
-## 构建与运行
+在仓库根目录运行：
 
 ```bash
-open Paperico.xcodeproj
+./script/build_and_run.sh             # 构建、启动
+./script/build_and_run.sh --verify    # 确认新进程已运行
+./script/build_and_run.sh --build-only
+./script/build_and_run.sh --debug
+./script/build_and_run.sh --logs
+./script/build_and_run.sh --telemetry
+./script/check.sh                     # 核心回归 + App 构建
+./script/check.sh --with-backend      # 额外检查旧 API 组件
 ```
 
-1. Scheme 选 `Paperico`;目标选 **My Mac**。
-2. 签名:选 "Sign to Run Locally" + 团队。
-3. Run(⌘R)。
+脚本为本次运行选择标准路径的 Xcode，不修改系统的 xcode-select 设置。
+需要验证 Release 时可设置 `PAPERICO_CONFIGURATION=Release`；`PAPERICO_DERIVED_DATA` 可指定已有构建目录。
 
-命令行构建:
+构建日志位于 `macos/build/build-local.log`；Debug bundle 位于
+`macos/build/DerivedData-Local/Build/Products/Debug/Paperico.app`。
+也可打开 `Paperico.xcodeproj`，选择 Paperico / My Mac 后运行。
+
+App 保持单一工作台。⌘1–⌘3 页面导航，⌘, 直接跳转到工作台内的设置页；重复按键复用当前窗口。
+Swift 文件由工程的文件系统同步组自动发现，增删源码不需要重新生成 pbxproj。
+
+SwiftPM 包仅服务于核心测试：
 
 ```bash
-xcodebuild -project Paperico.xcodeproj -scheme Paperico \
-  -destination 'platform=macOS' build
+# Xcode 已选中时，可独立运行：
+swift test --package-path macos
+./script/check_markdown_rendering.sh
 ```
 
-## 连接后端
+它不替代 App 的 Xcode target。原生回归使用临时目录和合成数据，不读取真实论文库，
+也不调用模型或 MinerU。
+Markdown 渲染回归在隐藏的 SwiftUI 容器中重放流式表格，覆盖不完整行、列数变化与窄面板，验证实际视图不会越界。
 
-App 是原生客户端,后端跑在任意一台机器上(`./start.sh`,默认 `:8000`):
+## 代码边界
 
-1. 首启进入 **设置 → 服务器地址**,填入后端地址,例如
-   `http://127.0.0.1:8000`(Mac 本机)或 `http://192.168.x.x:8000`(后端跑在局域网
-   另一台机器上)。
-2. 点 ✓ 保存并检测,出现"后端连接正常"即可。
-3. 之后 AI 模型 / MinerU 配置保存在后端的同一份数据库配置中(读写 `/api/settings`)。
+- `App/PapericoApp.swift`：场景与命令；`AppModel.swift`：依赖装配与启动；
+  `AppEnvironment.swift`：工作台和设置场景共用的依赖注入。
+- `Stores/`：按 Settings、Projects、Papers、Reader、Chat 分文件组织。
+- `Core/PaperLibrary.swift`：串行本地业务事务；LibraryIndex / LibraryFiles：格式与 IO。
+- `Core/PaperPipeline.swift`、`JobGate.swift`：分阶段处理、取消、重试与并发许可。
+- `Core/ChatService.swift`、`AnalysisEngine.swift`：证据上下文与分析请求。
+- `Pages/Reader/PaperDocumentView.swift`：离线正文与原生交互桥；`ReaderDivider.swift`：屏幕坐标分隔柄输入。
+- `reader-renderer/`：Markdown / KaTeX 源码、固定依赖与生成脚本；`Resources/Reader/`：已打包的离线资源。
+- `Pages/LibraryManagementSheet.swift`：处理任务与回收站；`Pages/Reader/`：阅读器。
+- `Components/LocalPaperImage.swift`：后台下采样与有上限的本地图像缓存。
 
-明文 HTTP:IP 直连与 localhost 本就豁免 ATS;工程已额外声明
-`NSAllowsLocalNetworking` 以支持局域网主机名。App 已启用 App Sandbox
-并授予网络客户端 + 用户选定文件读写(上传 PDF / 导出笔记)。
+详细的数据、状态和已知限制见 [架构分析](../docs/architecture.md)。
 
-### 数据存放位置
+## 数据与凭据
 
-App 遵循 macOS 标准目录规范,全部写入都在沙盒容器
-`~/Library/Containers/com.paperico.native/` 内:
+数据根目录位于 App 沙盒的 `Application Support/Paperico/`，包含 library.json、pdfs、
+papers、mineru_output、analyses 与 logs。普通服务设置和阅读偏好用 UserDefaults；两个
+凭据用 Keychain。App Sandbox 授权网络客户端和用户选定文件读写。
 
-| 内容 | 位置(容器内) | 写入方 |
-|---|---|---|
-| 偏好 / 阅读进度 / 服务器地址 | `Library/Preferences/com.paperico.native.plist`(UserDefaults) | `LocalPrefs` / `ServerConfig` |
-| 诊断与性能日志 | `Library/Application Support/Paperico/logs/` | `ReaderPerf`(开启追踪时) |
-| 导出的笔记 .md | 用户通过 fileExporter 自选 | `ChatPanel` |
+阅读外观中的背景透明度与玻璃透明度分别保存，拖动即时生效；玻璃控件供 build
+确认组件材质，文字与图标不随之变淡。PDF 阅读进度包含页内位置，逻辑链与目录共用章节层级。
 
-论文 PDF 与数据库属于后端:仓库模式存 `backend/`,或用 `./start.sh --app-data`
-存到 `~/Library/Application Support/Paperico/`(见根 README)。
+删除只是移入回收站，数据持续保留；没有自动清空。旧后端 SQLite / Fernet 与新版数据
+独立，目前没有自动导入迁移。请保留旧目录和数据库。
 
-## 本地开发循环
+## DMG
 
-- 增删 Swift 文件:工程使用文件系统同步组,**无需**重新生成工程;
-  如需重写 `project.pbxproj`,运行 `python3 scripts/make_pbxproj.py`。
-- 后端 schema 变更后跑契约检查:
+```bash
+./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+```
 
-  ```bash
-  # 后端运行中:
-  python3 scripts/check_api_contract.py --base http://127.0.0.1:8000
-  # 或离线:
-  python3 -c "import json,sys;sys.path.insert(0,'../backend');from app.main import app;print(json.dumps(app.openapi()))" > openapi.json
-  python3 scripts/check_api_contract.py --file openapi.json
-  ```
+Release bundle 位于 `macos/build/DerivedData-Release/Build/Products/Release/`，DMG 位于
+`macos/build/Paperico-0.2.4.dmg`。本地临时签名不等同于 Developer ID 签名和公证。
+正式分发可设置 `PAPERICO_SIGN_IDENTITY`，并自行完成所需的公证流程。
 
-  输出 `contract OK` 说明 `Paperico/Models/Models.swift` 与后端字段一致;
-  否则按提示补齐 Swift 模型并更新脚本内 SNAPSHOT。
+## 旧 API 契约
 
-- 性能基准:
+`Models/Models.swift` 保留与后端相兼容的 DTO 结构。`scripts/check_api_contract.py` 校验
+这份字段契约，用于兼容维护；当前 App 不从该 API 读取数据。
 
-  ```bash
-  ./scripts/run_reader_bench.sh
-  ```
-
-## 功能覆盖
-
-| 页面 | 覆盖 |
-|---|---|
-| 首页 | hero 文案/装饰画/指标/最近阅读/工作流面板 |
-| 论文库 | 项目分组(新建/重命名/删除/拖拽投递)、搜索、状态/排序筛选、多选批量移动删除、内联重命名、上传弹层(PDF 多选)、状态轮询 |
-| 方法索引 | 类别侧栏计数、搜索、方法卡展开论文跳转 |
-| 设置 | AI 模型 / MinerU(云/本地)/ 阅读外观三表单,测试连接,就绪度卡,notice;**服务器地址** |
-| 阅读器 | 边栏逻辑链大纲(随内容滚动)、双语/原文切换、字号缩放、重新翻译(+后台错误回显)、处理中/失败舞台与重新解析、进度条与进度记忆、文本↔PDF 切换 |
-| PDF | PDFKit 连续滚动、缩放记忆、按页进度记忆、原生划选 → "引用选中内容"加入对话 |
-| 对话 | SSE 流式、会话管理、引用证据 chips(跳块+闪高亮)、附加上下文 chips(选段/方法卡/图表)、预设提示词、笔记模式(多选生成 + 导出 .md) |
-
-## 实现差异说明
-
-以下均为"原生等价实现"的选择:LaTeX 以等宽样式呈现(无 KaTeX)、译文区按块附加上下文
-(附上下文菜单)、PDF 进度按页、原生 ColorPicker/Picker、服务器地址为原生客户端
-必需新增项。
+```bash
+backend/.venv/bin/python macos/scripts/check_api_contract.py --file backend/tests/openapi_snapshot.json
+```

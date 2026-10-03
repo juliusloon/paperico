@@ -9,13 +9,14 @@ typealias PlatformColor = NSColor
 #endif
 
 /// Native PDFKit replacement for reader/PdfReadingArea.tsx (pdf.js canvas stack).
-/// Continuous single-page scrolling, zoom memory per paper, page-based progress,
+/// Continuous single-page scrolling, zoom memory per paper, within-page progress,
 /// native text selection with an "引用选中内容" attach action.
 struct PdfReadingArea: View {
     @Environment(\.palette) private var palette
     @Environment(ReaderStore.self) private var readerStore
 
     let paperId: String
+    let layout: LibraryLayout
     @Binding var zoom: Double
     @Binding var progress: Double
     var onAttachSelection: (String) -> Void
@@ -26,11 +27,18 @@ struct PdfReadingArea: View {
         ZStack(alignment: .topTrailing) {
             PlatformPdfView(
                 paperId: paperId,
+                layout: layout,
+                backgroundColor: .clear,
+                dark: palette.dark,
                 zoom: zoom,
                 shared: shared,
-                onPageChange: { pageIndex, pageCount in
-                    let next = pageCount > 0 ? Double(pageIndex + 1) / Double(pageCount) * 100 : 0
-                    if abs(progress - next) >= 0.5 {
+                onZoomChange: { next in
+                    guard abs(zoom - next) > 0.001 else { return }
+                    zoom = next
+                    LocalPrefs.setPdfZoom(next, paperId: paperId)
+                },
+                onProgressChange: { next in
+                    if abs(progress - next) >= 0.05 {
                         progress = next
                         LocalPrefs.setPdfProgress(next, paperId: paperId)
                     }
@@ -42,16 +50,23 @@ struct PdfReadingArea: View {
                 VStack(spacing: 10) {
                     Image.ic(Ic.alertTriangle).font(.system(size: 20)).foregroundStyle(palette.accent)
                     Text("无法打开原始 PDF").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.gray800)
-                    Text("请确认论文已解析完成,或后端服务可用。")
+                    Text("未找到本地 PDF，请检查论文文件是否仍在数据目录中。")
                         .font(.system(size: 12))
                         .foregroundStyle(palette.gray500)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(palette.gray0)
-            } else {
-                attachButton
-                    .padding(.top, 62)
-                    .padding(.trailing, 18)
+                .background(Color.clear)
+            }
+        }
+        .overlay {
+            GeometryReader { geometry in
+                if let rect = shared.selectionRect, let text = shared.selectionText, !text.isEmpty {
+                    SelectionActionOverlay(selectionRect: rect, viewport: geometry.size) {
+                        let snippet = "P\(shared.selectionPage ?? 1) · \(String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(6000)))"
+                        onAttachSelection(snippet)
+                        shared.clearSelection()
+                    }
+                }
             }
         }
         .overlay(alignment: .top) {
@@ -78,28 +93,6 @@ struct PdfReadingArea: View {
         }
     }
 
-    private var attachButton: some View {
-        Button {
-            if let text = shared.selectionText, !text.isEmpty {
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                let snippet = "P\(shared.selectionPage ?? 1) · \(String(trimmed.prefix(230)))"
-                onAttachSelection(snippet)
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image.ic(Ic.messageCircle).font(.system(size: 12))
-                Text("引用选中内容").font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundStyle((shared.selectionText ?? "").isEmpty ? palette.gray400 : palette.accent)
-            .padding(.horizontal, 10)
-            .frame(minHeight: 36)
-            .background(RoundedRectangle(cornerRadius: 10).fill(palette.gray0.opacity(0.92)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(palette.gray300.opacity(0.72)))
-        }
-        .buttonStyle(.plain)
-        .disabled((shared.selectionText ?? "").isEmpty)
-        .help("把 PDF 中选中的文本加入论文对话")
-    }
 }
 
 /// Selection + load state shared between the PDFKit coordinator and SwiftUI.
@@ -108,6 +101,14 @@ struct PdfReadingArea: View {
 final class SharedPdfState {
     var selectionText: String?
     var selectionPage: Int?
+    var selectionRect: CGRect?
+    var isSelecting = false
+    @ObservationIgnored weak var pdfView: PDFView?
+    func clearSelection() {
+        pdfView?.currentSelection = nil
+        selectionText = nil
+        selectionRect = nil
+    }
     var loaded = false
     var failed = false
     // T2.3 focus request; the coordinator applies it once the document is ready.
@@ -124,48 +125,115 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
     var loadedPaperId: String?
 
     private var observers: [NSObjectProtocol] = []
+    #if os(macOS)
+    private var selectionMonitor: Any?
+    #endif
     private var shared: SharedPdfState?
-    private var onPageChange: ((Int, Int) -> Void)?
+    private var onProgressChange: ((Double) -> Void)?
+    private var onZoomChange: ((Double) -> Void)?
     private var currentZoom: Double = 1
     private var lastAppliedZoom: Double = 0
     private var baseFitFactor: CGFloat = 0
     private var lastFocusToken = 0
+    private var restoringProgress = false
+    private var progressScheduled = false
 
-    func attach(_ view: PDFView, shared: SharedPdfState, onPageChange: @escaping (Int, Int) -> Void) {
+    func attach(_ view: PDFView, shared: SharedPdfState, onZoomChange: @escaping (Double) -> Void,
+                onProgressChange: @escaping (Double) -> Void) {
+        detach()
         self.pdfView = view
         self.shared = shared
-        self.onPageChange = onPageChange
+        shared.pdfView = view
+        self.onProgressChange = onProgressChange
+        self.onZoomChange = onZoomChange
 
         observers.append(NotificationCenter.default.addObserver(
             forName: .PDFViewPageChanged, object: view, queue: .main
-        ) { [weak self] _ in self?.reportPage() })
+        ) { [weak self] _ in Task { @MainActor in self?.scheduleProgress() } })
         observers.append(NotificationCenter.default.addObserver(
             forName: .PDFViewSelectionChanged, object: view, queue: .main
-        ) { [weak self] _ in self?.reportSelection() })
+        ) { [weak self] _ in Task { @MainActor in self?.reportSelection() } })
+        observers.append(NotificationCenter.default.addObserver(
+            forName: .PDFViewScaleChanged, object: view, queue: .main
+        ) { [weak self] _ in Task { @MainActor in
+            self?.reportZoom()
+            self?.reportSelection()
+            self?.scheduleProgress()
+        } })
+        #if os(macOS)
+        selectionMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
+            guard let self, let pdfView = self.pdfView else { return event }
+            if event.type == .leftMouseDown, event.window === pdfView.window {
+                let point = pdfView.convert(event.locationInWindow, from: nil)
+                // Only PDFKit content starts a selection; overlays keep their existing selection.
+                if let content = pdfView.window?.contentView,
+                   let hit = content.hitTest(content.convert(event.locationInWindow, from: nil)),
+                   hit.isDescendant(of: pdfView), pdfView.bounds.contains(point) {
+                    self.selectionGestureChanged(active: true)
+                }
+            } else if event.type == .leftMouseUp,
+                      event.window === pdfView.window || self.shared?.isSelecting == true {
+                self.selectionGestureChanged(active: false)
+                // PDFKit receives the mouse-up after this local monitor.
+                DispatchQueue.main.async { [weak self] in self?.reportSelection() }
+            }
+            return event
+        }
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in Task { @MainActor in
+            self?.selectionGestureChanged(active: false)
+            self?.shared?.clearSelection()
+        } })
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let changed = notification.object as? NSView else { return }
+            Task { @MainActor in
+                guard let self, let pdfView = self.pdfView, changed.isDescendant(of: pdfView) else { return }
+                self.reportSelection()
+                self.scheduleProgress()
+            }
+        })
+        #endif
     }
 
-    func loadPaperIfNeeded(paperId: String) {
+    func viewportChanged() {
+        guard let pdfView, pdfView.document != nil else { return }
+        baseFitFactor = pdfView.scaleFactorForSizeToFit
+        applyZoom()
+        reportSelection()
+        scheduleProgress()
+    }
+
+    func loadPaperIfNeeded(paperId: String, layout: LibraryLayout) {
         guard loadedPaperId != paperId else { return }
         loadedPaperId = paperId
-        let url = ApiClient().papersPdfURL(id: paperId)
-        Task { @MainActor in
+        shared?.loaded = false
+        shared?.failed = false
+        shared?.clearSelection()
+        restoringProgress = true
+        let url = layout.pdfURL(paperId)
+        Task { @MainActor [weak self] in
             let document = await Task.detached(priority: .userInitiated) {
                 PDFDocument(url: url)
             }.value
-            guard let pdfView = pdfView, loadedPaperId == paperId else { return }
+            guard let self, let pdfView = self.pdfView, self.loadedPaperId == paperId else { return }
             if let document {
                 pdfView.document = document
-                shared?.loaded = true
-                shared?.failed = false
+                self.shared?.loaded = true
+                self.shared?.failed = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                     self?.baseFitFactor = pdfView.scaleFactorForSizeToFit
                     self?.applyZoom()
                     self?.restoreProgress()
+                    self?.restoringProgress = false
+                    self?.scheduleProgress()
                     self?.processPendingFocus()
                 }
             } else {
-                shared?.loaded = false
-                shared?.failed = true
+                self.shared?.loaded = false
+                self.shared?.failed = true
             }
         }
     }
@@ -178,21 +246,35 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
 
     private func applyZoom() {
         guard let pdfView else { return }
-        lastAppliedZoom = currentZoom
         let fit = baseFitFactor > 0 ? baseFitFactor : pdfView.scaleFactorForSizeToFit
         guard fit > 0 else { return }
+        baseFitFactor = fit
+        lastAppliedZoom = currentZoom
         pdfView.minScaleFactor = fit * 0.6
         pdfView.maxScaleFactor = fit * 2.4
         pdfView.scaleFactor = min(pdfView.maxScaleFactor, max(pdfView.minScaleFactor, fit * CGFloat(currentZoom)))
     }
 
+    /// PDFKit owns pinch magnification. Keep the binding and saved zoom in the
+    /// same fit-relative units as the toolbar, without reapplying the gesture.
+    private func reportZoom() {
+        guard let pdfView, pdfView.document != nil, baseFitFactor > 0 else { return }
+        let zoom = Double(pdfView.scaleFactor / baseFitFactor)
+        guard zoom.isFinite, abs(currentZoom - zoom) > 0.001 else { return }
+        currentZoom = zoom
+        lastAppliedZoom = zoom
+        onZoomChange?(zoom)
+    }
+
     private func restoreProgress() {
         guard let pdfView, let document = pdfView.document, document.pageCount > 0 else { return }
         let stored = LocalPrefs.pdfProgress(paperId: loadedPaperId ?? "")
-        guard stored > 1 else { return }
-        let index = min(document.pageCount - 1, max(0, Int(stored / 100 * Double(document.pageCount))))
-        if let page = document.page(at: index) {
-            pdfView.go(to: page)
+        guard stored > 0 else { return }
+        let position = PDFReadingPosition(progress: stored, pageCount: document.pageCount)
+        if let page = document.page(at: position.pageIndex) {
+            let bounds = page.bounds(for: pdfView.displayBox)
+            let point = CGPoint(x: bounds.minX, y: bounds.maxY - bounds.height * position.fraction)
+            pdfView.go(to: PDFDestination(page: page, at: point))
         }
     }
 
@@ -233,19 +315,101 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
         }
     }
 
-    private func reportPage() {
-        guard let pdfView, let document = pdfView.document, document.pageCount > 0,
-              let current = pdfView.currentPage, let onPageChange else { return }
-        onPageChange(document.index(for: current), document.pageCount)
+    private func scheduleProgress() {
+        guard !restoringProgress, !progressScheduled else { return }
+        progressScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.progressScheduled = false
+            self.reportProgress()
+        }
     }
 
-    private func reportSelection() {
-        guard let pdfView else { return }
+    private func reportProgress() {
+        guard !restoringProgress, let pdfView, let document = pdfView.document,
+              document.pageCount > 0, pdfView.bounds.height > 0 else { return }
+        #if os(macOS)
+        let flipped = pdfView.isFlipped
+        #else
+        let flipped = true
+        #endif
+        let viewport = pdfView.bounds
+        let top = flipped ? viewport.minY : viewport.maxY
+        let anchor = CGPoint(x: viewport.midX, y: top)
+        guard let page = pdfView.page(for: anchor, nearest: true) else { return }
+        let rect = pdfView.convert(page.bounds(for: pdfView.displayBox), from: page)
+        guard rect.height > 0 else { return }
+        let fraction = flipped ? (top - rect.minY) / rect.height : (rect.maxY - top) / rect.height
+        let position = PDFReadingPosition(pageIndex: document.index(for: page), fraction: Double(fraction))
+        var next = position.percentage(pageCount: document.pageCount)
+        if let last = document.page(at: document.pageCount - 1) {
+            let lastRect = pdfView.convert(last.bounds(for: pdfView.displayBox), from: last)
+            let bottomVisible = flipped ? lastRect.maxY <= viewport.maxY + 1 : lastRect.minY >= viewport.minY - 1
+            if bottomVisible { next = 100 }
+        }
+        onProgressChange?(next)
+    }
+
+    /// Mouse-down hides the action immediately. Keyboard selections can publish normally.
+    func selectionGestureChanged(active: Bool) {
+        shared?.isSelecting = active
+        if active { shared?.selectionRect = nil }
+    }
+
+    func detach() {
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers.removeAll()
+        #if os(macOS)
+        if let selectionMonitor { NSEvent.removeMonitor(selectionMonitor) }
+        selectionMonitor = nil
+        #endif
+        shared?.isSelecting = false
+        shared?.selectionRect = nil
+        shared?.pdfView = nil
+        shared = nil
+        pdfView = nil
+        loadedPaperId = nil
+        baseFitFactor = 0
+        lastAppliedZoom = 0
+        lastFocusToken = 0
+        restoringProgress = false
+        progressScheduled = false
+    }
+
+    func reportSelection() {
+        guard let pdfView, shared?.isSelecting != true else { return }
+        #if os(macOS)
+        // PDFKit may track the drag through a child view. Suppress notifications
+        // while the actual mouse button is held even if hosting hit-testing differed.
+        guard NSEvent.pressedMouseButtons & 1 == 0 else {
+            shared?.selectionRect = nil
+            return
+        }
+        #endif
         let selection = pdfView.currentSelection
         let text = selection?.string
+        shared?.selectionRect = nil
         shared?.selectionText = (text?.isEmpty == false) ? text : nil
         if let selection, let page = selection.pages.first, let document = pdfView.document {
             shared?.selectionPage = document.index(for: page) + 1
+            // Use the last visible line, rather than the union of whole pages.
+            for line in selection.selectionsByLine().reversed() {
+                for selectedPage in line.pages.reversed() {
+                    let converted = pdfView.convert(line.bounds(for: selectedPage), from: selectedPage)
+                    let visible = converted.intersection(pdfView.bounds)
+                    guard !visible.isNull, visible.width > 0, visible.height > 0 else { continue }
+                    #if os(macOS)
+                    let y = pdfView.isFlipped ? visible.minY - pdfView.bounds.minY : pdfView.bounds.maxY - visible.maxY
+                    #else
+                    let y = visible.minY - pdfView.bounds.minY
+                    #endif
+                    guard y + visible.height > 76 else { continue }
+                    shared?.selectionRect = CGRect(x: visible.minX - pdfView.bounds.minX, y: max(76, y),
+                                                   width: visible.width, height: visible.height - max(0, 76 - y))
+                    shared?.selectionPage = document.index(for: selectedPage) + 1
+                    return
+                }
+            }
         } else {
             shared?.selectionPage = nil
         }
@@ -261,9 +425,13 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
 #if os(iOS)
 struct PlatformPdfView: UIViewRepresentable {
     let paperId: String
+    let layout: LibraryLayout
+    let backgroundColor: PlatformColor
+    let dark: Bool
     let zoom: Double
     let shared: SharedPdfState
-    let onPageChange: (Int, Int) -> Void
+    let onZoomChange: (Double) -> Void
+    let onProgressChange: (Double) -> Void
 
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
@@ -271,43 +439,89 @@ struct PlatformPdfView: UIViewRepresentable {
         view.displayDirection = .vertical
         view.autoScales = false
         view.pageShadowsEnabled = true
-        view.backgroundColor = .systemBackground
-        context.coordinator.attach(view, shared: shared, onPageChange: onPageChange)
+        view.backgroundColor = backgroundColor
+        context.coordinator.attach(view, shared: shared, onZoomChange: onZoomChange, onProgressChange: onProgressChange)
         return view
     }
 
     func updateUIView(_ view: PDFView, context: Context) {
+        view.backgroundColor = backgroundColor
+        view.overrideUserInterfaceStyle = dark ? .dark : .light
         context.coordinator.updateZoom(zoom)
-        context.coordinator.loadPaperIfNeeded(paperId: paperId)
+        context.coordinator.loadPaperIfNeeded(paperId: paperId, layout: layout)
         context.coordinator.processPendingFocus()
     }
 
     func makeCoordinator() -> PdfCoordinatorBase { PdfCoordinatorBase() }
+
+    static func dismantleUIView(_ view: PDFView, coordinator: PdfCoordinatorBase) { coordinator.detach() }
 }
 #else
 struct PlatformPdfView: NSViewRepresentable {
     let paperId: String
+    let layout: LibraryLayout
+    let backgroundColor: PlatformColor
+    let dark: Bool
     let zoom: Double
     let shared: SharedPdfState
-    let onPageChange: (Int, Int) -> Void
+    let onZoomChange: (Double) -> Void
+    let onProgressChange: (Double) -> Void
 
     func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
+        let view = TrackingPdfView()
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
         view.autoScales = false
         view.pageShadowsEnabled = true
-        view.backgroundColor = .controlBackgroundColor
-        context.coordinator.attach(view, shared: shared, onPageChange: onPageChange)
+        view.backgroundColor = backgroundColor
+        view.onViewportChange = { [weak coordinator = context.coordinator] in coordinator?.viewportChanged() }
+        context.coordinator.attach(view, shared: shared, onZoomChange: onZoomChange, onProgressChange: onProgressChange)
         return view
     }
 
     func updateNSView(_ view: PDFView, context: Context) {
+        view.backgroundColor = backgroundColor
+        view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         context.coordinator.updateZoom(zoom)
-        context.coordinator.loadPaperIfNeeded(paperId: paperId)
+        context.coordinator.loadPaperIfNeeded(paperId: paperId, layout: layout)
         context.coordinator.processPendingFocus()
     }
 
     func makeCoordinator() -> PdfCoordinatorBase { PdfCoordinatorBase() }
+
+    static func dismantleNSView(_ view: PDFView, coordinator: PdfCoordinatorBase) {
+        (view as? TrackingPdfView)?.onViewportChange = nil
+        coordinator.detach()
+    }
+}
+
+private final class TrackingPdfView: PDFView {
+    var onViewportChange: (() -> Void)?
+    private var lastViewportSize: CGSize = .zero
+    override func layout() {
+        super.layout()
+        // PDFKit's scroll canvas otherwise restores an opaque system fill even
+        // when PDFView.backgroundColor is clear. Pages retain their own colors.
+        clearScrollCanvas()
+        guard bounds.size != lastViewportSize else { return }
+        lastViewportSize = bounds.size
+        DispatchQueue.main.async { [weak self] in self?.onViewportChange?() }
+    }
+
+    private func clearScrollCanvas() {
+        clearScrollBackgrounds(in: self)
+    }
+
+    private func clearScrollBackgrounds(in view: NSView) {
+        if let scroll = view as? NSScrollView {
+            scroll.contentView.postsBoundsChangedNotifications = true
+            scroll.drawsBackground = false
+            scroll.backgroundColor = .clear
+            scroll.contentView.drawsBackground = false
+            scroll.contentView.backgroundColor = .clear
+            return // Do not walk PDFKit's individual page views.
+        }
+        view.subviews.forEach { clearScrollBackgrounds(in: $0) }
+    }
 }
 #endif

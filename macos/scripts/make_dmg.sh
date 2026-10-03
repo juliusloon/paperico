@@ -26,7 +26,31 @@ DMG="build/Paperico-$VERSION.dmg"
 echo "Building Paperico $VERSION (Release)…"
 xcodebuild -project Paperico.xcodeproj -scheme Paperico \
   -configuration Release -destination 'platform=macOS' \
-  -derivedDataPath "$DERIVED" build "$@"
+  -derivedDataPath "$DERIVED" clean build "$@"
+
+# Reject missing or mismatched icons before distributing the app.
+python3 - "$APP" <<'PY'
+import json
+import plistlib
+import sys
+from pathlib import Path
+
+app = Path(sys.argv[1])
+source = Path("Paperico/paperico.icon")
+document = json.loads((source / "icon.json").read_text())
+for group in document["groups"]:
+    for layer in group["layers"]:
+        if "image-name" in layer:
+            assert (source / "Assets" / layer["image-name"]).is_file(), layer
+with (app / "Contents/Info.plist").open("rb") as handle:
+    info = plistlib.load(handle)
+assert info.get("CFBundleIconName") == "paperico", info.get("CFBundleIconName")
+assert info.get("CFBundleIconFile") in ("paperico", "paperico.icns")
+for name in ("paperico.icns", "Assets.car"):
+    resource = app / "Contents/Resources" / name
+    assert resource.is_file() and resource.stat().st_size > 0, resource
+print("Validated compiled Paperico icon resources.")
+PY
 
 if [ -n "${PAPERICO_SIGN_IDENTITY:-}" ]; then
   echo "Signing with '$PAPERICO_SIGN_IDENTITY'…"

@@ -1,0 +1,539 @@
+import Foundation
+import CryptoKit
+
+/// 数据目录布局(非隔离,视图层可同步取本地文件 URL)。
+struct LibraryLayout: Sendable {
+    let root: URL
+
+    func pdfURL(_ id: String) -> URL { root.appendingPathComponent("pdfs/\(id).pdf") }
+    func paperDir(_ id: String) -> URL { root.appendingPathComponent("papers/\(id)", isDirectory: true) }
+    func mineruOutputDir(_ id: String) -> URL { root.appendingPathComponent("mineru_output/\(id)", isDirectory: true) }
+    func analysesDir(_ id: String) -> URL { root.appendingPathComponent("analyses/\(id)", isDirectory: true) }
+    func blocksFile(_ id: String) -> URL { paperDir(id).appendingPathComponent("blocks.json") }
+    func entitiesFile(_ id: String) -> URL { paperDir(id).appendingPathComponent("entities.json") }
+    func chatFile(_ id: String) -> URL { paperDir(id).appendingPathComponent("chat.json") }
+    func notesFile(_ id: String) -> URL { paperDir(id).appendingPathComponent("notes.json") }
+
+    /// 把相对引用还原成本地文件 URL(Block.imagePath 等)。
+    func fileURL(forRelativePath path: String) -> URL? {
+        guard !path.isEmpty else { return nil }
+        guard !path.hasPrefix("/") else { return nil }
+        let base = root.standardizedFileURL.resolvingSymlinksInPath()
+        let url = root.appendingPathComponent(path).standardizedFileURL.resolvingSymlinksInPath()
+        guard url.path.hasPrefix(base.path + "/") else { return nil }
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+}
+
+/// 本地论文库(替代原 FastAPI 后端的持久层)。
+///
+/// 数据全部落在 App 沙盒容器内:
+///   Application Support/Paperico/
+///     library.json                项目 + 论文索引(轻量)
+///     pdfs/<id>.pdf               原始 PDF
+///     papers/<id>/blocks.json     解析块
+///     papers/<id>/entities.json   方法实体
+///     papers/<id>/chat.json       对话会话
+///     papers/<id>/notes.json      笔记
+///     mineru_output/<id>/…        MinerU 解包结果(图片路径按相对引用记录)
+///     analyses/<id>/…             LLM 原始响应 sidecar
+///
+/// Block/ChatMessage 等复用 Models.swift 里的既有 DTO,Codable 序列化,
+/// 视图层零改动;image_path/pdf 一律本地文件 URL,不再有 /api/files。
+actor PaperLibrary {
+
+    private let root: URL
+    let layout: LibraryLayout
+    private var index = LibraryIndex()
+    private var committedIndex = LibraryIndex()
+    private var loaded = false
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(root: URL? = nil) {
+        let base = root ?? AppPaths.appSupport
+        self.root = base
+        self.layout = LibraryLayout(root: base)
+        let e = JSONEncoder()
+        e.keyEncodingStrategy = .convertToSnakeCase
+        e.outputFormatting = [.prettyPrinted, .sortedKeys]
+        self.encoder = e
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        self.decoder = d
+    }
+
+    // MARK: - 目录布局
+
+    var dataRoot: URL { root }
+    var libraryFile: URL { root.appendingPathComponent("library.json") }
+    func pdfURL(_ id: String) -> URL { layout.pdfURL(id) }
+    func paperDir(_ id: String) -> URL { layout.paperDir(id) }
+    func mineruOutputDir(_ id: String) -> URL { layout.mineruOutputDir(id) }
+    func analysesDir(_ id: String) -> URL { layout.analysesDir(id) }
+    func blocksFile(_ id: String) -> URL { layout.blocksFile(id) }
+    func entitiesFile(_ id: String) -> URL { layout.entitiesFile(id) }
+    func chatFile(_ id: String) -> URL { layout.chatFile(id) }
+    func notesFile(_ id: String) -> URL { layout.notesFile(id) }
+
+    // MARK: - 装载与落盘
+
+    func load() throws {
+        guard !loaded else { return }
+        index = try LibraryFiles.readJSON(libraryFile, decoder: decoder) ?? LibraryIndex()
+        committedIndex = index
+        // 启动对账(对齐 reconcile_interrupted_papers):上次退出时仍在处理中的论文标记为中断。
+        let interrupted = ["parsing", "parsed", "normalizing", "analyzing", "reducing"]
+        var changed = false
+        for i in index.papers.indices where interrupted.contains(index.papers[i].status) {
+            index.papers[i].status = "error"
+            index.papers[i].errorMessage = "处理在应用退出时被中断，请重新解析或重新翻译。"
+            index.papers[i].errorCode = ErrorCode.interruptedByRestart.rawValue
+            changed = true
+        }
+        if changed { try persistIndex() }
+        loaded = true
+    }
+
+    private func persistIndex() throws {
+        do {
+            try LibraryFiles.writeJSON(index, to: libraryFile, encoder: encoder)
+            committedIndex = index
+        } catch {
+            index = committedIndex
+            throw error
+        }
+    }
+
+    private func requirePaper(_ id: String) throws {
+        try Task.checkCancellation()
+        guard paper(id: id) != nil else {
+            throw PipelineError("论文已移入回收站或不存在", .internalError)
+        }
+    }
+
+    private func paperRecord(_ id: String) -> Int? {
+        index.papers.firstIndex { $0.id == id }
+    }
+
+    // MARK: - 项目
+
+    func createProject(name: String, description: String) throws -> ProjectGroup {
+        let project = ProjectGroup(
+            id: Self.newId(), name: name, description: description,
+            colorTag: "", paperCount: 0, createdAt: Self.now()
+        )
+        index.projects.append(project)
+        try persistIndex()
+        return project
+    }
+
+    func listProjects() -> [ProjectGroup] {
+        index.projects.map { project in
+            var updated = project
+            updated.paperCount = index.papers.filter { $0.projectId == project.id }.count
+            return updated
+        }
+    }
+
+    func updateProject(id: String, name: String, description: String) throws -> ProjectGroup {
+        guard let projectIndex = index.projects.firstIndex(where: { $0.id == id }) else {
+            throw PipelineError("Project not found", .internalError)
+        }
+        var project = index.projects[projectIndex]
+        project.name = name
+        project.description = description
+        index.projects[projectIndex] = project
+        try persistIndex()
+        return listProjects().first { $0.id == id } ?? project
+    }
+
+    func deleteProject(id: String) throws {
+        // 删除分组但保留论文(对齐后端 unlink 语义)。
+        for i in index.papers.indices where index.papers[i].projectId == id {
+            index.papers[i].projectId = nil
+        }
+        index.projects.removeAll { $0.id == id }
+        try persistIndex()
+    }
+
+    // MARK: - 论文入库
+
+    /// 导入 PDF:落盘 + sha256 去重(对齐 create_paper 的 T1.4 语义)。
+    func importPDF(fileData: Data, fileName: String, projectId: String?) throws -> PaperListItem {
+        guard fileName.lowercased().hasSuffix(".pdf") else {
+            throw PipelineError("Only PDF files are supported", .pdfMissing)
+        }
+        guard fileData.starts(with: Data("%PDF-".utf8)) else {
+            throw PipelineError("The uploaded file is not a valid PDF", .pdfMissing)
+        }
+        let digest = SHA256.hash(data: fileData).map { String(format: "%02x", $0) }.joined()
+        if let duplicateId = index.shaByPaperId.first(where: { key, sha in
+            sha == digest && index.papers.contains { $0.id == key }
+        })?.key,
+           let duplicate = index.papers.first(where: { $0.id == duplicateId }) {
+            let label = duplicate.displayTitle
+            throw PipelineError("与已有论文《\(label)》重复（id \(duplicate.id)）", .duplicatePaper)
+        }
+        if index.trash.contains(where: { index.shaByPaperId[$0.id] == digest }) {
+            throw PipelineError("该 PDF 已在回收站中，请恢复已有论文。", .duplicatePaper)
+        }
+
+        let id = Self.newId()
+        try LibraryFiles.writeData(fileData, to: pdfURL(id))
+        var paper = PaperListItem.empty(id: id)
+        paper.projectId = projectId
+        paper.sourceType = "pdf_upload"
+        paper.originalFileName = fileName
+        index.shaByPaperId[id] = digest
+
+        index.papers.insert(paper, at: 0)
+        try persistIndex()
+        return paper
+    }
+
+    // MARK: - URL 导入(暂无 UI 入口,管线保留 pdf_url 提交路径)
+
+    func importSourceURL(_ urlString: String, projectId: String?) throws -> PaperListItem {
+        let id = Self.newId()
+        var paper = PaperListItem.empty(id: id)
+        paper.projectId = projectId
+        paper.sourceType = urlString.hasSuffix(".pdf") || urlString.contains("/pdf/") ? "url_pdf" : "url_html"
+        paper.originalFileName = String(urlString.split(separator: "/").last?.prefix(100) ?? "")
+        index.sourceUrlByPaperId[id] = urlString
+        index.papers.insert(paper, at: 0)
+        try persistIndex()
+        return paper
+    }
+
+    func sourceURL(paperId: String) -> String? {
+        index.sourceUrlByPaperId[paperId]
+    }
+
+    // MARK: - 论文列表/详情
+
+    func listPapers(projectId: String? = nil, status: String? = nil, q: String? = nil) -> [PaperListItem] {
+        let query = q?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return index.papers.filter { paper in
+            if let projectId, !projectId.isEmpty, paper.projectId != projectId { return false }
+            if let status, !status.isEmpty, paper.status != status { return false }
+            if let query, !query.isEmpty,
+               !paper.title.localizedCaseInsensitiveContains(query),
+               !paper.titleZh.localizedCaseInsensitiveContains(query),
+               !paper.originalFileName.localizedCaseInsensitiveContains(query) { return false }
+            return true
+        }
+    }
+
+    func paper(id: String) -> PaperListItem? {
+        index.papers.first { $0.id == id }
+    }
+
+    func paperDetail(id: String, markOpened: Bool = true) throws -> PaperDetail {
+        guard let record = paper(id: id) else {
+            throw PipelineError("没有找到这篇论文", .internalError)
+        }
+        var detail = PaperDetail(paper: record, blocks: [], entities: [])
+        if let blocks: [Block] = try LibraryFiles.readJSON(blocksFile(id), decoder: decoder) {
+            detail.blocks = blocks
+        }
+        let entities: [MethodEntity] = try LibraryFiles.readJSON(entitiesFile(id), decoder: decoder) ?? []
+        detail.entities = entities
+        // 块级实体引用在读取时构建(后端存关联表,这里由 blockRefs 反推)。
+        detail.blocks = detail.blocks.map { block in
+            var updated = block
+            updated.entityRefs = entities.filter { $0.blockRefs.contains(block.id) }.map(\.id)
+            return updated
+        }
+        // 打开即更新 last_opened_at(对齐 get_paper)。
+        if markOpened, let i = paperRecord(id) {
+            index.papers[i].lastOpenedAt = Self.now()
+            try persistIndex()
+            detail.paper = index.papers[i]
+        }
+        return detail
+    }
+
+    func writeBlocks(paperId: String, blocks: [Block]) throws {
+        try requirePaper(paperId)
+        try LibraryFiles.writeJSON(blocks, to: blocksFile(paperId), encoder: encoder)
+    }
+
+    func writeEntities(paperId: String, entities: [MethodEntity]) throws {
+        try requirePaper(paperId)
+        try LibraryFiles.writeJSON(entities, to: entitiesFile(paperId), encoder: encoder)
+        let newKeys = Set(entities.map(\.canonicalKey)).filter { index.methodAddedAt[$0] == nil }
+        if !newKeys.isEmpty {
+            let timestamp = Self.now()
+            for key in newKeys { index.methodAddedAt[key] = timestamp }
+            try persistIndex()
+        }
+    }
+
+    func readBlocks(paperId: String) throws -> [Block] {
+        try LibraryFiles.readJSON(blocksFile(paperId), decoder: decoder) ?? []
+    }
+
+    func readEntities(paperId: String) throws -> [MethodEntity] {
+        try LibraryFiles.readJSON(entitiesFile(paperId), decoder: decoder) ?? []
+    }
+
+    // MARK: - 状态与元数据
+
+    func setStatus(paperId: String, status: String, errorMessage: String = "", errorCode: String? = nil) throws {
+        guard let i = paperRecord(paperId) else { return }
+        index.papers[i].status = status
+        index.papers[i].errorMessage = errorMessage
+        index.papers[i].errorCode = errorCode
+        try persistIndex()
+    }
+
+    func renamePaper(id: String, title: String) throws -> PaperListItem {
+        guard let i = paperRecord(id) else {
+            throw PipelineError("Paper not found", .internalError)
+        }
+        index.papers[i].title = title
+        try persistIndex()
+        return index.papers[i]
+    }
+
+    func movePapers(paperIds: [String], projectId: String?) throws -> Int {
+        var moved = 0
+        for paperId in paperIds {
+            guard let i = paperRecord(paperId) else { continue }
+            index.papers[i].projectId = projectId
+            moved += 1
+        }
+        try persistIndex()
+        return moved
+    }
+
+    /// Soft-delete preserves all PDF, parsed content, chat and notes until restored.
+    func deletePaper(id: String) throws {
+        guard let record = paper(id: id) else { return }
+        index.trash.insert(TrashedPaper(paper: record, deletedAt: Self.now()), at: 0)
+        index.papers.removeAll { $0.id == id }
+        try persistIndex()
+    }
+
+    func listTrash() -> [TrashedPaper] { index.trash }
+
+    func restorePaper(id: String) throws {
+        guard let entry = index.trash.first(where: { $0.id == id }) else { return }
+        var record = entry.paper
+        if let projectId = record.projectId, !index.projects.contains(where: { $0.id == projectId }) {
+            record.projectId = nil
+        }
+        if record.statusEnum.isActive {
+            record.status = "error"
+            record.errorMessage = "处理已停止，可重新解析或重新翻译。"
+            record.errorCode = ErrorCode.cancelled.rawValue
+        }
+        index.papers.insert(record, at: 0)
+        index.trash.removeAll { $0.id == id }
+        try persistIndex()
+    }
+
+    func updatePaper(_ mutate: (inout PaperListItem) -> Void) throws {
+        var changed = false
+        for i in index.papers.indices {
+            var record = index.papers[i]
+            mutate(&record)
+            if record != index.papers[i] {
+                index.papers[i] = record
+                changed = true
+            }
+        }
+        if changed { try persistIndex() }
+    }
+
+    // MARK: - 跨论文方法索引(对齐 library_api)
+
+    func methodIndex(projectId: String? = nil, category: String? = nil, q: String? = nil) throws -> [MethodIndexItem] {
+        // User index edits remain separate from the paper's extracted evidence.
+        // Aliases combine sources before applying category/search filters.
+        var grouped: [String: [(entity: MethodEntity, paperId: String)]] = [:]
+        for record in index.papers {
+            let paperEntities = try readEntities(paperId: record.id)
+            for entity in paperEntities {
+                let key = methodKey(entity.canonicalKey)
+                if index.hiddenMethods.contains(key) { continue }
+                grouped[key, default: []].append((entity, record.id))
+            }
+        }
+
+        var items: [MethodIndexItem] = []
+        for (key, entries) in grouped {
+            var paperIds = Array(Set(entries.map(\.paperId))).sorted()
+            if let projectId, !projectId.isEmpty {
+                paperIds = paperIds.filter { pid in paper(id: pid)?.projectId == projectId }
+                if paperIds.isEmpty { continue }
+            }
+            var papers: [MethodIndexPaper] = []
+            for pid in paperIds {
+                guard let record = paper(id: pid) else { continue }
+                let blockIds = Set(entries.filter { $0.paperId == pid }.flatMap { $0.entity.blockRefs })
+                papers.append(MethodIndexPaper(paperId: pid, title: record.displayTitle, blockIds: Array(blockIds).sorted()))
+            }
+            if papers.isEmpty { continue }
+            let first = entries.first { $0.entity.canonicalKey == key }?.entity ?? entries[0].entity
+            let content = index.methodContent[key] ?? MethodIndexContent(name: first.name, category: first.category, definitionZh: first.definitionZh)
+            if let category, !category.isEmpty, content.category != category { continue }
+            if let q, !q.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !content.name.localizedCaseInsensitiveContains(q.trimmingCharacters(in: .whitespacesAndNewlines)) { continue }
+            let addedAt = entries.compactMap { index.methodAddedAt[$0.entity.canonicalKey] ?? paper(id: $0.paperId)?.createdAt }.min()
+            items.append(MethodIndexItem(
+                canonicalKey: key, name: content.name, category: content.category,
+                definitionZh: content.definitionZh, papers: papers, addedAt: addedAt
+            ))
+        }
+        return items
+    }
+
+    private func methodKey(_ original: String) -> String {
+        var key = original, visited: Set<String> = []
+        while let next = index.methodAliases[key], visited.insert(key).inserted { key = next }
+        return key
+    }
+
+    func editMethod(key: String, name: String, definitionZh: String) throws {
+        try Task.checkCancellation()
+        let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, let item = try methodIndex().first(where: { $0.id == key }) else {
+            throw PipelineError("方法名称不能为空，且条目必须仍在索引中。", .internalError)
+        }
+        index.methodContent[key] = MethodIndexContent(name: title, category: item.category,
+            definitionZh: definitionZh.trimmingCharacters(in: .whitespacesAndNewlines))
+        try persistIndex()
+    }
+
+    func deleteMethod(key: String) throws {
+        try Task.checkCancellation()
+        guard try methodIndex().contains(where: { $0.id == key }) else {
+            throw PipelineError("方法条目已不存在。", .internalError)
+        }
+        index.hiddenMethods.append(key)
+        try persistIndex()
+    }
+
+    func mergeMethods(keys: [String], keeping target: String, name: String, definitionZh: String) throws {
+        try Task.checkCancellation()
+        let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unique = Set(keys)
+        let items = try methodIndex()
+        guard unique.count == 2, unique.contains(target), !title.isEmpty,
+              unique.isSubset(of: Set(items.map(\.id))), let kept = items.first(where: { $0.id == target }) else {
+            throw PipelineError("请选择两个仍在索引中的方法，并填写合并后的名称。", .internalError)
+        }
+        for key in unique where key != target { index.methodAliases[key] = target }
+        index.methodContent[target] = MethodIndexContent(name: title, category: kept.category,
+            definitionZh: definitionZh.trimmingCharacters(in: .whitespacesAndNewlines))
+        try persistIndex()
+    }
+
+    // MARK: - 对话持久化
+
+    func chatSessions(paperId: String) throws -> [ChatSession] {
+        try LibraryFiles.readJSON(chatFile(paperId), decoder: decoder) ?? []
+    }
+
+    func chatSession(paperId: String, sessionId: String) throws -> ChatSession? {
+        try chatSessions(paperId: paperId).first { $0.id == sessionId }
+    }
+
+    func saveChatSession(paperId: String, session: ChatSession) throws {
+        try requirePaper(paperId)
+        var sessions = try chatSessions(paperId: paperId)
+        if let i = sessions.firstIndex(where: { $0.id == session.id }) {
+            sessions[i] = session
+        } else {
+            sessions.insert(session, at: 0)
+        }
+        try LibraryFiles.writeJSON(sessions, to: chatFile(paperId), encoder: encoder)
+    }
+
+    // MARK: - 笔记持久化
+
+    func notes(paperId: String) throws -> [Note] {
+        try LibraryFiles.readJSON(notesFile(paperId), decoder: decoder) ?? []
+    }
+
+    func addNote(paperId: String, note: Note) throws {
+        try requirePaper(paperId)
+        var notes = try notes(paperId: paperId)
+        notes.insert(note, at: 0)
+        try LibraryFiles.writeJSON(notes, to: notesFile(paperId), encoder: encoder)
+    }
+
+    // MARK: - Reader annotation sidecar
+
+    func readerAnnotations(paperId: String) throws -> [String: ReaderNodeAnnotation] {
+        try requirePaper(paperId)
+        return try LibraryFiles.readJSON(paperDir(paperId).appendingPathComponent("reader-annotations.json"), decoder: decoder) ?? [:]
+    }
+
+    func saveReaderAnnotations(paperId: String, annotations: [String: ReaderNodeAnnotation]) throws {
+        try requirePaper(paperId)
+        let validIds = Set(try readBlocks(paperId: paperId).map(\.id))
+        let valid = annotations.filter { validIds.contains($0.key) && !$0.value.isEmpty }
+        try LibraryFiles.writeJSON(valid, to: paperDir(paperId).appendingPathComponent("reader-annotations.json"), encoder: encoder)
+    }
+
+    // MARK: - 分析 sidecar
+
+    func writeAnalysisRaw(paperId: String, name: String, data: [String: Any]) throws {
+        try requirePaper(paperId)
+        let url = analysesDir(paperId).appendingPathComponent(name)
+        let jsonObject = data
+        try LibraryFiles.writeJSONAny(jsonObject, to: url)
+    }
+
+    // MARK: - 工具
+
+    static func newId() -> String {
+        UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(12).lowercased()
+    }
+
+    /// RFC3339 UTC(毫秒 + Z),与后端时间戳列同宽,保证字符串排序稳定。
+    static func now() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter.string(from: Date())
+    }
+
+    /// 论文块 ID:`b<论文ID前6位>-<四位序号>`,对话引用 [b00xx] 的取值来源。
+    static func blockId(paperId: String, order: Int) -> String {
+        let prefix = String(paperId.prefix(6))
+        return "b\(prefix)-\(String(format: "%04d", order + 1))"
+    }
+
+    /// 实体名规范化(对齐 _canonical_key)。
+    static func canonicalKey(_ name: String) -> String {
+        let lowered = name.lowercased().trimmingCharacters(in: .whitespaces)
+        var output = ""
+        for scalar in lowered.unicodeScalars {
+            let isAlnum = (scalar.value >= 97 && scalar.value <= 122)
+                || (scalar.value >= 48 && scalar.value <= 57)
+                || (scalar.value >= 0x4E00 && scalar.value <= 0x9FFF)
+            output.unicodeScalars.append(isAlnum ? scalar : "_")
+        }
+        return output.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+    }
+}
+
+// MARK: - DTO 辅助
+
+extension PaperListItem {
+    /// 库内新建论文的默认记录;非空字段全部给后端语义一致的空值。
+    static func empty(id: String) -> PaperListItem {
+        PaperListItem(
+            id: id, title: "", titleZh: "", authors: [], year: nil,
+            domainTags: [], status: "uploaded", projectId: nil,
+            sourceType: "pdf_upload", originalFileName: "", createdAt: PaperLibrary.now(),
+            lastOpenedAt: nil, tldr: "", narrativeSummary: "", contributions: [],
+            difficultyEstimate: "", venue: "", errorMessage: "", errorCode: nil
+        )
+    }
+}

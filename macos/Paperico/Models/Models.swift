@@ -63,6 +63,7 @@ struct Block: Codable, Hashable, Identifiable, Sendable {
     var latex: String
     var plainExplanation: String
     var entityRefs: [String]
+    var headingLevel: Int? = nil
 }
 
 struct MethodEntity: Codable, Hashable, Identifiable, Sendable {
@@ -137,6 +138,8 @@ struct ChatMessage: Codable, Hashable, Identifiable, Sendable {
     var attachedContext: [AttachedContext]?
     var citedBlockIds: [String]?
     var createdAt: String
+    var generationState: String? = nil // stopped | failed; older saved messages decode without this field
+
 }
 
 struct ChatSession: Codable, Hashable, Identifiable, Sendable {
@@ -194,21 +197,20 @@ struct MinerUSettings: Codable, Hashable, Sendable {
     var defaultOptions: MinerUDefaultOptions
 }
 
-/// Backend stores this as a free-form dict; paperico always writes these five keys.
+/// Backend stores this as a free-form dict; paperico always writes these four keys.
 /// Decoding is lenient: missing/unknown keys fall back to the documented defaults
 /// so a schema drift can never invalidate the whole AppSettings payload.
+/// 论文语言交给 MinerU 自动判定,不再作为设置项(旧配置里的 language 键被忽略)。
 struct MinerUDefaultOptions: Codable, Hashable, Sendable {
     var isOcr: Bool
     var enableFormula: Bool
     var enableTable: Bool
-    var language: String
     var modelBackend: String
 
-    init(isOcr: Bool = false, enableFormula: Bool = true, enableTable: Bool = true, language: String = "en", modelBackend: String = "vlm") {
+    init(isOcr: Bool = false, enableFormula: Bool = true, enableTable: Bool = true, modelBackend: String = "vlm") {
         self.isOcr = isOcr
         self.enableFormula = enableFormula
         self.enableTable = enableTable
-        self.language = language
         self.modelBackend = modelBackend
     }
 
@@ -216,7 +218,6 @@ struct MinerUDefaultOptions: Codable, Hashable, Sendable {
         case isOcr = "is_ocr"
         case enableFormula = "enable_formula"
         case enableTable = "enable_table"
-        case language
         case modelBackend = "model_backend"
     }
 
@@ -225,7 +226,6 @@ struct MinerUDefaultOptions: Codable, Hashable, Sendable {
         isOcr = (try? container.decode(Bool.self, forKey: .isOcr)) ?? false
         enableFormula = (try? container.decode(Bool.self, forKey: .enableFormula)) ?? true
         enableTable = (try? container.decode(Bool.self, forKey: .enableTable)) ?? true
-        language = (try? container.decode(String.self, forKey: .language)) ?? "en"
         modelBackend = (try? container.decode(String.self, forKey: .modelBackend)) ?? "vlm"
     }
 
@@ -234,7 +234,6 @@ struct MinerUDefaultOptions: Codable, Hashable, Sendable {
         try container.encode(isOcr, forKey: .isOcr)
         try container.encode(enableFormula, forKey: .enableFormula)
         try container.encode(enableTable, forKey: .enableTable)
-        try container.encode(language, forKey: .language)
         try container.encode(modelBackend, forKey: .modelBackend)
     }
 }
@@ -291,6 +290,10 @@ struct AppSettings: Codable, Hashable, Sendable {
 struct TestConnectionResult: Codable, Hashable, Sendable {
     var success: Bool
     var message: String
+    /// LLM capability probe results; nil for parser tests and legacy responses.
+    var supportsReasoning: Bool?
+    var reasoningLevels: [String]?
+    var defaultMaxOutputTokens: Int?
 }
 
 // MARK: - Library
@@ -326,6 +329,7 @@ struct MethodIndexItem: Codable, Hashable, Identifiable, Sendable {
     var category: String
     var definitionZh: String
     var papers: [MethodIndexPaper]
+    var addedAt: String? = nil
 
     var id: String { canonicalKey }
 }

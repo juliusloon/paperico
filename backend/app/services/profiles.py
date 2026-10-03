@@ -72,8 +72,9 @@ def resolve_llm(app_settings: dict, role: LlmRole) -> LLMClient:
     for profile in profiles:
         if not isinstance(profile, dict):
             continue
-        if _client_for(profile).is_configured:
-            return _client_for(profile)
+        client = _client_for(profile)
+        if client.is_configured:
+            return client
 
     if len(profiles) == 1 and isinstance(profiles[0], dict):
         return _client_for(profiles[0])

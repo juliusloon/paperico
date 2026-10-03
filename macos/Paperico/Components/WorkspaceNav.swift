@@ -1,300 +1,374 @@
 import SwiftUI
 
-/// 工作台导航(floating pill, mirrors layout/WorkspaceNav.tsx)。
-/// - 常规:224×44 玻璃圆角矩形;菜单下拉与自身同宽、左缘对齐。
-/// - 收起(collapsed):纯圆形 logo 按钮(宽度与 52pt 收起侧栏对齐);
-///   阅读器目录收起时仍附加一个圆形目录切换按钮。
-/// - 贴底放置(opensUpward)时菜单向上弹出,否则向下弹出。
+private enum WorkspaceNavMetrics {
+    static let railWidth: CGFloat = 52
+    static let expandedWidth: CGFloat = 224
+    static let barHeight: CGFloat = 52
+}
+
+/// The page reserves only the bottom bar's footprint. The root draws its glass
+/// above every content layer, with extra menu content growing upward in place.
 struct WorkspaceNav: View {
-    @Environment(\.palette) private var palette
-    @Environment(\.colorScheme) private var systemScheme
-    @Environment(AppStore.self) private var appStore
+    var collapsed: Bool? = nil
+    var enabled = true
+    var currentPaperId: String?
+    var includesDirectory = false
+    var surfaceScheme: ColorScheme?
+
+    @Environment(\.containerWidth) private var containerWidth
+
+    @State private var sourceId = UUID()
+    @State private var section: WorkspaceMenuSection?
+
+    private var isCollapsed: Bool { collapsed ?? (containerWidth < LayoutBreakpoint.workspace) }
+
+    var body: some View {
+        Color.clear
+            .frame(width: isCollapsed ? WorkspaceNavMetrics.railWidth : WorkspaceNavMetrics.expandedWidth,
+                   height: WorkspaceNavMetrics.barHeight)
+            .anchorPreference(key: WorkspaceMenuPreferenceKey.self, value: .bounds) { anchor in
+                [WorkspaceMenuRequest(id: sourceId, anchor: anchor, section: section,
+                                      collapsed: isCollapsed, enabled: enabled, currentPaperId: currentPaperId,
+                                      includesDirectory: includesDirectory, surfaceScheme: surfaceScheme,
+                                      dismiss: { section = nil }, toggle: { next in
+                                          section = section == next ? nil : next
+                                      })]
+            }
+            .onChange(of: enabled) { _, active in if !active { section = nil } }
+            .accessibilityHidden(true)
+    }
+}
+
+enum WorkspaceMenuSection { case pages, directory }
+
+struct WorkspaceMenuRequest: Identifiable {
+    let id: UUID
+    let anchor: Anchor<CGRect>
+    let section: WorkspaceMenuSection?
+    let collapsed: Bool
+    let enabled: Bool
+    let currentPaperId: String?
+    let includesDirectory: Bool
+    let surfaceScheme: ColorScheme?
+    let dismiss: () -> Void
+    let toggle: (WorkspaceMenuSection) -> Void
+}
+
+struct WorkspaceMenuPreferenceKey: PreferenceKey {
+    static var defaultValue: [WorkspaceMenuRequest] { [] }
+    static func reduce(value: inout [WorkspaceMenuRequest], nextValue: () -> [WorkspaceMenuRequest]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+struct WorkspaceMenuOverlay: View {
+    let requests: [WorkspaceMenuRequest]
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Router.self) private var router
 
-    var collapsed = false
-    var currentPaperId: String?
-    var onToggleOutline: (() -> Void)? = nil
-    var opensUpward = false
-
-    @State private var menuOpen = false
-
-    private var isDark: Bool {
-        switch appStore.theme {
-        case "dark": return true
-        case "light": return false
-        default: return systemScheme == .dark
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                if requests.contains(where: { $0.section != nil }) {
+                    OutsideDismissArea(label: "收起底部菜单") { dismissAll() }
+                }
+                GlassEffectContainer(spacing: 0) {
+                    ForEach(requests) { request in
+                        let anchor = geometry[request.anchor]
+                        let isCompactButton = request.collapsed && request.section == nil
+                        let width = min(isCompactButton ? WorkspaceNavMetrics.railWidth : WorkspaceNavMetrics.expandedWidth,
+                                        geometry.size.width - anchor.minX - 14)
+                        let available = max(WorkspaceNavMetrics.barHeight, anchor.maxY - 44)
+                        let rows = request.currentPaperId == nil && router.lastPaperId == nil ? 4 : 5
+                        let height: CGFloat = switch request.section {
+                        case .pages: min(available, WorkspaceNavMetrics.barHeight + 24 + CGFloat(rows) * 43)
+                        case .directory: min(available, 520)
+                        case nil: WorkspaceNavMetrics.barHeight
+                        }
+                        WorkspaceNavSurface(request: request)
+                            .environment(\.colorScheme, request.surfaceScheme ?? colorScheme)
+                            .disabled(!request.enabled)
+                            .frame(width: width, height: height, alignment: .bottomLeading)
+                            // The bottom edge stays at the bar's original position.
+                            .position(x: anchor.minX + width / 2, y: anchor.maxY - height / 2)
+                            .transition(.opacity)
+                            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: request.section)
+                            .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: request.collapsed)
+                    }
+                }
+            }
+            .onExitCommand { dismissAll() }
         }
     }
 
-    private struct NavPage: Hashable {
+    private func dismissAll() { requests.forEach { $0.dismiss() } }
+}
+
+private struct WorkspaceNavSurface: View {
+    let request: WorkspaceMenuRequest
+    @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppStore.self) private var appStore
+    @Environment(Router.self) private var router
+    @Environment(ReaderStore.self) private var readerStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isDark: Bool {
+        switch appStore.theme {
+        case "dark": true
+        case "light": false
+        default: colorScheme == .dark
+        }
+    }
+
+
+    private struct NavPage: Identifiable {
         let page: Router.Page
         let label: String
         let icon: String
-        let prefix: String
+        var id: String { label }
     }
 
     private var pages: [NavPage] {
         var items = [
-            NavPage(page: .home, label: "首页", icon: Ic.house, prefix: "home"),
-            NavPage(page: .library, label: "论文库", icon: Ic.library, prefix: "library"),
-            NavPage(page: .methods, label: "方法索引", icon: Ic.layers, prefix: "methods"),
+            NavPage(page: .home, label: "首页", icon: Ic.house),
+            NavPage(page: .library, label: "论文库", icon: Ic.library),
+            NavPage(page: .methods, label: "方法索引", icon: Ic.layers)
         ]
-        if let readerPaperId = currentPaperId ?? router.lastPaperId, !readerPaperId.isEmpty {
-            items.append(NavPage(page: .reader(paperId: readerPaperId), label: "阅读器", icon: Ic.bookOpen, prefix: "paper"))
+        if let id = request.currentPaperId ?? router.lastPaperId, !id.isEmpty {
+            items.append(NavPage(page: .reader(paperId: id), label: "阅读器", icon: Ic.bookOpen))
         }
-        items.append(NavPage(page: .settings, label: "设置", icon: Ic.settings, prefix: "settings"))
+        items.append(NavPage(page: .settings, label: "设置", icon: Ic.settings))
         return items
     }
 
-    private func isActive(_ item: NavPage) -> Bool {
-        switch item.page {
-        case .home: return router.page == .home
-        case .reader(let paperId):
-            if case .reader(let current) = router.page { return current == paperId }
-            return false
-        default:
-            return item.prefix == prefix(of: router.page)
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            if let section = request.section {
+                Group {
+                    switch section {
+                    case .pages: pageMenu
+                    case .directory: directory
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.bottom, WorkspaceNavMetrics.barHeight + 4)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            }
+            bottomBar
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .liquidPanel(cornerRadius: isCompactButton ? WorkspaceNavMetrics.barHeight / 2 : 24)
+        .environment(\.floatingSurface, true)
+    }
+
+    private var isCompactButton: Bool { request.collapsed && request.section == nil }
+
+    @ViewBuilder private var bottomBar: some View {
+        if isCompactButton {
+            Button { request.toggle(.pages) } label: {
+                brandIcon.frame(width: WorkspaceNavMetrics.railWidth, height: WorkspaceNavMetrics.barHeight)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain).noFocusRing()
+            .help("展开工作台导航").accessibilityLabel("展开工作台导航")
+        } else {
+            expandedBottomBar
         }
     }
 
-    private func prefix(of page: Router.Page) -> String {
-        switch page {
-        case .home: return "home"
-        case .library: return "library"
-        case .methods: return "methods"
-        case .settings: return "settings"
-        case .reader: return "paper"
+    private var brandIcon: some View {
+        Image("PapericoMark")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 28, height: 28)
+            .foregroundStyle(palette.accent)
+            .frame(width: 36, height: 36)
+    }
+
+    /// The bar stays fixed while additional page or directory rows grow upward.
+    private var expandedBottomBar: some View {
+        HStack(spacing: 4) {
+            Button { request.toggle(.pages) } label: {
+                HStack(spacing: 7) {
+                    brandIcon
+                    Text("Paperico").font(.reading(15, weight: .semibold))
+                        .lineLimit(1).minimumScaleFactor(0.85)
+                        .foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
+                    Image.ic(Ic.chevronDown).font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(request.section == .pages ? 180 : 0))
+                }.frame(height: 36).contentShape(Rectangle())
+            }.help("展开工作台导航").accessibilityLabel("展开工作台导航")
+            Group {
+                if request.includesDirectory {
+                    Button { request.toggle(.directory) } label: {
+                        Image.ic(Ic.listTree).font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.primary).frame(width: 32, height: 32)
+                    }.help("展开或收起论文逻辑链目录")
+                        .accessibilityLabel("论文逻辑链目录")
+                        .accessibilityValue(request.section == .directory ? "已展开" : "已收起")
+                } else { Color.clear.frame(width: 32, height: 32).accessibilityHidden(true) }
+            }
+            RoundIconButton(systemName: isDark ? Ic.sun : Ic.moon, size: 32,
+                            title: isDark ? "切换亮色" : "切换暗色", foreground: .primary) {
+                appStore.setTheme(isDark ? "light" : "dark")
+            }
         }
+        .padding(.horizontal, 8)
+        .frame(width: WorkspaceNavMetrics.expandedWidth,
+               height: WorkspaceNavMetrics.barHeight, alignment: .leading)
+        .buttonStyle(.plain).noFocusRing()
+    }
+
+    private var pageMenu: some View {
+        ScrollView {
+            VStack(spacing: 3) {
+                ForEach(pages) { item in
+                    Button {
+                        request.dismiss()
+                        router.go(item.page)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image.ic(item.icon).font(.system(size: 13)).frame(width: 20)
+                            Text(item.label).font(.system(size: 13))
+                            Spacer(minLength: 0)
+                            if item.page == router.page {
+                                Text("当前").font(.system(size: 10)).foregroundStyle(.secondary)
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 9).frame(height: 40)
+                        .background(Color.primary.opacity(item.page == router.page ? 0.07 : 0),
+                                    in: RoundedRectangle(cornerRadius: CornerRadius.inset))
+                        .contentShape(Rectangle())
+                    }.buttonStyle(.plain).noFocusRing()
+                }
+            }.padding(8)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var directory: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("论文逻辑链").font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Text("\(readerStore.outlineEntries.count) 个节点")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 14).padding(.top, 15).padding(.bottom, 8)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 3) {
+                    ForEach(readerStore.outlineEntries) { entry in
+                        if let block = readerStore.paper?.blocks.first(where: { $0.id == entry.blockId }) {
+                        Button {
+                            readerStore.scrollToBlock(block.id)
+                            request.dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                if let page = block.pageIdx {
+                                    Text("第 \(page + 1) 页").font(.system(size: 10)).foregroundStyle(.secondary)
+                                }
+                                Text(entry.title)
+                                    .font(.system(size: entry.heading ? (entry.level == 1 ? 16 : 14.5) : 13.5,
+                                                  weight: entry.heading ? .semibold : .regular))
+                                    .lineLimit(3).foregroundStyle(.primary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(9).padding(.leading, CGFloat(entry.level - 1) * 10)
+                            .background(Color.primary.opacity(block.id == readerStore.activeBlockId ? 0.07 : 0),
+                                        in: RoundedRectangle(cornerRadius: CornerRadius.inset))
+                            .contentShape(Rectangle())
+                        }.buttonStyle(.plain).noFocusRing()
+                        }
+                    }
+                }.padding(.horizontal, 6).padding(.bottom, 8)
+            }
+        }
+        .foregroundStyle(.primary)
+    }
+}
+
+/// One desktop layout at every width. A narrow window keeps the same sidebar
+/// rail; expanding it reserves its own column until the user clicks outside.
+struct WorkspaceSplitLayout<Sidebar: View, Content: View>: View {
+    var compact: Bool
+    var collapsed: Bool
+    @Binding var temporarilyExpanded: Bool
+    @ViewBuilder var sidebar: () -> Sidebar
+    @ViewBuilder var content: () -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.trafficLightClearance) private var trafficLightClearance
+    @Environment(\.palette) private var palette
+
+    private var railCollapsed: Bool { compact ? !temporarilyExpanded : collapsed }
+    private var reservedWidth: CGFloat {
+        railCollapsed ? WorkspaceNavMetrics.railWidth : WorkspaceNavMetrics.expandedWidth
     }
 
     var body: some View {
-        Group {
-            if collapsed {
-                // 收起态:圆形按钮各自携带玻璃表面
-                navContent
-            } else {
-                navContent
-                    .modifier(NavPillSurface(collapsed: false))
-            }
-        }
-        .overlay(alignment: opensUpward ? .bottomLeading : .topLeading) {
-            if menuOpen {
-                pageMenu
-                    .offset(y: opensUpward ? -(44 + 8) : (44 + 8))
+        GeometryReader { geometry in
+            // Keep the compact page at its rail-layout width while the sidebar
+            // pushes it out of the viewport. Reflowing into the remaining sliver
+            // lets intrinsic toolbar/grid widths displace the sidebar at 490 pt.
+            let contentWidth = max(0, geometry.size.width - 12 -
+                (compact ? WorkspaceNavMetrics.railWidth : reservedWidth))
+            ZStack(alignment: .leading) {
+                GlassEffectContainer(spacing: 4) {
+                    HStack(alignment: .top, spacing: 12) {
+                        Color.clear.frame(width: reservedWidth)
+                        content().frame(width: contentWidth, height: geometry.size.height)
+                            .disabled(compact && temporarilyExpanded)
+                            .accessibilityHidden(compact && temporarilyExpanded)
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+                }
+                .blur(radius: compact && temporarilyExpanded ? 3 : 0)
+                .clipped()
+                if compact && temporarilyExpanded {
+                    OutsideDismissArea(label: "点击空白收起侧栏", dimOpacity: palette.dark ? 0.22 : 0.12) {
+                        temporarilyExpanded = false
+                    }
+                    .padding(-14)
                     .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.15), value: menuOpen)
-        .animation(.easeInOut(duration: 0.18), value: collapsed)
-        .background {
-            // 点击菜单以外任意区域关闭(覆盖整窗,在菜单层之下)
-            if menuOpen {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { menuOpen = false }
-                    .ignoresSafeArea()
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var navContent: some View {
-        if collapsed {
-            HStack(spacing: 4) {
-                circularButton(systemName: Ic.feather, tint: palette.accent, help: "展开工作台导航") {
-                    menuOpen.toggle()
                 }
-                if let onToggleOutline {
-                    circularButton(
-                        systemName: Ic.panelLeft,
-                        tint: palette.gray500,
-                        help: "展开结构目录",
-                        action: onToggleOutline
-                    )
-                }
-            }
-        } else {
-            HStack(spacing: 3) {
-                brandButton
-                Spacer(minLength: 0)
-                RoundIconButton(
-                    systemName: isDark ? Ic.sun : Ic.moon,
-                    size: 32,
-                    title: isDark ? "切换亮色" : "切换暗色"
-                ) {
-                    appStore.setTheme(isDark ? "light" : "dark")
-                }
-                if let onToggleOutline {
-                    RoundIconButton(
-                        systemName: Ic.panelLeftClose,
-                        size: 32,
-                        title: "收起结构目录"
-                    ) {
-                        onToggleOutline()
+                GlassEffectContainer(spacing: 4) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sidebar().frame(maxHeight: .infinity, alignment: .top)
+                            .padding(.top, max(0, trafficLightClearance - 8))
+                        WorkspaceNav(collapsed: compact || collapsed, enabled: !compact || !temporarilyExpanded)
                     }
                 }
+                .frame(width: reservedWidth)
+                .zIndex(1)
             }
-            .padding(4)
-            .frame(width: 224, height: 44)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
         }
+        .padding(14)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: railCollapsed)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: temporarilyExpanded)
+        .onChange(of: compact) { _, _ in temporarilyExpanded = false }
+        .onExitCommand { temporarilyExpanded = false }
     }
+}
 
-    private func circularButton(systemName: String, tint: Color, help: String, action: @escaping () -> Void) -> some View {
+/// A real control prevents window-background dragging from swallowing a click
+/// intended to dismiss an overlay in a titlebar-free workspace.
+struct OutsideDismissArea: View {
+    let label: String
+    var dimOpacity: Double = 0
+    let action: () -> Void
+    var body: some View {
         Button(action: action) {
-            Image.ic(systemName)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(tint)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
+            Color.black.opacity(dimOpacity).contentShape(Rectangle())
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .buttonStyle(.plain)
-        .noFocusRing()
-        .modifier(NavPillSurface(collapsed: true))
-        .help(help)
-    }
-
-    /// macOS 26+ / iOS 26+ 走系统 Liquid Glass;旧系统保持原有手绘浮标外观。
-    private struct NavPillSurface: ViewModifier {
-        var collapsed: Bool
-        @Environment(\.palette) private var palette
-
-        func body(content: Content) -> some View {
-            #if os(macOS)
-            if #available(macOS 26.0, *) {
-                content.glassEffect(.regular.interactive(), in: shape)
-            } else {
-                legacy(content)
-            }
-            #elseif os(iOS)
-            if #available(iOS 26.0, *) {
-                content.glassEffect(.regular.interactive(), in: shape)
-            } else {
-                legacy(content)
-            }
-            #else
-            legacy(content)
-            #endif
-        }
-
-        private var shape: AnyShape {
-            collapsed ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 13))
-        }
-
-        private func legacy(_ content: Content) -> some View {
-            content
-                .background(
-                    RoundedRectangle(cornerRadius: 13)
-                        .fill(palette.gray0.opacity(0.92))
-                        .background(.ultraThinMaterial, in: shapeForMaterial)
-                )
-                .overlay(shapeForMaterial.stroke(palette.gray300.opacity(0.72)))
-                .shadow(color: palette.shadowFloat, radius: 14, y: 5)
-        }
-
-        private var shapeForMaterial: RoundedRectangle {
-            RoundedRectangle(cornerRadius: collapsed ? 22 : 13)
-        }
-    }
-
-    private var brandButton: some View {
-        Button {
-            menuOpen.toggle()
-        } label: {
-            HStack(spacing: 8) {
-                Image.ic(Ic.feather)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Paperico")
-                        .font(.reading(13, weight: .semibold))
-                        .foregroundStyle(palette.gray800)
-                    Text("RESEARCH DESK")
-                        .font(.mono(7, weight: .bold))
-                        .kerning(0.7)
-                        .foregroundStyle(palette.gray400)
-                }
-                Image.ic(Ic.chevronDown)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(palette.gray400)
-                    .rotationEffect(.degrees(menuOpen ? 180 : 0))
-            }
-            .padding(.leading, 3)
-            .padding(.trailing, 7)
-            .frame(height: 36)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .noFocusRing()
-        .help("展开工作台导航")
-    }
-
-    /// 下拉页面菜单:与导航栏同宽(224)、左缘对齐,玻璃圆角矩形。
-    private var pageMenu: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            ForEach(pages, id: \.self) { item in
-                Button {
-                    router.go(item.page)
-                    menuOpen = false
-                } label: {
-                    HStack(spacing: 8) {
-                        Image.ic(item.icon)
-                            .font(.system(size: 13))
-                            .frame(width: 20)
-                            .foregroundStyle(isActive(item) ? palette.accent : palette.gray600)
-                        Text(item.label)
-                            .font(.system(size: 13))
-                            .foregroundStyle(isActive(item) ? palette.accent : palette.gray600)
-                        Spacer(minLength: 0)
-                        if isActive(item) {
-                            Text("当前")
-                                .font(.system(size: 10))
-                                .foregroundStyle(palette.accent)
-                        }
-                    }
-                    .padding(.horizontal, 9)
-                    .frame(minHeight: 40)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(isActive(item) ? palette.accentSoft : Color.clear))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .noFocusRing()
-            }
-        }
-        .padding(8)
-        .frame(width: 224, alignment: .leading)
-        .modifier(MenuSurface())
-    }
-
-    /// 菜单面板表面:macOS 26+ 用 Liquid Glass,旧系统回退到手绘浮层。
-    private struct MenuSurface: ViewModifier {
-        @Environment(\.palette) private var palette
-
-        func body(content: Content) -> some View {
-            #if os(macOS)
-            if #available(macOS 26.0, *) {
-                content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 13))
-            } else {
-                legacy(content)
-            }
-            #elseif os(iOS)
-            if #available(iOS 26.0, *) {
-                content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 13))
-            } else {
-                legacy(content)
-            }
-            #else
-            legacy(content)
-            #endif
-        }
-
-        private func legacy(_ content: Content) -> some View {
-            content
-                .background(RoundedRectangle(cornerRadius: 13).fill(palette.gray0))
-                .overlay(RoundedRectangle(cornerRadius: 13).stroke(palette.gray200))
-                .shadow(color: palette.shadowFloat, radius: 18, y: 8)
-        }
+        .buttonStyle(.plain).noFocusRing()
+        .accessibilityLabel(label)
     }
 }

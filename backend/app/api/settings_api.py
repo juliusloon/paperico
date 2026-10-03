@@ -41,7 +41,6 @@ DEFAULT_SETTINGS = {
             "is_ocr": True,
             "enable_formula": True,
             "enable_table": True,
-            "language": "en",
             "model_backend": "pipeline",
         },
     },
@@ -93,16 +92,17 @@ async def get_settings(db: AsyncSession = Depends(get_db)) -> AppSettingsOut:
             reasoning_effort=p.get("reasoning_effort"), streaming=p.get("streaming", True),
         ))
 
+    mineru_data = data.get("mineru", DEFAULT_SETTINGS["mineru"])
+    mineru_plain_key = decrypt_or_empty(mineru_data.get("api_key", ""))
+
     return AppSettingsOut(
         model_profiles=profiles,
         profile_assignment=ProfileAssignment(**data.get("profile_assignment", DEFAULT_SETTINGS["profile_assignment"])),
         mineru=MinerUSettings(
-            **{k: v for k, v in data.get("mineru", DEFAULT_SETTINGS["mineru"]).items()
+            **{k: v for k, v in mineru_data.items()
                if k not in ("api_key", "api_key_configured")},
-            api_key=(lambda value: mask_key(value) if value else "")(
-                decrypt_or_empty(data.get("mineru", {}).get("api_key", ""))
-            ),
-            api_key_configured=bool(decrypt_or_empty(data.get("mineru", {}).get("api_key", ""))),
+            api_key=mask_key(mineru_plain_key) if mineru_plain_key else "",
+            api_key_configured=bool(mineru_plain_key),
         ),
         appearance=AppearanceSettings(**data.get("appearance", DEFAULT_SETTINGS["appearance"])),
         chat_defaults=ChatDefaults(**data.get("chat_defaults", DEFAULT_SETTINGS["chat_defaults"])),
@@ -162,9 +162,83 @@ async def update_settings(update: AppSettingsUpdate, db: AsyncSession = Depends(
     return await get_settings(db)
 
 
+REASONING_LEVELS = ["off", "low", "medium", "high"]
+
+
+async def _probe_model_output_limit(base_url: str, api_key: str, model: str) -> int | None:
+    """Best-effort: read /models metadata for an explicit output-token limit."""
+    import httpx
+
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{base_url.rstrip('/')}/models", headers=headers)
+            if not resp.is_success:
+                return None
+            payload = resp.json()
+    except Exception:
+        return None
+    entries = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return None
+    entry = next((e for e in entries if isinstance(e, dict) and e.get("id") == model), None)
+    if entry is None:
+        return None
+    # OpenRouter nests the limit under top_provider; vLLM/LiteLLM expose it flat.
+    nested = entry.get("top_provider") if isinstance(entry.get("top_provider"), dict) else {}
+    for source in (nested, entry):
+        for key in ("max_completion_tokens", "max_output_tokens", "max_tokens"):
+            value = source.get(key)
+            if isinstance(value, int) and 0 < value <= 1_000_000:
+                return value
+    return None
+
+
+async def _probe_chat_capability(base_url: str, api_key: str, model: str) -> tuple[bool, bool, str]:
+    """Tiny completion without/with reasoning_effort.
+
+    The baseline request (no reasoning_effort) establishes connectivity; the
+    follow-up with ``reasoning_effort: "low"`` detects whether the model accepts
+    it. Returns (success, supports_reasoning, error_message).
+    """
+    import httpx
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    messages = [{"role": "user", "content": "Reply with the single word: OK"}]
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        payload = {"model": model, "messages": messages, "max_tokens": 128}
+        successful_payload = payload
+        resp = await client.post(url, headers=headers, json=payload)
+        if not resp.is_success:
+            error = str(LLMClient._error_from_response(resp))
+            # Newer OpenAI models only accept max_completion_tokens.
+            if resp.status_code == 400 and "max_completion_tokens" in error.lower():
+                retry = {"model": model, "messages": messages, "max_completion_tokens": 128}
+                resp = await client.post(url, headers=headers, json=retry)
+                if not resp.is_success:
+                    return False, False, str(LLMClient._error_from_response(resp))
+                successful_payload = retry
+            else:
+                return False, False, error
+
+        reasoning_payload = dict(successful_payload)
+        reasoning_payload["reasoning_effort"] = "low"
+        reasoning_resp = await client.post(url, headers=headers, json=reasoning_payload)
+        return True, reasoning_resp.is_success, ""
+
+
 @router.post("/test-llm", response_model=TestConnectionResult)
 async def test_llm_connection(body: dict, db: AsyncSession = Depends(get_db)):
-    base_url = str(body.get("base_url", "")).strip()
+    base_url = LLMClient._normalize_base_url(str(body.get("base_url", "")))
+    model = str(body.get("model", "")).strip()
+    if not base_url:
+        return TestConnectionResult(success=False, message="请先填写 Base URL")
+    if not model:
+        return TestConnectionResult(success=False, message="请先填写模型名称")
     api_key = str(body.get("api_key", "")).strip()
     profile_id = body.get("profile_id", "")
     if not api_key:
@@ -176,17 +250,26 @@ async def test_llm_connection(body: dict, db: AsyncSession = Depends(get_db)):
         if profile:
             api_key = decrypt_or_empty(profile.get("api_key", ""))
     if not api_key:
-        return TestConnectionResult(success=False, message="尚未保存可用的模型 API Key")
-    model = str(body.get("model", "gpt-4o-mini")).strip()
-    llm = LLMClient(base_url=base_url, api_key=api_key, model=model or "gpt-4o-mini")
+        return TestConnectionResult(success=False, message="请先填写 API Key,或先保存过可用密钥")
+
     try:
-        result = await llm.chat(
-            messages=[{"role": "user", "content": "Say 'OK' in one word."}],
-            max_tokens=10,
-        )
-        return TestConnectionResult(success=True, message=f"连接成功: {result[:50]}")
+        success, supports_reasoning, error = await _probe_chat_capability(base_url, api_key, model)
     except Exception as e:
         return TestConnectionResult(success=False, message=f"连接失败: {str(e)[:200]}")
+    if not success:
+        return TestConnectionResult(success=False, message=f"连接失败: {error}")
+
+    output_limit = await _probe_model_output_limit(base_url, api_key, model)
+    message = "连接成功,该模型支持思考强度调节" if supports_reasoning else "连接成功,该模型不支持思考强度(将保持关闭)"
+    if output_limit:
+        message += f",默认单次最大输出 {output_limit}"
+    return TestConnectionResult(
+        success=True,
+        message=message + "。",
+        supports_reasoning=supports_reasoning,
+        reasoning_levels=list(REASONING_LEVELS) if supports_reasoning else ["off"],
+        default_max_output_tokens=output_limit,
+    )
 
 
 @router.post("/test-mineru", response_model=TestConnectionResult)

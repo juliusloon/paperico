@@ -254,6 +254,10 @@ class AppSettingsUpdate(BaseModel):
 class TestConnectionResult(BaseModel):
     success: bool
     message: str
+    # LLM capability probe results; None for parser tests and legacy responses.
+    supports_reasoning: bool | None = None
+    reasoning_levels: list[str] = []
+    default_max_output_tokens: int | None = None
 
 
 # ── Library ───────────────────────────────────────────────

@@ -1,26 +1,21 @@
 import SwiftUI
 
-/// Mirrors reader/ReaderPage.tsx — three-column desktop shell with draggable
-/// splitters, tabbed panes on narrow width (web ≤900px breakpoint), status polling.
+/// One responsive reader shell: document, margin chain, and trailing floating cards.
 struct ReaderPage: View {
     let paperId: String
 
     @Environment(\.palette) private var palette
     @Environment(\.containerWidth) private var containerWidth
-    @Environment(\.apiClient) private var client
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AppServices.self) private var services
     @Environment(ReaderStore.self) private var readerStore
     @Environment(ChatStore.self) private var chatStore
 
-    enum MobileTab: Hashable {
-        case outline, reading, chat
-    }
-
     @State private var leftWidth: CGFloat = LocalPrefs.leftWidth > 0 ? LocalPrefs.leftWidth : 250
     @State private var rightWidth: CGFloat = LocalPrefs.rightWidth > 0 ? LocalPrefs.rightWidth : 370
-    @State private var mobileTab: MobileTab = .reading
-    @State private var visitedTabs: Set<MobileTab> = [.reading]
+    @State private var presentsHiddenPanels = false
 
-    private var isCompact: Bool { containerWidth < LayoutBreakpoint.reader }
     private var paperStatus: PaperStatus? { readerStore.paper?.paper.statusEnum }
 
     var body: some View {
@@ -40,29 +35,55 @@ struct ReaderPage: View {
                             Task { await readerStore.fetchPaper(id: paperId) }
                         }
                         BackToLibraryButton()
-                            .buttonStyle(SecondaryButtonStyle())
+                            .buttonStyle(LiquidActionButtonStyle())
                     }
                 }
-            } else if isCompact {
-                mobileReader
             } else {
                 desktopReader
             }
         }
-        .background(palette.gray100)
-        .task { await bootstrap() }
+        .background(Color.clear)
+        .environment(\.trafficLightClearance, 0)
+        .overlay(alignment: .bottomLeading) {
+            WorkspaceNav(currentPaperId: paperId, includesDirectory: true,
+                         surfaceScheme: colorScheme)
+                .padding(14)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            GlassEffectContainer(spacing: 8) {
+                if !floatingPanelsFit(containerWidth), !presentsHiddenPanels {
+                    RoundIconButton(systemName: Ic.messagesSquare, size: 40,
+                                    title: "打开论文信息与对话", foreground: .primary) {
+                        presentsHiddenPanels = true
+                    }
+                    .liquidTool(cornerRadius: 20)
+                    .transition(.opacity)
+                }
+            }
+            .padding(14)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: floatingPanelsFit(containerWidth))
+            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: presentsHiddenPanels)
+        }
+        .task(id: paperId) { await bootstrap() }
+        .task(id: "\(paperId):\(services.pipeline.isProcessing(paperId))") { await pollLoop() }
+        .task { await perfLoop() }
+        .onChange(of: readerStore.attachedContext.count) { oldValue, newValue in
+            guard newValue > oldValue else { return }
+            if !floatingPanelsFit(containerWidth) { presentsHiddenPanels = true }
+        }
     }
 
     private func bootstrap() async {
+        chatStore.bind(to: paperId)
         LocalPrefs.lastPaperId = paperId
         let startedAt = ReaderPerf.start("reader.open(\(paperId))")
         if readerStore.paper?.paper.id != paperId {
             await readerStore.fetchPaper(id: paperId)
         }
+        guard !Task.isCancelled else { return }
         await chatStore.fetchSessions(paperId: paperId)
+        guard !Task.isCancelled else { return }
         ReaderPerf.end("reader.open(\(paperId))", startedAt: startedAt)
-        await perfLoop()
-        await pollLoop()
     }
 
     /// 轮询改成"轻量 status + 按需整篇重载"。
@@ -71,19 +92,16 @@ struct ReaderPage: View {
     /// (实测 414 KB / 181 block),替换 store 里的整个 `paper` → 文档里每一个
     /// 视图失效重建。处理中的论文几乎点不动,就是这个循环造成的。
     private func pollLoop() async {
-        var tick = 0
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 3_500_000_000)
             if Task.isCancelled { return }
             // 已就绪/出错:没有再轮询的必要,直接退出循环。
-            guard let current = paperStatus, current.isActive else { return }
-
-            tick += 1
-            guard let status = try? await client.papersStatus(id: paperId) else { continue }
+            guard let current = paperStatus,
+                  current.isActive || services.pipeline.isProcessing(paperId) else { return }
+            guard let status = await services.pipeline.status(paperId: paperId) else { continue }
             let next = PaperStatus(raw: status.status)
-            // 状态真的变了才整篇重载;否则每 4 个 tick(≈14s)补一次全量,
-            // 保证新解析出来的正文还是会陆续出现。
-            if next == current, tick % 4 != 0 {
+            // 同一阶段只更新轻量状态；单次分析全部校验落盘后才整篇刷新。
+            if next == current {
                 readerStore.applyStatus(status)
                 continue
             }
@@ -95,7 +113,6 @@ struct ReaderPage: View {
     /// 性能采样输出(默认关闭,见 Support/ReaderPerf.swift)。
     private func perfLoop() async {
         guard ReaderPerf.isEnabled else { return }
-        ReaderPerf.frameIntervals.reset()
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             if Task.isCancelled { return }
@@ -110,144 +127,79 @@ struct ReaderPage: View {
         .font(.system(size: 12))
         .foregroundStyle(palette.gray500)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.gray50)
+        .background(palette.insetSurface)
     }
 
     // MARK: desktop shell
 
     private var desktopReader: some View {
         GeometryReader { shell in
-            HStack(spacing: 0) {
-                ReadingArea(leftWidth: $leftWidth)
-                    .frame(maxWidth: .infinity)
-
-                resizeHandle(shellWidth: shell.size.width)
-                    .frame(width: 8)
-
+            let visible = floatingPanelsFit(shell.size.width)
+            let drawerWidth = visible ? rightWidth : min(rightWidth, max(0, shell.size.width * 0.5 - 12))
+            ZStack(alignment: .trailing) {
+                ReadingArea(toolsObscured: presentsHiddenPanels && !visible, leftWidth: $leftWidth)
+                    .padding(.trailing, visible ? rightWidth + 24 : 0)
+                if !visible, presentsHiddenPanels {
+                    OutsideDismissArea(label: "关闭论文信息与对话") { presentsHiddenPanels = false }
+                        .background(.black.opacity(0.08))
+                        .transition(.opacity)
+                }
+                // Keep the card and chat state mounted when switching between inline and drawer presentation.
                 RightPanel()
+                    .environment(\.drawerSurface, !visible && presentsHiddenPanels)
+                    .frame(width: drawerWidth)
                     .padding(.trailing, 12)
-                    .padding(.vertical, 12)
-                    .frame(width: rightWidth)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                    .padding(.leading, 12)
+                    .offset(x: visible || presentsHiddenPanels ? 0 : drawerWidth + 24)
+                    .allowsHitTesting(visible || presentsHiddenPanels)
+                    .accessibilityHidden(!visible && !presentsHiddenPanels)
+                if visible {
+                    resizeHandle(shellWidth: shell.size.width)
+                        .frame(width: 12)
+                        .padding(.trailing, rightWidth + 12)
+                        .transition(.opacity)
+                }
             }
+            .clipped()
+            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: presentsHiddenPanels)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: visible)
+            .onChange(of: visible) { _, inline in
+                if inline { presentsHiddenPanels = false }
+            }
+            .onExitCommand { presentsHiddenPanels = false }
         }
-        .onChange(of: leftWidth) { _, value in LocalPrefs.leftWidth = value }
-        .onChange(of: rightWidth) { _, value in LocalPrefs.rightWidth = value }
+    }
+
+    private func floatingPanelsFit(_ width: CGFloat) -> Bool {
+        // Both document modes use the same shell breakpoint, so switching to
+        // PDF never moves the toolbar by suddenly inserting the right cards.
+        let outline = !readerStore.leftPanelCollapsed && width >= LayoutBreakpoint.reader ? leftWidth : 0
+        return width >= max(LayoutBreakpoint.reader, outline + 500 + rightWidth + 24)
     }
 
     private func resizeHandle(shellWidth: CGFloat) -> some View {
-        ZStack {
-            Rectangle()
-                .fill(palette.gray0)
-                .contentShape(Rectangle())
-            Capsule()
-                .fill(palette.gray300.opacity(0.68))
-                .frame(width: 2, height: 34)
+        ReaderDivider(axis: .horizontal, label: "调整右侧卡片宽度") { translation in
+            let base = dragStartRightWidth ?? rightWidth
+            if dragStartRightWidth == nil { dragStartRightWidth = rightWidth }
+            let candidate = base - translation
+            let clamped = min(520, max(310, candidate))
+            let outline = !readerStore.leftPanelCollapsed && shellWidth >= LayoutBreakpoint.reader ? leftWidth : 0
+            let limit = shellWidth - outline - 500 - 24
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                rightWidth = max(310, min(clamped, max(310, limit)))
+            }
+        } onEnd: {
+            dragStartRightWidth = nil
+            LocalPrefs.rightWidth = rightWidth
         }
-        .cursor(.resizeLeftRight)
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    let base = dragStartRightWidth ?? rightWidth
-                    if dragStartRightWidth == nil { dragStartRightWidth = rightWidth }
-                    let candidate = base - value.translation.width
-                    let clamped = min(520, max(310, candidate))
-                    let limit = shellWidth - (readerStore.leftPanelCollapsed ? 0 : leftWidth) - 520
-                    rightWidth = max(310, min(clamped, max(310, limit)))
-                }
-                .onEnded { _ in dragStartRightWidth = nil }
-        )
     }
 
     @State private var dragStartRightWidth: CGFloat?
 
-    // MARK: compact shell
-
-    private var mobileReader: some View {
-        VStack(spacing: 0) {
-            mobileTopBar
-            ZStack {
-                ReadingArea(mobile: true, leftWidth: .constant(240))
-                    .opacity(mobileTab == .reading ? 1 : 0)
-                    .allowsHitTesting(mobileTab == .reading)
-
-                if visitedTabs.contains(.outline) {
-                    MobileOutline(
-                        onNavigate: { blockId in
-                            switchTab(.reading)
-                            readerStore.scrollToBlock(blockId)
-                        },
-                        onEntityChat: { entity, blockId in
-                            readerStore.addAttachedContext(AttachedContext(
-                                type: "method_card",
-                                refBlockId: blockId,
-                                refEntityId: entity.id,
-                                snippet: entity.name
-                            ))
-                            switchTab(.chat)
-                        }
-                    )
-                    .opacity(mobileTab == .outline ? 1 : 0)
-                    .allowsHitTesting(mobileTab == .outline)
-                }
-                if visitedTabs.contains(.chat) {
-                    MobileSidePanel()
-                        .opacity(mobileTab == .chat ? 1 : 0)
-                        .allowsHitTesting(mobileTab == .chat)
-                }
-            }
-        }
-        .background(palette.gray0)
-    }
-
-    private var mobileTopBar: some View {
-        CompactTopBar(currentPaperId: paperId) {
-            tabStrip
-        }
-    }
-
-    private var tabStrip: some View {
-        HStack(spacing: 2) {
-            mobileTabButton(.outline, label: "逻辑链", icon: Ic.listTree)
-            mobileTabButton(.reading, label: "正文", icon: Ic.bookText)
-            mobileTabButton(.chat, label: "对话", icon: Ic.messagesSquare, badge: readerStore.attachedContext.count)
-        }
-        .padding(3)
-        .background(RoundedRectangle(cornerRadius: 12).fill(palette.gray50))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.gray200))
-    }
-
-    private func mobileTabButton(_ tab: MobileTab, label: String, icon: String, badge: Int = 0) -> some View {
-        let active = mobileTab == tab
-        return Button {
-            switchTab(tab)
-        } label: {
-            HStack(spacing: 5) {
-                Image.ic(icon).font(.system(size: 14))
-                Text(label).font(.system(size: 12, weight: .semibold))
-                if badge > 0 {
-                    Text("\(badge)")
-                        .font(.mono(9, weight: .bold))
-                        .foregroundStyle(active ? .white : palette.accent)
-                        .padding(.horizontal, 4)
-                        .frame(minWidth: 16, minHeight: 16)
-                        .background(
-                            Capsule().fill(active ? Color.white.opacity(0.24) : palette.accentSoft)
-                        )
-                }
-            }
-            .foregroundStyle(active ? .white : palette.gray500)
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .background(RoundedRectangle(cornerRadius: 9).fill(active ? palette.accent : Color.clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .noFocusRing()
-    }
-
-    private func switchTab(_ tab: MobileTab) {
-        mobileTab = tab
-        visitedTabs.insert(tab)
-    }
 }
 
 struct BackToLibraryButton: View {

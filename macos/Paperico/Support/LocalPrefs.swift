@@ -57,4 +57,60 @@ enum LocalPrefs {
     static func setPdfZoom(_ value: Double, paperId: String) {
         d.set(value, forKey: "paperico:pdf-zoom:\(paperId)")
     }
+
+    // MARK: appearance(纯客户端设置)
+
+    /// 外观三存于 UserDefaults:修改即时生效,不依赖本机数据服务是否启动。
+    /// 后端 /api/settings 里的 appearance 仅作旧数据的一次性迁移来源。
+    static var accentColor: String? {
+        get { appearanceString(forKey: "paperico:appearance-accent") }
+        set { setAppearanceString(newValue, forKey: "paperico:appearance-accent") }
+    }
+
+    static var themeMode: String? {
+        get { appearanceString(forKey: "paperico:appearance-theme") }
+        set { setAppearanceString(newValue, forKey: "paperico:appearance-theme") }
+    }
+
+    static var readingFontSize: Int? {
+        get {
+            guard d.object(forKey: "paperico:appearance-font-size") != nil else { return nil }
+            let size = d.integer(forKey: "paperico:appearance-font-size")
+            return size > 0 ? size : nil
+        }
+        set {
+            guard let newValue else {
+                d.removeObject(forKey: "paperico:appearance-font-size")
+                return
+            }
+            d.set(newValue, forKey: "paperico:appearance-font-size")
+        }
+    }
+
+    static var backgroundTransparency: Double {
+        get { min(50, max(0, d.double(forKey: "paperico:background-transparency"))) }
+        set { d.set(min(50, max(0, newValue.isFinite ? newValue : 0)), forKey: "paperico:background-transparency") }
+    }
+
+    /// Build-time tuning of component material, independent of the window canvas.
+    static var glassTransparency: Double {
+        get {
+            guard d.object(forKey: "paperico:glass-transparency") != nil else { return 15 }
+            return min(30, max(0, d.double(forKey: "paperico:glass-transparency")))
+        }
+        set { d.set(min(30, max(0, newValue.isFinite ? newValue : 15)), forKey: "paperico:glass-transparency") }
+    }
+
+    private static func appearanceString(forKey key: String) -> String? {
+        let value = d.string(forKey: key)
+        return (value?.isEmpty == false) ? value : nil
+    }
+
+    private static func setAppearanceString(_ value: String?, forKey key: String) {
+        guard let value, !value.isEmpty else {
+            d.removeObject(forKey: key)
+            return
+        }
+        d.set(value, forKey: key)
+    }
 }

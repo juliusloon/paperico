@@ -1,0 +1,52 @@
+import Foundation
+
+struct MethodIndexContent: Codable, Equatable, Sendable {
+    var name: String
+    var category: String
+    var definitionZh: String
+}
+
+struct TrashedPaper: Codable, Identifiable, Sendable {
+    var paper: PaperListItem
+    var deletedAt: String
+    var id: String { paper.id }
+}
+
+/// Version 1 also accepts the unversioned index used during the native migration.
+struct LibraryIndex: Codable {
+    var schemaVersion = 1
+    var projects: [ProjectGroup] = []
+    var papers: [PaperListItem] = []
+    var shaByPaperId: [String: String] = [:]
+    var sourceUrlByPaperId: [String: String] = [:]
+    var trash: [TrashedPaper] = []
+    var methodContent: [String: MethodIndexContent] = [:]
+    var methodAliases: [String: String] = [:]
+    var hiddenMethods: [String] = []
+    var methodAddedAt: [String: String] = [:]
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, projects, papers, shaByPaperId, sourceUrlByPaperId, trash
+        case methodContent, methodAliases, hiddenMethods, methodAddedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard schemaVersion == 1 else {
+            throw PipelineError("论文库由更新版本创建，请升级 Paperico 后再打开。", .storageFailed)
+        }
+        // These existed before versioning; missing required fields indicate corruption.
+        projects = try values.decode([ProjectGroup].self, forKey: .projects)
+        papers = try values.decode([PaperListItem].self, forKey: .papers)
+        shaByPaperId = try values.decodeIfPresent([String: String].self, forKey: .shaByPaperId) ?? [:]
+        sourceUrlByPaperId = try values.decodeIfPresent([String: String].self, forKey: .sourceUrlByPaperId) ?? [:]
+        trash = try values.decodeIfPresent([TrashedPaper].self, forKey: .trash) ?? []
+        methodContent = try values.decodeIfPresent([String: MethodIndexContent].self, forKey: .methodContent) ?? [:]
+        methodAliases = try values.decodeIfPresent([String: String].self, forKey: .methodAliases) ?? [:]
+        hiddenMethods = try values.decodeIfPresent([String].self, forKey: .hiddenMethods) ?? []
+        methodAddedAt = try values.decodeIfPresent([String: String].self, forKey: .methodAddedAt) ?? [:]
+    }
+}

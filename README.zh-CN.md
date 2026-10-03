@@ -2,170 +2,122 @@
 
 # Paperico
 
-**本地优先、自带 Key（BYOK）的论文精读工作台。**
+**本地优先、自带 Key（BYOK）的原生论文精读工作台。**
 
-上传 PDF，由 MinerU 解析为结构化内容，然后配合 AI 生成的逻辑链大纲、逐句双语翻译、
-方法卡片进行精读——对话中的每一条回答都能引用到论文的具体位置。
+导入 PDF，用 MinerU 恢复结构，以 AI 辅助双语阅读、梳理论证、证据问答和笔记沉淀。
 
 [![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.1.0-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/app-v0.2.4-orange)](CHANGELOG.md)
 
 [English](README.md) · 简体中文
 
 </div>
 
----
+## v0.2.4
 
-## 为什么做 Paperico
+正文在所有窗口宽度下使用同一布局，增加悬浮目录、恢复逻辑链连线，并将无标题玻璃卡片
+改为从右侧划入。重做提问框、缩短历史标题，统一圆形图标控件与两页搜索。设置支持实时
+调整背景透明度；首页增加功能介绍和使用指引。离线数学排版与一次全文分析流程继续沿用。
 
-精读论文不是"看一遍摘要"。Paperico 围绕 **读 → 理解结构 → 提问 → 沉淀** 这条主线构建，
-并坚持一条红线：**AI 的每一次输出都必须可溯源**。一句话摘要、方法卡片、对话引用都要能
-指回论文的具体 block；模型对论文未提及的内容必须明确声明，不得杜撰。
+macOS App 已独立运行：论文库、解析与分析任务、对话和笔记均由原生代码管理，无需启动
+Python 后端。新增任务管理和可恢复回收站，并修复启动崩溃、并发存储与取消任务交错问题。
 
-一切都在你自己的机器上运行：PDF、SQLite 数据库、抽取的图表、API Key（Fernet 加密存储）
-均不离开本机。解析与模型调用由你的后端**直连你自己配置的服务**（MinerU、任意
-OpenAI 兼容端点），Paperico 自身不做任何中转代理。
+阅读[更新说明](docs/releases/v0.2.4.md)或[仓库分析与架构说明](docs/architecture.md)。
 
 ## 功能
 
-- **结构化解析** — PDF 交由 [MinerU](https://github.com/opendatalab/MinerU)（云端
-  `mineru.net` 或自托管端点）解析为类型化 block：段落、标题、图、表、公式。
-- **逻辑链大纲** — LLM 生成"这一节在论证中扮演什么角色"的逻辑链条目，随滚动位置联动。
-- **逐句双语阅读** — 原文/译文对照，支持按 block 重新翻译，目标语言可配置。
-- **方法卡片与实体** — 抽取论文中使用的方法，形成跨论文可检索的方法索引。
-- **可溯源对话** — SSE 流式对话，每条回答附带证据引用，点击引用跳转并闪烁高亮对应
-  block；可附加选中文本、方法卡、图表作为额外上下文。
-- **笔记模式** — 多选 block 生成结构化笔记，导出 Markdown。
-- **文献库管理** — 项目分组、状态筛选、导入去重、批量操作、回收站与恢复。
-- **原生 macOS 客户端** — SwiftUI + PDFKit，零第三方依赖，与任何 API 客户端一样对接
-  同一本地后端。
-- **PDF 模式** — 结构化视图旁用 PDFKit 显示原始 PDF，阅读进度双向同步。
+- **论文库**：项目分组、搜索、排序、多选移动、PDF 去重、批量导入逐文件错误报告。
+- **任务管理**：查看待处理和失败论文、停止处理、重新解析、复用段落重新翻译。
+- **双语精读**：原文与译文、逻辑链大纲、方法卡片、原始 PDF、证据跳转与阅读进度记忆。
+- **证据问答**：可附带选段、方法或图表；模型回答中的有效 block 引用可定位原文。
+- **笔记**：选择对话生成 Markdown 笔记，支持导出。
+- **回收站**：删除后保留 PDF、解析结果、对话和笔记，可直接恢复。
+- **原生桌面交互**：Liquid Glass、深浅色外观、自定义强调色、⌘1–⌘3 页面导航和 ⌘, 跳转设置页。
 
-## 架构
+## 使用与运行
 
-```text
-┌──────────────────────┐
-│  macOS 客户端(SwiftUI) │    ← 任何 HTTP 客户端都可调用 API
-└──────────┬───────────┘
-           │  REST + SSE
-           ▼
-   ┌───────────────────┐   直连调用     ┌───────────────────────┐
-   │ FastAPI + SQLite, │ ─────────────▶ │ MinerU（云/自托管）     │
-   │ PDF 与 block 本地 │                │                       │
-   │ 存储              │ ─────────────▶ │ 任意 OpenAI 兼容端点    │
-   └───────────────────┘                └───────────────────────┘
-```
-
-| 目录 | 说明 |
-|---|---|
-| [`backend/`](backend) | FastAPI 后端：任务调度、本地存储、加密配置、REST + SSE API |
-| [`macos/`](macos) | macOS 原生客户端：SwiftUI + PDFKit（单 Xcode target） |
-| [`docs/`](docs) | 工程笔记：bbox 坐标系、存储迁移、化学结构解析 spike 等 |
-
-## 快速开始
-
-环境要求：**Python 3.11+**。
+当前 App target 要求 **macOS 26+、Xcode 26+**。已验证环境为 macOS 27 / Xcode 27、Apple Silicon。
 
 ```bash
 git clone https://github.com/juliusloon/paperico.git
 cd paperico
-./start.sh
+./script/build_and_run.sh
 ```
 
-`start.sh` 首次运行会自动创建 Python 虚拟环境并安装依赖，然后启动后端：
+脚本会构建并启动 App；若系统选中 Command Line Tools 而标准路径已安装 Xcode，脚本会
+为本次构建自动选择 Xcode。也可以打开 `macos/Paperico.xcodeproj`，选择 Paperico → My Mac → Run。
+Codex 的 Run 按钮使用同一脚本。
 
-- 后端 API：http://127.0.0.1:8000 · 接口文档 http://127.0.0.1:8000/docs
+1. 在论文库导入 PDF。尚未配置服务时，论文保留在本地，状态为待解析。
+2. 在设置中保存 AI 模型的 Base URL、模型名与 API Key，测试连通性。
+3. 配置 MinerU 云端 Token，或选择自己部署的本地 Gradio 服务。
+4. 配置完成后，从论文库的 **处理任务** 开始解析。后续导入会在配置就绪时自动处理。
+5. 阅读过程中点击回答的证据引用，可跳转到对应段落或 PDF 位置。
 
-更习惯手动搭建？参见 [`backend/README.md`](backend/README.md)。
+**本地优先不等于离线 AI**：使用云端 MinerU 会上传 PDF；模型端点会接收任务所需的论文
+文本和对话上下文。App 直连你配置的服务，Paperico 不提供中转服务器。
 
-### 首次使用
+## 架构与目录
 
-1. 启动 macOS 客户端（见下），进入 **设置** 页填写你的 Key：
-   - **AI 模型**：任意 OpenAI 兼容端点（Base URL + Key + 模型名），用于翻译、大纲、
-     方法卡片与对话；
-   - **MinerU**：`mineru.net` 的 API Key，或把 Base URL 指向你的自托管实例，用于 PDF
-     解析。
-2. （推荐，替代界面输入）复制 [`backend/.env.example`](backend/.env.example) 为
-   `backend/.env` 并填入配置——完整变量见[配置表](#配置)。
-3. 在首页上传一篇 PDF，等待解析完成。
+```text
+SwiftUI 页面 → Observable Stores → PaperLibrary / PaperPipeline / ChatService
+                                       │                  │
+                                 本地 JSON 与文件      MinerU / LLM
+```
 
-> 在设置页填写的 Key 会先经 Fernet 加密再入库；密钥文件保存在后端存储目录下
-> （权限 0600），也可以通过 `PAPERICO_ENCRYPTION_KEY` 指定自己的密钥。
+| 目录 | 职责 |
+|---|---|
+| `macos/Paperico/App/` | 启动、依赖注入、路由、主题和原生场景 |
+| `macos/Paperico/Stores/` | 按设置、项目、论文、阅读和对话拆分的可观察状态 |
+| `macos/Paperico/Core/` | 本地持久化、任务闸门、处理管线、服务客户端与 ZIP 读取 |
+| `macos/Paperico/Pages/`、`Components/` | 页面、阅读器与通用控件 |
+| `macos/Tests/`、`macos/Package.swift` | 不启动 UI、不调用外部服务的核心回归测试 |
+| `script/` | 仓库级构建、启动、验证入口 |
+| `backend/` | 保留的 v0.1 REST/SSE 服务与 Python 测试，独立于新版 App |
+| `docs/` | 当前架构、版本说明和历史工程记录 |
 
-### 安装 macOS 客户端
+本地的 `frontend/`、`design/` 为忽略的历史 Web 实现与设计资料，不属于当前 App 构建。
 
-每个 [GitHub Release](https://github.com/juliusloon/paperico/releases) 都附带预打包的
-DMG（也可以自己打一个：`cd macos && ./scripts/make_dmg.sh`）。打开 DMG，把 **Paperico**
-拖入 *Applications* 即可。
+## 数据与升级
 
-目前 Release **未经签名**：首次启动 Gatekeeper 会拦截——右键 App → **打开** →
-**打开** 确认即可。如果你有 Developer ID，可以产出签名版本：
-`PAPERICO_SIGN_IDENTITY="Developer ID Application: …" ./scripts/make_dmg.sh`
-（分发前再做公证）。
+App 沙盒中的数据根目录：
 
-### 我的数据在哪里？
+```text
+~/Library/Containers/com.paperico.native/Data/Library/Application Support/Paperico/
+├── library.json          # 版本化项目、论文、去重索引与回收站记录
+├── pdfs/                 # 原始 PDF
+├── papers/<id>/          # blocks、entities、chat、notes JSON
+├── mineru_output/<id>/   # 解析结果与图表
+├── analyses/<id>/        # 分析原始响应
+└── logs/                 # 可选诊断日志
+```
 
-- **App 本身**已启用沙盒：偏好与阅读进度存放在容器
-  （`~/Library/Containers/com.paperico.native/`）内，诊断日志在容器的
-  `…/Data/Library/Application Support/Paperico/logs/`。
-- **论文、PDF 与抽取结果**属于后端而非 App：
-  - `./start.sh`（仓库模式，默认）把数据存在仓库目录内
-    （`backend/paperico.db` + `backend/app/storage/`）；
-  - `./start.sh --app-data` 把数据存到 `~/Library/Application Support/Paperico/`
-    ——后端成为日常固定设施后推荐用这种布局。首次使用会自动迁移仓库里的既有数据。
-    两种模式下，设置页填写的 API Key 都是 Fernet 加密存储的。
+服务配置、外观与进度在 UserDefaults；API Key 与 MinerU Token 在 macOS 钥匙串。
+存储错误会明确显示，损坏或未知版本的索引不会被当作空库覆盖。
 
-### macOS 客户端
+v0.2.0 可读取原生迁移期间的无版本 JSON 索引。**旧 Python 后端的 SQLite 论文库、Fernet
+密钥和原生论文库仍是两份独立数据，目前不会自动转换**；升级前请保留旧数据库和存储目录。
+备份原生库时请复制整个数据根目录，包括回收站引用的数据；钥匙串凭据需要单独管理。
 
-原生客户端是单个 SwiftUI target，与后端通过 REST + SSE 通信。
-
-环境要求：macOS 14+、[Xcode 16+](https://developer.apple.com/xcode/)。
+## 验证与打包
 
 ```bash
-open macos/Paperico.xcodeproj   # 选择 Paperico scheme → Run (⌘R)
+./script/check.sh                    # 原生核心测试 + 完整 App 构建
+./script/check.sh --with-backend     # 加跑已有后端测试、lint 和 DTO 契约检查
+./script/build_and_run.sh --verify   # 构建、启动并确认进程运行
+./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-首启在 **设置 → 服务器地址** 填入后端地址（如本机后端 `http://127.0.0.1:8000`）。
-构建细节与 API 契约检查见 [`macos/README.md`](macos/README.md)。
+DMG 输出在 `macos/build/Paperico-0.2.4.dmg`。本地构建使用临时签名，未经 Developer ID
+公证。正式分发的签名选项见 [macOS 开发说明](macos/README.md)。
 
-## 配置
+## 可选的旧 API 服务
 
-后端所有配置均为 `PAPERICO_` 前缀的可选环境变量（从 `backend/.env` 加载），完整列表见
-[`backend/.env.example`](backend/.env.example)。常用项：
+需要独立 REST/SSE API 的用户仍可运行 `./start.sh`，或参考 [backend/README.md](backend/README.md)。
+该命令启动 Python 服务，不是新版 App 的启动入口；`backend/.env` 与 `PAPERICO_*` 环境变量
+也不会配置原生 App。
 
-| 变量 | 用途 | 默认值 |
-|---|---|---|
-| `PAPERICO_LLM_BASE_URL` | OpenAI 兼容端点（翻译/对话/笔记） | `https://api.openai.com/v1` |
-| `PAPERICO_LLM_API_KEY` | LLM API Key（也可在设置页填写） | — |
-| `PAPERICO_LLM_MODEL` | 模型名 | `gpt-4o-mini` |
-| `PAPERICO_MINERU_BASE_URL` | MinerU API 地址（云/自托管） | `https://mineru.net/api/v4` |
-| `PAPERICO_MINERU_API_KEY` | MinerU Key（也可在设置页填写） | — |
-| `PAPERICO_ENCRYPTION_KEY` | 加密存储凭据的 Fernet 密钥 | 本地自动生成 |
-| `PAPERICO_STORAGE_ROOT` | PDF/图表/解析结果存储位置 | `backend/app/storage` |
-| `PAPERICO_JOB_KIND_LIMITS` | 各类任务并发上限，如 `{"mineru": 4}` | — |
+贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全说明见 [SECURITY.md](SECURITY.md)。
 
-设置页配置的 Key 加密入库；环境变量适合无界面部署场景。
-
-## 路线图
-
-- [x] v0.1.0 — 首个开源版本：解析、双语精读、可溯源对话、笔记、文献库、后端与
-      macOS 客户端
-- [ ] 批量导入（Zotero / arXiv 导出）
-- [ ] 项目内多篇论文联合对话
-- [ ] 可选的多用户与鉴权模式
-
-各版本变更见 [`CHANGELOG.md`](CHANGELOG.md)。
-
-## 参与贡献
-
-欢迎一切贡献——Bug 报告、文档与代码。开发环境搭建、后端↔客户端 API 契约约定、测试
-运行方式请先阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
-
-## 安全
-
-发现安全问题请走私密渠道上报，见 [`SECURITY.md`](SECURITY.md)；请勿公开提 Issue。
-
-## 许可证
-
-[MIT](LICENSE) © 2026 juliusloon。MinerU 通过其公开 API 调用，版权归其作者所有。
+[MIT](LICENSE) © 2026 juliusloon。

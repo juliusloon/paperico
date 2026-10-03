@@ -57,6 +57,7 @@ docs/verification/
 
 # ===== 内部规划文档(含个人本地路径/私人阅读清单,不入库) =====
 /paper_reading_workbench_spec.md
+/Workbench.md
 /docs/ios-app-plan.md
 
 # ===== IDE / OS / AI 工具本地状态 =====
@@ -67,3 +68,7 @@ docs/verification/
 Thumbs.db
 .zcode/
 .workbuddy/
+
+# SwiftPM core tests
+.build/
+.swiftpm/

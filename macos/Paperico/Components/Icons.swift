@@ -42,7 +42,7 @@ enum Ic {
     static let search = "magnifyingglass"
     static let close = "xmark"
     static let shieldAlert = symbol("exclamationmark.triangle", fallback: "exclamationmark.circle")
-    static let check = "check"
+    static let check = "checkmark"
     static let checkSquare = symbol("checkmark.square", fallback: "checkmark")
     static let square = "square"
     static let grip = symbol("line.3.horizontal", fallback: "circle.grid.2x2")
@@ -124,7 +124,7 @@ struct StatusDot: View {
         switch status {
         case .ready: return palette.success
         case .error: return palette.danger
-        case .unknown: return Color(hex: "#9a9a9a")!
+        case .unknown: return palette.gray400
         default: return palette.amber
         }
     }
@@ -144,13 +144,11 @@ struct SkeletonCard: View {
         .padding(18)
         .frame(minHeight: 142, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.gray200))
-        .background(palette.gray0)
-        .cornerRadius(12)
+        .liquidPanel()
     }
 
     private var bar: some View {
-        RoundedRectangle(cornerRadius: 5)
+        RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [palette.gray100, palette.gray50, palette.gray100],
@@ -168,53 +166,27 @@ struct RoundIconButton: View {
     let systemName: String
     var size: CGFloat = 32
     var title: String = ""
+    var foreground: Color? = nil
+    var animatesSymbolChange = true
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image.ic(systemName)
-                .font(.system(size: size * 0.47, weight: .medium))
-                .foregroundStyle(palette.gray500)
+                .font(.system(size: size * 0.40, weight: .medium))
+                .foregroundStyle(foreground ?? palette.gray500)
+                .contentTransition(animatesSymbolChange ? .symbolEffect(.replace) : .identity)
                 .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
         .noFocusRing()
-        .background(RoundedRectangle(cornerRadius: size * 0.28).fill(Color.clear))
-        .contentShape(Rectangle())
+        .contentShape(Circle())
+        .accessibilityLabel(title)
         .help(Text(title))
     }
 }
 
 // MARK: - Primary / secondary action buttons (home hero + reader error states)
-
-struct PrimaryButtonStyle: ButtonStyle {
-    @Environment(\.palette) private var palette
-
-    func makeBody(configuration: Configuration) -> some View {
-        let label = configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 40)
-
-        Group {
-            #if os(macOS)
-            if #available(macOS 26.0, *) {
-                label.glassEffect(accentGlass(palette.accent), in: Capsule())
-            } else {
-                label.background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
-            }
-            #elseif os(iOS)
-            if #available(iOS 26.0, *) {
-                label.glassEffect(accentGlass(palette.accent), in: Capsule())
-            } else {
-                label.background(RoundedRectangle(cornerRadius: 9).fill(palette.accent))
-            }
-            #endif
-        }
-        .opacity(configuration.isPressed ? 0.88 : 1)
-    }
-}
 
 struct PrimaryActionButton: View {
     let title: String
@@ -228,45 +200,14 @@ struct PrimaryActionButton: View {
                 if let systemImage { Image.ic(systemImage).font(.system(size: 13, weight: .semibold)) }
             }
         }
-        .buttonStyle(PrimaryButtonStyle())
+        .buttonStyle(LiquidActionButtonStyle(prominent: true))
+        .controlSize(.large).buttonBorderShape(.capsule)
         .noFocusRing()
     }
 }
 
-struct SecondaryButtonStyle: ButtonStyle {
-    @Environment(\.palette) private var palette
-
-    func makeBody(configuration: Configuration) -> some View {
-        let label = configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(palette.gray700)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 40)
-
-        Group {
-            #if os(macOS)
-            if #available(macOS 26.0, *) {
-                label.glassEffect(.regular.interactive(), in: Capsule())
-            } else {
-                label
-                    .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray300))
-            }
-            #elseif os(iOS)
-            if #available(iOS 26.0, *) {
-                label.glassEffect(.regular.interactive(), in: Capsule())
-            } else {
-                label
-                    .background(RoundedRectangle(cornerRadius: 9).fill(palette.gray0))
-                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(palette.gray300))
-            }
-            #endif
-        }
-        .opacity(configuration.isPressed ? 0.88 : 1)
-    }
-}
-
 struct SecondaryActionButton: View {
+    @Environment(\.colorScheme) private var colorScheme
     let title: String
     var systemImage: String?
     let action: () -> Void
@@ -277,8 +218,10 @@ struct SecondaryActionButton: View {
                 Text(title)
                 if let systemImage { Image.ic(systemImage).font(.system(size: 13, weight: .semibold)) }
             }
+            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
         }
-        .buttonStyle(SecondaryButtonStyle())
+        .buttonStyle(LiquidActionButtonStyle())
+        .controlSize(.large).buttonBorderShape(.capsule)
         .noFocusRing()
     }
 }

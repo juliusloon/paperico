@@ -1,0 +1,194 @@
+import Foundation
+import Observation
+
+// MARK: - ChatStore (mirrors useChatStore)
+
+@MainActor
+@Observable
+final class ChatStore {
+    private let library: PaperLibrary
+    private let settings: SettingsStore
+
+    var sessions: [ChatSession] = []
+    var error = ""
+    var currentSession: ChatSession?
+    var streaming = false
+    private(set) var preparingRevision = false
+    var busy: Bool { streaming || preparingRevision }
+    var streamContent = ""
+    var pendingMessage: ChatMessage?
+    @ObservationIgnored private var generationTask: Task<Void, Never>?
+    private var stopRequested = false
+    private var activePaperId: String?
+    private var requestVersion = UUID()
+
+    init(library: PaperLibrary, settings: SettingsStore) {
+        self.library = library
+        self.settings = settings
+    }
+
+    func bind(to paperId: String) {
+        guard activePaperId != paperId else { return }
+        generationTask?.cancel()
+        generationTask = nil
+        activePaperId = paperId
+        requestVersion = UUID()
+        sessions = []
+        currentSession = nil
+        streaming = false
+        preparingRevision = false
+        streamContent = ""
+        pendingMessage = nil
+        error = ""
+    }
+
+    func fetchSessions(paperId: String) async {
+        bind(to: paperId)
+        let version = requestVersion
+        do {
+            let loaded = try await library.chatSessions(paperId: paperId)
+            guard version == requestVersion else { return }
+            sessions = loaded
+        } catch {
+            guard version == requestVersion else { return }
+            self.error = ApiFailure.wrap(error).localizedDescription
+        }
+    }
+
+    func loadSession(paperId: String, sessionId: String) async {
+        guard !busy else { return }
+        bind(to: paperId)
+        let version = requestVersion
+        do {
+            let loaded = try await library.chatSession(paperId: paperId, sessionId: sessionId)
+            guard version == requestVersion else { return }
+            currentSession = loaded
+        } catch {
+            guard version == requestVersion else { return }
+            self.error = ApiFailure.wrap(error).localizedDescription
+        }
+    }
+
+    /// 流式问答:走 ChatService(本地会话持久化 + 直连模型),SSE 事件语义与旧后端一致。
+    func sendMessage(paperId: String, content: String, attachedContext: [AttachedContext]?) async {
+        guard !busy else { return }
+        bind(to: paperId)
+        let version = requestVersion
+        let session = currentSession
+        error = ""
+        streaming = true
+        stopRequested = false
+        streamContent = ""
+
+        let userMessage = ChatMessage(
+            id: "temp-\(Date().timeIntervalSince1970 * 1000)",
+            sessionId: session?.id ?? "",
+            role: "user",
+            content: content,
+            attachedContext: attachedContext,
+            citedBlockIds: nil,
+            createdAt: ISO8601DateFormatter().string(from: Date())
+        )
+        if let session {
+            var updated = session
+            updated.messages.append(userMessage)
+            currentSession = updated
+        } else {
+            pendingMessage = userMessage
+        }
+
+        var fullContent = ""
+        var sessionId = session?.id
+
+        do {
+            let stream = ChatService.send(
+                paperId: paperId, content: content, sessionId: sessionId,
+                attachedContext: attachedContext, library: library, llm: settings.llmConfig(for: .chat),
+                onTask: { [weak self] task in self?.generationTask = task }
+            )
+            for try await event in stream {
+                guard version == requestVersion else { return }
+                if let chunk = event.content, !chunk.isEmpty {
+                    fullContent += chunk
+                    streamContent = fullContent
+                }
+                if let sid = event.sessionId, !sid.isEmpty {
+                    sessionId = sid
+                    if currentSession == nil {
+                        var question = userMessage; question.sessionId = sid
+                        currentSession = ChatSession(id: sid, paperId: paperId, title: "新对话",
+                                                     messages: [question], createdAt: question.createdAt)
+                        pendingMessage = nil
+                    }
+                }
+                if let title = event.sessionTitle { currentSession?.title = title }
+            }
+        } catch {
+            guard version == requestVersion else { return }
+            if !stopRequested && !(error is CancellationError) { self.error = ApiFailure.wrap(error).localizedDescription }
+        }
+
+        guard version == requestVersion else { return }
+        // Reload canonical IDs/content; ChatService is the single persistence owner.
+        if let sessionId {
+            do {
+                let loaded = try await library.chatSession(paperId: paperId, sessionId: sessionId)
+                guard version == requestVersion else { return }
+                currentSession = loaded
+            }
+            catch { self.error = ApiFailure.wrap(error).localizedDescription }
+        }
+        guard version == requestVersion else { return }
+        streaming = false
+        generationTask = nil
+        streamContent = ""
+        pendingMessage = nil
+        await fetchSessions(paperId: paperId)
+    }
+
+    func stopGenerating() {
+        guard streaming else { return }
+        stopRequested = true
+        generationTask?.cancel()
+    }
+
+    func editAndResend(paperId: String, messageId: String, content: String) async {
+        guard !busy, let session = currentSession,
+              let turn = ChatRevision.editing(session, messageId: messageId, content: content) else { return }
+        await sendRevision(paperId: paperId, source: session, turn: turn)
+    }
+
+    func regenerate(paperId: String, assistantId: String) async {
+        guard !busy, let session = currentSession,
+              let turn = ChatRevision.regenerating(session, assistantId: assistantId) else { return }
+        await sendRevision(paperId: paperId, source: session, turn: turn)
+    }
+
+    private func sendRevision(paperId: String, source: ChatSession, turn: ChatRevision.Turn) async {
+        let version = requestVersion
+        preparingRevision = true
+        defer { if version == requestVersion { preparingRevision = false } }
+        var branch = ChatSession(id: PaperLibrary.newId(), paperId: paperId,
+                                 title: String(source.title.prefix(42)) + " · 修订", messages: turn.history,
+                                 createdAt: PaperLibrary.now())
+        for index in branch.messages.indices { branch.messages[index].sessionId = branch.id }
+        do {
+            try await library.saveChatSession(paperId: paperId, session: branch)
+            guard version == requestVersion else { return }
+            currentSession = branch
+            preparingRevision = false
+            await sendMessage(paperId: paperId, content: turn.content, attachedContext: turn.context)
+        } catch {
+            guard version == requestVersion else { return }
+            self.error = ApiFailure.wrap(error).localizedDescription
+        }
+    }
+
+    func newSession() {
+        guard !busy else { return }
+        requestVersion = UUID()
+        currentSession = nil
+        streamContent = ""
+        pendingMessage = nil
+    }
+}
