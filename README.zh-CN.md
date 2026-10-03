@@ -1,43 +1,51 @@
+<p align="center">
+  <img src="./assets/readme/hero.zh.svg" width="100%" alt="Paperico——本地优先、自带 Key 的 macOS 原生论文精读工作台。导入论文 PDF，双语精读、按证据提问，把讨论沉淀为 Markdown 笔记。右侧为 Paperico 应用图标：蓝色 P 与灰色 O。">
+</p>
+
 <div align="center">
-
-# Paperico
-
-**本地优先、自带 Key（BYOK）的原生论文精读工作台。**
-
-导入 PDF，用 MinerU 恢复结构，以 AI 辅助双语阅读、梳理论证、证据问答和笔记沉淀。
 
 [![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/app-v0.2.4-orange)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/download-v0.2.5-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 [English](README.md) · 简体中文
 
 </div>
 
-## v0.2.4
+## Paperico 是什么
 
-正文在所有窗口宽度下使用同一布局，增加悬浮目录、恢复逻辑链连线，并将无标题玻璃卡片
-改为从右侧划入。重做提问框、缩短历史标题，统一圆形图标控件与两页搜索。设置支持实时
-调整背景透明度；首页增加功能介绍和使用指引。离线数学排版与一次全文分析流程继续沿用。
+Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢复结构，然后原文与译文对照
+阅读，配合逻辑链大纲、方法卡片和随手可跳转的原始 PDF。提问时可附带选段、方法或图表，
+回答中的有效 block 引用会直接定位到对应证据。
 
-macOS App 已独立运行：论文库、解析与分析任务、对话和笔记均由原生代码管理，无需启动
-Python 后端。新增任务管理和可恢复回收站，并修复启动崩溃、并发存储与取消任务交错问题。
+论文库保存在你自己的沙盒中，API Key 存于 macOS 钥匙串，App 直连你配置的服务。
+**本地优先、自带 Key、无中转服务器，运行 App 也无需启动 Python 后端。**
 
-阅读[更新说明](docs/releases/v0.2.4.md)或[仓库分析与架构说明](docs/architecture.md)。
-
-## 功能
+## 你能得到什么
 
 - **论文库**：项目分组、搜索、排序、多选移动、PDF 去重、批量导入逐文件错误报告。
-- **任务管理**：查看待处理和失败论文、停止处理、重新解析、复用段落重新翻译。
-- **双语精读**：原文与译文、逻辑链大纲、方法卡片、原始 PDF、证据跳转与阅读进度记忆。
-- **证据问答**：可附带选段、方法或图表；模型回答中的有效 block 引用可定位原文。
+- **任务管理**：待处理与失败队列，支持停止、重新解析、复用段落重新翻译；配置就绪后新导入自动处理。
+- **双语精读**：原文与译文、逻辑链大纲、方法卡片、PDFKit 原文阅读与进度记忆。
+- **证据问答**：可附带选段、方法或图表；引用可定位到来源段落或 PDF 位置。
 - **笔记**：选择对话生成 Markdown 笔记，支持导出。
-- **回收站**：删除后保留 PDF、解析结果、对话和笔记，可直接恢复。
-- **原生桌面交互**：Liquid Glass、深浅色外观、自定义强调色、⌘1–⌘3 页面导航和 ⌘, 跳转设置页。
+- **回收站**：删除后保留 PDF、解析结果、对话和笔记，可随时恢复。
+- **原生桌面**：Liquid Glass、深浅色外观、自定义强调色、离线公式渲染、⌘1–⌘3 导航与 ⌘, 设置。
 
-## 使用与运行
+## v0.2.5 更新
 
-当前 App target 要求 **macOS 26+、Xcode 26+**。已验证环境为 macOS 27 / Xcode 27、Apple Silicon。
+- 全新 Icon Composer 应用图标，导航使用单色 Paperico 标志。
+- 全新 release 工作流构建可安装的 `Paperico-0.2.5.dmg` 并附到 GitHub Release。
+- v0.2.1–v0.2.4 的阅读器、论文库、对话与离线渲染更新均已包含在这一原生 App 中。
+
+详见[更新说明](docs/releases/v0.2.5.md)与[仓库分析与架构说明](docs/architecture.md)。
+
+## 运行
+
+**安装**：从 [最新 Release](https://github.com/juliusloon/paperico/releases) 下载
+`Paperico-0.2.5.dmg`，将 Paperico 拖入 Applications 并替换旧版。此包未使用 Developer ID
+签名或 Apple 公证；正式分发的签名选项见 [macOS 开发说明](macos/README.md)。
+
+**从源码构建**——要求 macOS 26+、Xcode 26+；已验证环境为 macOS 27 / Xcode 27、Apple Silicon：
 
 ```bash
 git clone https://github.com/juliusloon/paperico.git
@@ -46,24 +54,26 @@ cd paperico
 ```
 
 脚本会构建并启动 App；若系统选中 Command Line Tools 而标准路径已安装 Xcode，脚本会
-为本次构建自动选择 Xcode。也可以打开 `macos/Paperico.xcodeproj`，选择 Paperico → My Mac → Run。
-Codex 的 Run 按钮使用同一脚本。
+为本次构建自动选择 Xcode。也可以打开 `macos/Paperico.xcodeproj`，选择 Paperico →
+My Mac → Run。Codex 的 Run 按钮使用同一脚本。
+
+首次使用：
 
 1. 在论文库导入 PDF。尚未配置服务时，论文保留在本地，状态为待解析。
 2. 在设置中保存 AI 模型的 Base URL、模型名与 API Key，测试连通性。
 3. 配置 MinerU 云端 Token，或选择自己部署的本地 Gradio 服务。
-4. 配置完成后，从论文库的 **处理任务** 开始解析。后续导入会在配置就绪时自动处理。
+4. 配置完成后，从处理任务页开始解析。
 5. 阅读过程中点击回答的证据引用，可跳转到对应段落或 PDF 位置。
 
 **本地优先不等于离线 AI**：使用云端 MinerU 会上传 PDF；模型端点会接收任务所需的论文
 文本和对话上下文。App 直连你配置的服务，Paperico 不提供中转服务器。
 
-## 架构与目录
+## 工作原理
 
 ```text
 SwiftUI 页面 → Observable Stores → PaperLibrary / PaperPipeline / ChatService
-                                       │                  │
-                                 本地 JSON 与文件      MinerU / LLM
+                                     │                  │
+                              本地 JSON 与文件      MinerU / LLM
 ```
 
 | 目录 | 职责 |
@@ -109,8 +119,10 @@ v0.2.0 可读取原生迁移期间的无版本 JSON 索引。**旧 Python 后端
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-DMG 输出在 `macos/build/Paperico-0.2.4.dmg`。本地构建使用临时签名，未经 Developer ID
-公证。正式分发的签名选项见 [macOS 开发说明](macos/README.md)。
+DMG 输出在 `macos/build/Paperico-0.2.5.dmg`。推送 `v*` 标签会触发
+[release 工作流](.github/workflows/release.yml)，在干净的 Release 构建上产出 DMG 并
+上传到 GitHub Release。本地构建使用临时签名，未经 Developer ID 公证；正式分发的签名
+选项见 [macOS 开发说明](macos/README.md)。
 
 ## 可选的旧 API 服务
 
