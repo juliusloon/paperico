@@ -1,214 +1,162 @@
 import SwiftUI
 
-/// Mirrors reader/MetaCard.tsx — the 论文信息 card.
+/// Paper overview: publication, title, compact facts and a readable summary.
 struct MetaCard: View {
     @Environment(\.palette) private var palette
     @Environment(ReaderStore.self) private var readerStore
 
     var body: some View {
-        Group {
-            if let detail = readerStore.paper {
-                ScrollView {
-                    body(for: detail)
-                }
+        if let detail = readerStore.paper {
+            ScrollView {
+                overview(detail).padding(20)
             }
         }
     }
 
-    private func body(for detail: PaperDetail) -> some View {
+    private func overview(_ detail: PaperDetail) -> some View {
         let paper = detail.paper
-        let characterCount = detail.blocks.reduce(0) { $0 + $1.textOriginal.count }
-        let readingMinutes = max(1, Int((Double(characterCount) / 1100.0).rounded()))
-
-        return VStack(alignment: .leading, spacing: 0) {
-            Text(paper.venue.isEmpty ? "RESEARCH PAPER" : paper.venue)
-                .font(.mono(10, weight: .bold))
-                .kerning(1.2)
-                .foregroundStyle(palette.accent)
-            Text(paper.displayTitle)
-                .font(.reading(19.5, weight: .medium))
-                .lineSpacing(4)
-                .foregroundStyle(palette.gray900)
-                .padding(.top, 9)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if !paper.titleZh.isEmpty && paper.titleZh != paper.title {
-                Text(paper.titleZh)
-                    .font(.system(size: 14))
-                    .lineSpacing(4)
-                    .foregroundStyle(palette.gray500)
-                    .padding(.top, 9)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !paper.authors.isEmpty {
-                Text(paper.authors.prefix(6).joined(separator: " · ") + (paper.authors.count > 6 ? " 等" : ""))
-                    .font(.system(size: 12.5))
-                    .lineSpacing(3)
-                    .foregroundStyle(palette.gray600)
-                    .padding(.top, 9)
-            }
-
-            HStack(spacing: 11) {
-                HStack(spacing: 4) {
-                    Image.ic(Ic.clock).font(.system(size: 10)).foregroundStyle(palette.accent)
-                    Text("\(readingMinutes)").font(.system(size: 11.5, weight: .bold)).foregroundStyle(palette.gray700)
-                    Text("分钟").font(.system(size: 11.5)).foregroundStyle(palette.gray500)
+        let characters = detail.blocks.reduce(0) { $0 + $1.textOriginal.count }
+        let minutes = max(1, Int((Double(characters) / 1100).rounded()))
+        return VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(paper.displayTitle)
+                    .font(.system(size: 18, weight: .semibold)).foregroundStyle(palette.gray900)
+                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                if !paper.titleZh.isEmpty && paper.titleZh != paper.displayTitle {
+                    Text(paper.titleZh).font(.system(size: 13)).foregroundStyle(palette.gray600)
+                        .lineSpacing(4).fixedSize(horizontal: false, vertical: true)
                 }
-                HStack(spacing: 4) {
-                    Image.ic(Ic.fileText).font(.system(size: 10)).foregroundStyle(palette.accent)
-                    Text("\(detail.blocks.count)").font(.system(size: 11.5, weight: .bold)).foregroundStyle(palette.gray700)
-                    Text("节点").font(.system(size: 11.5)).foregroundStyle(palette.gray500)
+                if !paper.authors.isEmpty {
+                    Text(paper.authors.prefix(6).joined(separator: " · ") + (paper.authors.count > 6 ? " 等" : ""))
+                        .font(.system(size: 11)).foregroundStyle(palette.gray500).lineSpacing(3)
                 }
-                HStack(spacing: 4) {
-                    Image.ic(Ic.gauge).font(.system(size: 10)).foregroundStyle(palette.accent)
-                    Text(paper.difficultyEstimate.isEmpty ? "待评估" : paper.difficultyEstimate)
-                        .font(.system(size: 11.5, weight: .bold))
-                        .foregroundStyle(palette.gray700)
+                if !paper.venue.isEmpty || paper.year != nil {
+                    HStack(spacing: 8) {
+                        if !paper.venue.isEmpty { Text(paper.venue) }
+                        if let year = paper.year { Text(String(year)) }
+                    }
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(palette.gray600)
                 }
-                Spacer(minLength: 0)
             }
-            .padding(.vertical, 9)
-            .padding(.top, 4)
-            .overlay(alignment: .top) { Rectangle().fill(palette.gray100).frame(height: 1) }
-            .overlay(alignment: .bottom) { Rectangle().fill(palette.gray100).frame(height: 1) }
-            .padding(.top, 9)
-
+            HStack(spacing: 14) {
+                fact("\(minutes) 分钟", icon: "clock")
+                fact("\(PaperOutline.entries(detail.blocks).count) 节点", icon: "text.alignleft")
+                if !paper.difficultyEstimate.isEmpty { fact(paper.difficultyEstimate, icon: "gauge.with.dots.needle.50percent") }
+            }
             if !paper.domainTags.isEmpty {
-                HStack(spacing: 5) {
+                FlowChips {
                     ForEach(paper.domainTags, id: \.self) { tag in
-                        Text(tag)
-                            .font(.system(size: 11))
-                            .foregroundStyle(palette.accent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(palette.accentSoft))
+                        Text(tag).font(.system(size: 11)).foregroundStyle(palette.gray600)
+                            .padding(.horizontal, 9).padding(.vertical, 5)
+                            .liquidInset(cornerRadius: ControlSpec.radius)
                     }
                 }
-                .padding(.top, 10)
             }
-
             if !paper.tldr.isEmpty {
-                summarySection(title: "一句话总结", systemImage: Ic.sparkles, featured: true) {
-                    Text(paper.tldr).summaryBody(palette: palette)
+                HStack(alignment: .top, spacing: 12) {
+                    Capsule().fill(palette.accent.opacity(0.7)).frame(width: 3)
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("研究要点").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.accent)
+                        Text(paper.tldr).font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(palette.gray800).lineSpacing(5)
+                    }
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
-
             if !paper.narrativeSummary.isEmpty {
-                summarySection(title: "全文主线", systemImage: nil, featured: false) {
-                    Text(paper.narrativeSummary).summaryBody(palette: palette)
-                }
+                summary("全文主线") { Text(paper.narrativeSummary).summaryBody(palette: palette) }
             }
-
             if !paper.contributions.isEmpty {
-                summarySection(title: "核心贡献", systemImage: nil, featured: false) {
-                    VStack(alignment: .leading, spacing: 3) {
+                summary("核心贡献") {
+                    VStack(alignment: .leading, spacing: 10) {
                         ForEach(Array(paper.contributions.enumerated()), id: \.offset) { index, item in
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text("\(index + 1).").foregroundStyle(palette.gray500)
+                            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                                Text("\(index + 1)").font(.system(size: 11, weight: .medium)).foregroundStyle(palette.gray500)
                                 Text(item).summaryBody(palette: palette)
                             }
                         }
                     }
                 }
             }
-
             if !detail.entities.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text("方法与实体").font(.system(size: 12, weight: .bold)).foregroundStyle(palette.gray700)
-                        Spacer(minLength: 0)
-                        Text("\(detail.entities.count)").font(.system(size: 12)).foregroundStyle(palette.accent)
-                    }
-                    .padding(.top, 13)
-                    .overlay(alignment: .top) { Rectangle().fill(palette.gray100).frame(height: 1) }
-
-                    FlowChips(maxWidth: 18) {
+                summary("方法与实体 · \(detail.entities.count)") {
+                    FlowChips {
                         ForEach(detail.entities.prefix(18)) { entity in
                             Button {
                                 readerStore.highlightEntities([entity.id])
-                                if let firstBlock = entity.blockRefs.first {
-                                    readerStore.scrollToBlock(firstBlock, centered: true)
-                                }
+                                if let first = entity.blockRefs.first { readerStore.scrollToBlock(first, centered: true) }
                             } label: {
-                                Text(entity.name)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(palette.gray600)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 5)
-                                    .background(RoundedRectangle(cornerRadius: 5).fill(palette.gray50))
-                                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(palette.gray200))
-                            }
-                            .buttonStyle(.plain)
-                            .help(entity.definitionZh.isEmpty ? entity.category : entity.definitionZh)
+                                Text(entity.name).font(.system(size: 11)).foregroundStyle(palette.accent)
+                                    .lineLimit(2).padding(.horizontal, 9).padding(.vertical, 6)
+                                    .background(palette.accentSoft.opacity(0.65), in: Capsule())
+                            }.buttonStyle(.plain)
+                                .help(entity.definitionZh.isEmpty ? entity.category : entity.definitionZh)
                         }
                     }
-                    .padding(.top, 7)
                 }
             }
         }
-        .padding(18)
+        .textSelection(.enabled)
     }
 
-    private func summarySection<Content: View>(title: String, systemImage: String?, featured: Bool, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                if let systemImage {
-                    Image.ic(systemImage).font(.system(size: 10))
-                }
-                Text(title)
-            }
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(palette.accent)
+    private func fact(_ text: String, icon: String) -> some View {
+        Label(text, systemImage: icon).font(.system(size: 11)).foregroundStyle(palette.gray500)
+            .lineLimit(1)
+    }
 
+    private func summary<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Divider().opacity(0.5)
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.gray500)
             content()
-        }
-        .padding(.top, 13)
-        .overlay(alignment: .top) { Rectangle().fill(palette.gray100).frame(height: 1) }
-        .modifier(FeaturedModifier(palette: palette, featured: featured))
-    }
-}
-
-private struct FeaturedModifier: ViewModifier {
-    let palette: Palette
-    let featured: Bool
-
-    func body(content: Content) -> some View {
-        if featured {
-            content
-                .padding(11)
-                .background(RoundedRectangle(cornerRadius: 9).fill(palette.accentFaint))
-                .padding(.top, 1)
-        } else {
-            content
         }
     }
 }
 
 extension Text {
     func summaryBody(palette: Palette) -> some View {
-        self
-            .font(.system(size: 14))
-            .lineSpacing(4)
-            .foregroundStyle(palette.gray600)
+        font(.system(size: 13)).lineSpacing(5).foregroundStyle(palette.gray700)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-/// Simple wrapping chip layout.
+/// Wrap at each chip's intrinsic width so names do not break into tiny columns.
 struct FlowChips<Content: View>: View {
-    let maxWidth: Int
+    let spacing: CGFloat
     @ViewBuilder let content: () -> Content
-
-    init(maxWidth: Int = Int.max, @ViewBuilder content: @escaping () -> Content) {
-        self.maxWidth = maxWidth
+    init(spacing: CGFloat = 6, @ViewBuilder content: @escaping () -> Content) {
+        self.spacing = spacing
         self.content = content
     }
+    var body: some View { WrappingChipsLayout(spacing: spacing) { content() } }
+}
 
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), alignment: .leading)], alignment: .leading, spacing: 4) {
-            content()
+private struct WrappingChipsLayout: Layout {
+    var spacing: CGFloat = 6
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(subviews, width: proposal.width ?? .greatestFiniteMagnitude).size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(subviews, width: bounds.width)
+        for (index, point) in result.positions.enumerated() {
+            let size = subviews[index].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            subviews[index].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y),
+                                  anchor: .topLeading, proposal: ProposedViewSize(size))
         }
+    }
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (size: CGSize, positions: [CGPoint]) {
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, usedWidth: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            if x > 0 && x + size.width > width {
+                x = 0; y += rowHeight + spacing; rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            usedWidth = max(usedWidth, x + size.width)
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return (CGSize(width: min(width, usedWidth), height: y + rowHeight), positions)
     }
 }

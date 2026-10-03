@@ -1,87 +1,69 @@
 # Contributing to Paperico
 
-Thanks for your interest in improving Paperico! This document covers the development
-setup, the project's conventions, and the few rules that keep the macOS client and the
-backend from drifting apart.
+The native macOS app is the primary product. The Python REST/SSE server is retained
+as an independent compatibility component. See [docs/architecture.md](docs/architecture.md)
+for the current ownership boundaries and [docs/releases/v0.2.0.md](docs/releases/v0.2.0.md)
+for the native migration changes.
 
-## Project layout
+## Native development
 
-```text
-backend/    FastAPI server (Python 3.11+, SQLAlchemy async + SQLite)
-macos/      Native macOS client (SwiftUI + PDFKit, single Xcode target)
-docs/       Engineering notes
+Prerequisites: macOS 26+ and Xcode 26+. From the repository root:
+
+```bash
+./script/build_and_run.sh
+./script/check.sh
+./script/build_and_run.sh --verify
 ```
 
-## Development setup
+The Codex Run action calls the same build/run script. Swift files are automatically
+included by the Xcode synchronized group; do not regenerate the project to add files.
+`macos/Package.swift` tests selected core sources and is not a second GUI application.
 
-### Backend
+Put app dependency wiring in `App/`, observable UI state in `Stores/`, persistence and
+service logic in `Core/`, and view composition in `Pages/` or `Components/`. Keep files
+named after their responsibility. Actor isolation alone does not make a read/modify/write
+transaction safe if it suspends between reading and saving.
+
+Regression tests for persistence, task lifecycle or service protocol behavior belong in
+`macos/Tests/PapericoCoreTests/`. Use synthetic PDFs, ZIPs and temporary directories;
+do not call paid APIs or rely on the developer's real library. Reversible visual-only
+changes normally need a build and a focused UI check, rather than implementation-mirroring tests.
+
+## Compatibility backend
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
-
-pytest                 # run the test suite
-ruff check .           # lint
-uvicorn app.main:app --reload   # dev server on :8000
+pytest -q
+ruff check .
+uvicorn app.main:app --reload
 ```
 
-If you use [uv](https://docs.astral.sh/uv/): `uv pip install --python .venv/bin/python -e ".[dev]"`.
+Configuration uses `backend/.env` and `PAPERICO_*` variables; those settings do not
+configure the native app. Run both tracks with `./script/check.sh --with-backend` after
+installing the backend dev dependencies.
 
-Configuration is read from `backend/.env` (see
-[`backend/.env.example`](backend/.env.example)) or `PAPERICO_*` environment variables.
+When changing a backend response schema, update `backend/tests/openapi_snapshot.json`
+and run `macos/scripts/check_api_contract.py`. Retained Swift DTOs and the script's
+snapshot must agree. This is a compatibility-data contract, not a native runtime dependency.
 
-### macOS client
+## Releases and documentation
 
-Prerequisites: macOS 14+, Xcode 16+ (the project uses file-system synchronized groups).
+- Update both root READMEs when changing setup, data ownership or system requirements.
+- Record user-visible changes under Unreleased in CHANGELOG.md, then create a dated
+  version entry and release note when preparing a release.
+- Keep app target and project-bootstrap marketing/build versions consistent.
+- Package with `macos/scripts/make_dmg.sh`; local ad-hoc signing is separate from
+  Developer ID signing and notarization.
+- Treat earlier backend/web engineering plans in `docs/` as historical context.
 
-```bash
-cd macos
-open Paperico.xcodeproj   # Paperico scheme → Run (⌘R)
-xcodebuild -project Paperico.xcodeproj -scheme Paperico \
-  -destination 'platform=macOS' build     # CLI build
-```
+## Repository hygiene
 
-Swift files are picked up automatically (synchronized groups) — there is no need to
-regenerate the project when adding files. After a backend API schema change, run the
-contract check (next section). To produce a distributable `Paperico-<version>.dmg`,
-run `./scripts/make_dmg.sh` from `macos/` (Release build + signed DMG via
-`PAPERICO_SIGN_IDENTITY`, optional).
+Use Conventional Commit prefixes such as `feat(macos):` or `fix(backend):`. Never add
+credentials, environment files, PDFs, personal databases, build output or screenshots
+with paper contents. CI contains a credential-pattern scan.
 
-## The API-contract rule
-
-`macos/Paperico/Models/Models.swift` mirrors the backend Pydantic schemas field-for-field.
-Whenever you change an API response schema in `backend/`, you **must**:
-
-1. update `backend/tests/openapi_snapshot.json` (the snapshot test fails otherwise), and
-2. run `macos/scripts/check_api_contract.py` (offline: against a dumped `openapi.json`,
-   or online against a running backend) and update the Swift models + script snapshot
-   until it prints `contract OK`.
-
-This is enforced by the backend test suite; PRs that break it will not pass CI.
-
-## Conventions
-
-- **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) —
-  `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, with an optional scope such as
-  `feat(backend):` / `fix(macos):`.
-- **Python**: formatted and linted with `ruff` (config in `backend/pyproject.toml`).
-  New backend behaviour needs pytest coverage; migration scripts need a regression test.
-- **Docs**: the repository language is English; the Chinese README
-  ([`README.zh-CN.md`](README.zh-CN.md)) should be kept in sync with the English one.
-- **Secrets never enter the repo**: no API keys, `.env` files, or local database/PDF
-  storage. CI scans fail the build on obvious key patterns.
-
-## Submitting changes
-
-1. Fork / create a branch (`feat/my-change`).
-2. Make the change with tests where applicable.
-3. Run `pytest` (backend) and a macOS `xcodebuild` build if you touched `macos/`.
-4. Update [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** for user-visible changes.
-5. Open a pull request using the template; link any related issues.
-
-## Reporting bugs
-
-Open a [bug report](https://github.com/juliusloon/paperico/issues/new?template=bug_report.yml)
-with your OS, client (macOS app / backend API), backend version and relevant logs. For
-security issues, follow [`SECURITY.md`](SECURITY.md) instead.
+Bug reports should identify the app or API component, version, OS, reproducible steps
+and relevant diagnostics. Report security issues through [SECURITY.md](SECURITY.md).

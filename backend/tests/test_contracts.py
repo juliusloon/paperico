@@ -6,8 +6,10 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.core import crypto
+from app.core.config import settings as runtime_settings
 from app.core.models import _now
 from app.core.schemas import PaperListItem, PaperStatusOut
 from app.core.status import ErrorCode, PipelineError, error_code_of, set_paper_error
@@ -83,34 +85,47 @@ class FixedWidthTimestampTests(unittest.TestCase):
 
 class ProfileResolutionTests(unittest.TestCase):
     def test_explicit_assignment_wins_even_if_unconfigured(self):
-        settings = make_settings(
-            profile("primary", base_url="https://x/v1", api_key="k", model="m"),
-            chat="primary",
-        )
-        client = resolve_llm(settings, LlmRole.CHAT)
-        self.assertEqual(client.model, "m")
+        with patch.object(runtime_settings, "llm_api_key", ""):
+            settings = make_settings(
+                profile("decoy", base_url="https://generic.example/v1", api_key="decoy-key", model="generic-model"),
+                profile("assigned", base_url="https://assigned.example/v1", model="assigned-model"),
+                chat="assigned",
+            )
+            client = resolve_llm(settings, LlmRole.CHAT)
+
+        self.assertEqual(client.base_url, "https://assigned.example/v1")
+        self.assertEqual(client.model, "assigned-model")
+        self.assertFalse(client.is_configured)
 
     def test_logic_chain_falls_back_to_translation_profile(self):
         settings = make_settings(
-            profile("main", base_url="https://x/v1", api_key="k", model="m"),
-            translation_and_extraction="main",
+            profile("decoy", base_url="https://generic.example/v1", api_key="decoy-key", model="generic-model"),
+            profile("translation", base_url="https://translation.example/v1", api_key="translation-key", model="translation-model"),
+            translation_and_extraction="translation",
         )
         client = resolve_llm(settings, LlmRole.LOGIC_CHAIN_AND_SUMMARY)
-        self.assertEqual(client.model, "m")
+        self.assertEqual(client.base_url, "https://translation.example/v1")
+        self.assertEqual(client.model, "translation-model")
 
     def test_chat_chain_falls_back_to_translation(self):
         settings = make_settings(
-            profile("main", base_url="https://x/v1", api_key="k", model="m"),
-            translation_and_extraction="main",
+            profile("decoy", base_url="https://generic.example/v1", api_key="decoy-key", model="generic-model"),
+            profile("translation", base_url="https://translation.example/v1", api_key="translation-key", model="translation-model"),
+            translation_and_extraction="translation",
         )
-        self.assertEqual(resolve_llm(settings, LlmRole.CHAT).model, "m")
+        client = resolve_llm(settings, LlmRole.CHAT)
+        self.assertEqual(client.base_url, "https://translation.example/v1")
+        self.assertEqual(client.model, "translation-model")
 
     def test_note_chain_falls_back_to_chat(self):
         settings = make_settings(
-            profile("main", base_url="https://x/v1", api_key="k", model="m"),
-            chat="main",
+            profile("decoy", base_url="https://generic.example/v1", api_key="decoy-key", model="generic-model"),
+            profile("chat", base_url="https://chat.example/v1", api_key="chat-key", model="chat-model"),
+            chat="chat",
         )
-        self.assertEqual(resolve_llm(settings, LlmRole.NOTE_SYNTHESIS).model, "m")
+        client = resolve_llm(settings, LlmRole.NOTE_SYNTHESIS)
+        self.assertEqual(client.base_url, "https://chat.example/v1")
+        self.assertEqual(client.model, "chat-model")
 
     def test_configured_profile_preferred_over_blank_assignment(self):
         settings = make_settings(
@@ -121,13 +136,23 @@ class ProfileResolutionTests(unittest.TestCase):
         self.assertEqual(client.model, "m")
 
     def test_single_profile_used_even_if_unconfigured(self):
-        settings = make_settings(profile("only"))
-        client = resolve_llm(settings, LlmRole.CHAT)
-        reference = LLMClient()
+        with (
+            patch.object(runtime_settings, "llm_base_url", "https://environment.example/v1"),
+            patch.object(runtime_settings, "llm_api_key", ""),
+            patch.object(runtime_settings, "llm_model", "environment-model"),
+        ):
+            settings = make_settings(
+                profile("only", base_url="https://saved.example/v1", model="saved-model")
+            )
+            client = resolve_llm(settings, LlmRole.CHAT)
+            reference = LLMClient()
+
         self.assertEqual(
             (client.base_url, client.api_key, client.model),
-            (reference.base_url, reference.api_key, reference.model),
+            ("https://saved.example/v1", "", "saved-model"),
         )
+        self.assertNotEqual((client.base_url, client.model), (reference.base_url, reference.model))
+        self.assertFalse(client.is_configured)
 
     def test_falls_back_to_environment_default(self):
         client = resolve_llm(make_settings(), LlmRole.CHAT)

@@ -571,7 +571,7 @@ async def _process_paper(paper_id: str):
             await db.flush()
 
             # Extract and deduplicate entities
-            entity_map = {}  # canonical_key -> {name, category, block_ids, mention_contexts}
+            entity_map = {}  # canonical_key -> {name, category, block_ids}
             for ent in all_entities_raw:
                 key = _canonical_key(ent["name"])
                 if key not in entity_map:
@@ -579,7 +579,6 @@ async def _process_paper(paper_id: str):
                         "name": ent["name"],
                         "category": ent.get("category", "OTHER"),
                         "block_ids": [],
-                        "mention_context": ent.get("mention_context", ""),
                     }
                 if ent["block_id"] not in entity_map[key]["block_ids"]:
                     entity_map[key]["block_ids"].append(ent["block_id"])

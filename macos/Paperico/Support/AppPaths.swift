@@ -5,7 +5,7 @@ import Foundation
 // 沙盒开启时,这些目录自动落在 app 容器内:
 //   ~/Library/Containers/com.paperico.native/Data/Library/Application Support/Paperico/
 // 偏好与阅读进度在 UserDefaults(容器 Preferences/com.paperico.native.plist);
-// 导出笔记由用户通过 fileExporter 自选位置;这里存放 app 自己管理的文件
+// 导出笔记由用户通过原生保存面板自选位置;这里存放 app 自己管理的文件
 // (诊断/性能日志等),遵循 macOS 标准目录规范。
 
 enum AppPaths {

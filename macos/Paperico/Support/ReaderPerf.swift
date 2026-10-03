@@ -62,29 +62,11 @@ enum ReaderPerf {
         return Double(info.phys_footprint) / (1024 * 1024)
     }
 
-    // MARK: 计数器
-
-    /// 一次 fetch + 首次渲染中,论文详情的请求解码与行数。
-    static let storeFetch = PerfMeter()
-    /// ReadingArea.documentBody 被求值的次数。
-    static let documentBody = PerfCounter()
-    /// ReadingArea.updateActiveBlock 被触发的次数(滚动时每帧都会)。
-    static let activeBlockUpdates = PerfCounter()
-    /// ReadingArea.updateTextProgress 被触发的次数。
-    static let progressUpdates = PerfCounter()
-    /// 真正写 UserDefaults 的次数(合并后应该远小于 progressUpdates)。
-    static let progressPersisted = PerfCounter()
-    /// 每帧间隔统计 → 滚动流畅度(FPS / p95 帧耗时)。
-    static let frameIntervals = FrameStats()
-
     static func dumpSummary() {
         guard isEnabled else { return }
         let timestamp = ISO8601DateFormatter().string(from: Date())
         var lines = ["---- Paperico 阅读页性能摘要 \(timestamp) ----"]
         lines.append(String(format: "  内存 footprint = %.1f MB", memoryFootprintMB()))
-        lines.append(String(format: "  documentBody 求值次数 = %d", documentBody.current))
-        lines.append(String(format: "  activeBlock 更新次数  = %d", activeBlockUpdates.current))
-        lines.append(String(format: "  进度回调次数/持久化次数 = %d / %d", progressUpdates.current, progressPersisted.current))
         lines.append(String(
             format: "  Markdown 块缓存 命中/未命中 = %d / %d (未命中累计 %.1f ms)",
             PaperMarkdown.blockCacheHits.current,
@@ -94,11 +76,6 @@ enum ReaderPerf {
             format: "  AttributedString 缓存 命中/未命中 = %d / %d",
             PaperMarkdown.attributedCacheHits.current,
             PaperMarkdown.attributedCacheMisses.current))
-        if let fps = frameIntervals.snapshot() {
-            lines.append(String(
-                format: "  帧间隔 平均=%.1f ms (%.0f FPS) p95=%.1f ms 最大=%.1f ms 样本=%d",
-                fps.averageMs, fps.fps, fps.p95Ms, fps.maxMs, fps.samples))
-        }
         lines.forEach { log("%@", $0) }
         persistSummary(lines.joined(separator: "\n") + "\n")
     }
@@ -122,7 +99,7 @@ enum ReaderPerf {
     }
 }
 
-// MARK: - 计数器 / 计时器
+// MARK: - 计数器
 
 /// 线程安全计数器(NSCache 与 SwiftUI 可能从不同线程读写数量统计)。
 final class PerfCounter: @unchecked Sendable {
@@ -140,83 +117,5 @@ final class PerfCounter: @unchecked Sendable {
     var current: Int {
         lock.lock(); defer { lock.unlock() }
         return value
-    }
-}
-
-/// 累计耗时统计。
-final class PerfMeter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var count = 0
-    private var totalMs: Double = 0
-
-    func record(_ ms: Double) {
-        lock.lock()
-        count += 1
-        totalMs += ms
-        lock.unlock()
-    }
-
-    var current: Int {
-        lock.lock(); defer { lock.unlock() }
-        return count
-    }
-
-    var total: Double {
-        lock.lock(); defer { lock.unlock() }
-        return totalMs
-    }
-
-    var average: Double {
-        lock.lock(); defer { lock.unlock() }
-        return count == 0 ? 0 : totalMs / Double(count)
-    }
-}
-
-/// 环形缓冲的帧间隔统计:滚动时每一帧的间隔直接反映流畅度。
-final class FrameStats: @unchecked Sendable {
-    private let lock = NSLock()
-    private var samples: [Double]
-    private var capacity: Int
-    private var lastTimestamp: UInt64?
-
-    init(capacity: Int = 240) {
-        self.capacity = capacity
-        self.samples = []
-        self.samples.reserveCapacity(capacity)
-    }
-
-    func recordFrame(at timestamp: UInt64 = DispatchTime.now().uptimeNanoseconds) {
-        lock.lock()
-        if let last = lastTimestamp {
-            let deltaMs = Double(timestamp - last) / 1_000_000
-            // 忽略超过 500 ms 的间隔(说明中间暂停/切后台,不是卡顿)。
-            if deltaMs > 0, deltaMs < 500 {
-                if samples.count == capacity { samples.removeFirst() }
-                samples.append(deltaMs)
-            }
-        }
-        lastTimestamp = timestamp
-        lock.unlock()
-    }
-
-    func reset() {
-        lock.lock(); samples.removeAll(keepingCapacity: true); lastTimestamp = nil; lock.unlock()
-    }
-
-    struct Snapshot {
-        var averageMs: Double
-        var p95Ms: Double
-        var maxMs: Double
-        var samples: Int
-        var fps: Double { averageMs > 0 ? 1000 / averageMs : 0 }
-    }
-
-    func snapshot() -> Snapshot? {
-        lock.lock(); defer { lock.unlock() }
-        guard !samples.isEmpty else { return nil }
-        let sorted = samples.sorted()
-        let avg = sorted.reduce(0, +) / Double(sorted.count)
-        let p95Index = min(sorted.count - 1, Int(Double(sorted.count) * 0.95))
-        return Snapshot(averageMs: avg, p95Ms: sorted[p95Index], maxMs: sorted.last ?? 0, samples: sorted.count)
     }
 }

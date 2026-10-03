@@ -2,192 +2,135 @@
 
 # Paperico
 
-**A local-first, bring-your-own-key workbench for deep-reading research papers.**
+**A local-first, bring-your-own-key native paper reading workbench.**
 
-Upload a PDF, let MinerU turn it into structured blocks, and read it side-by-side with an
-AI-built logic-chain outline, sentence-level bilingual translation, method cards — and a
-chat that cites the exact block it answers from.
+Import PDFs, recover their structure with MinerU, then read bilingually, follow the argument,
+ask evidence-grounded questions, and turn the discussion into Markdown notes.
 
 [![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.1.0-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/app-v0.2.4-orange)](CHANGELOG.md)
 
 English · [简体中文](README.zh-CN.md)
 
 </div>
 
----
+## Version 0.2.4
 
-## Why Paperico
+The reader now shares one layout at every window width, with a hover table of contents,
+connected margin logic chain, and headerless glass cards that slide in from the right.
+Chat has a new multiline composer and bounded history titles. Search, circular icon
+controls, background transparency and home feature guides are consistent across the app.
+Offline math and the single streamed full-paper analysis remain available.
 
-Deep-reading a paper is not the same as skimming a summary. Paperico is built around the
-loop **read → understand the structure → ask → take notes**, with one hard rule: every AI
-output must be traceable back to a specific location in the paper. Summaries, method cards
-and chat citations all link to source blocks — the model is not allowed to speak about the
-paper without a receipt.
+The macOS app now owns its library, processing jobs, chat and notes in native code.
+No Python backend is needed to run the app. This update adds task management and a
+recoverable trash, and fixes startup crashes, persistence races and cancellation/retry conflicts.
 
-Everything runs on your machine: PDFs, the SQLite database, extracted figures, and your
-API keys (stored encrypted with Fernet). Paperico never proxies your documents through a
-third-party service of its own — parsing and model calls go directly from your backend to
-the providers **you** configure (BYOK).
+See the [release notes](docs/releases/v0.2.4.md) and [architecture review](docs/architecture.md).
 
 ## Features
 
-- **Structured parsing** — PDFs are parsed by
-  [MinerU](https://github.com/opendatalab/MinerU) (cloud `mineru.net` or a self-hosted
-  endpoint) into typed blocks: paragraphs, headings, figures, tables, equations.
-- **Logic-chain outline** — an LLM-generated chain of "what role does this section play in
-  the argument" entries, synced with your scroll position.
-- **Sentence-level bilingual reading** — side-by-side original/translation with per-block
-  retranslation; target language configurable.
-- **Method cards & entities** — methods used in the paper extracted into a browsable
-  index, across all papers in your library.
-- **Evidence-grounded chat** — streaming SSE chat where every answer cites the blocks it
-  is based on; click a citation to jump and flash-highlight the source. Attach extra
-  context: text selections, method cards, figures.
-- **Notes mode** — multi-select blocks, generate structured notes, export Markdown.
-- **Library management** — projects, status filters, dedup on import, batch operations,
-  soft-delete with restore.
-- **Native macOS client** — SwiftUI + PDFKit, zero third-party dependencies, talking to
-  the same local backend as any API client would.
-- **PDF mode** — original PDF rendering (PDFKit) alongside the structured view, with
-  progress synced in both directions.
+- Project groups, search, sorting, bulk moves, PDF deduplication, and per-file batch import errors.
+- Task management with stop, reparse, and retranslate operations.
+- Bilingual text, logic-chain outlines, method cards, PDFKit reading and saved progress.
+- Chat with attached selections, methods or figures; valid block citations locate their evidence.
+- Markdown note synthesis from selected messages and file export.
+- Trash recovery preserving PDFs, extracted content, conversations and notes.
+- Native Liquid Glass, light/dark appearance, accent colors, ⌘1–⌘3 navigation and ⌘, settings.
 
-## Architecture
+## Run
 
-```text
-┌──────────────────────┐
-│  macOS app (SwiftUI) │      ← any HTTP client can talk to the API
-└──────────┬───────────┘
-           │  REST + SSE
-           ▼
-   ┌───────────────────┐   delegates    ┌───────────────────────┐
-   │ FastAPI + SQLite, │ ─────────────▶ │ MinerU (cloud or      │
-   │ local storage of  │                │ self-hosted)          │
-   │ PDFs & blocks     │ ─────────────▶ │ any OpenAI-compatible │
-   └───────────────────┘                │ LLM endpoint          │
-                                        └───────────────────────┘
-```
-
-| Directory | What it is |
-|---|---|
-| [`backend/`](backend) | FastAPI server: jobs, storage, encrypted settings, REST + SSE API |
-| [`macos/`](macos) | Native macOS client: SwiftUI + PDFKit (single Xcode target) |
-| [`docs/`](docs) | Engineering notes: bbox coordinates, storage migration, chemistry parsing spike |
-
-## Quickstart
-
-Prerequisites: **Python 3.11+**.
+The current app target requires **macOS 26+ and Xcode 26+**. Local verification used
+macOS 27 / Xcode 27 on Apple Silicon.
 
 ```bash
 git clone https://github.com/juliusloon/paperico.git
 cd paperico
-./start.sh
+./script/build_and_run.sh
 ```
 
-`start.sh` creates the Python virtualenv and installs dependencies on first run, then
-starts the backend:
+The script builds and opens the app. It selects an Xcode installation at the standard
+path for this invocation if Command Line Tools are currently selected. You can also
+open `macos/Paperico.xcodeproj` and run the Paperico scheme on My Mac.
+The Codex Run action uses the same script.
 
-- Backend API: http://127.0.0.1:8000 · interactive docs at http://127.0.0.1:8000/docs
+1. Import PDFs into the library, even before configuring AI services.
+2. Open Settings, save your model endpoint, model ID and API key, then test connectivity.
+3. Configure a MinerU cloud token or your self-hosted MinerU Gradio endpoint.
+4. Start pending papers from **处理任务** (processing tasks). Later imports start automatically
+   when the service configuration is ready.
+5. Click evidence citations to locate their blocks or PDF positions while reading.
 
-Prefer manual setup? See [`backend/README.md`](backend/README.md).
+**Local-first does not mean offline AI.** Cloud MinerU receives your PDF; the model
+endpoint receives the text and conversation context needed for each task. The app
+connects directly to your configured services. Paperico does not operate a relay.
 
-### First run
+## Architecture
 
-1. Launch the macOS app (below), go to **Settings**, and fill in your keys:
-   - **LLM**: any OpenAI-compatible endpoint (base URL + key + model). This powers
-     translation, outlines, method cards and chat.
-   - **MinerU**: a `mineru.net` API key, or point the base URL at your self-hosted
-     instance. This powers PDF parsing.
-2. (Recommended, instead of the UI) copy [`backend/.env.example`](backend/.env.example)
-   to `backend/.env` and set the values there — see the
-   [configuration table](#configuration).
-3. Upload a PDF on the home page and wait for parsing to finish.
+```text
+SwiftUI pages → Observable stores → PaperLibrary / PaperPipeline / ChatService
+                                         │                  │
+                                  local JSON/files       MinerU / LLM
+```
 
-> API keys entered in Settings are encrypted with Fernet before being stored. The key file
-> lives under the backend storage directory (mode 0600), or provide your own via
-> `PAPERICO_ENCRYPTION_KEY`.
+| Directory | Responsibility |
+|---|---|
+| `macos/Paperico/App/` | Startup, dependency injection, routing, themes and native scenes |
+| `macos/Paperico/Stores/` | Separate settings, project, paper, reader and chat state |
+| `macos/Paperico/Core/` | Persistence, job gates, pipeline, service clients and ZIP parsing |
+| `macos/Paperico/Pages/`, `Components/` | Pages, reader and reusable controls |
+| `macos/Tests/`, `macos/Package.swift` | Core tests without UI startup or external API calls |
+| `script/` | Repository-level build, run and verification entrypoints |
+| `backend/` | Retained v0.1 REST/SSE service and Python tests, independent of the app |
+| `docs/` | Current architecture, releases and historical engineering records |
 
-### Install the macOS app
+Ignored local `frontend/` and `design/` directories contain the retired web implementation
+and design material. They are not part of the app build.
 
-Prebuilt DMGs are attached to each [GitHub Release](https://github.com/juliusloon/paperico/releases)
-(or build one yourself: `cd macos && ./scripts/make_dmg.sh`). Open the DMG and drag
-**Paperico** into *Applications*.
+## Data and upgrades
 
-Releases are currently **unsigned**: on first launch macOS Gatekeeper will warn —
-right-click the app → **Open** → **Open** to confirm. With a Developer ID you can produce
-signed builds: `PAPERICO_SIGN_IDENTITY="Developer ID Application: …" ./scripts/make_dmg.sh`
-(then notarize before distribution).
+The sandboxed app stores its library under:
 
-### Where is my data?
+```text
+~/Library/Containers/com.paperico.native/Data/Library/Application Support/Paperico/
+├── library.json          # versioned projects, papers, hashes and trash records
+├── pdfs/                 # original PDFs
+├── papers/<id>/          # blocks, entities, chat and notes JSON
+├── mineru_output/<id>/   # extracted content and figures
+├── analyses/<id>/        # raw analysis responses
+└── logs/                 # optional diagnostics
+```
 
-- **The app itself** is sandboxed and keeps preferences and per-paper reader state in its
-  container (`~/Library/Containers/com.paperico.native/`), diagnostics logs under
-  `~/Library/Containers/com.paperico.native/Data/Library/Application Support/Paperico/logs/`.
-- **Your papers, PDFs and extracted figures** belong to the backend, not the app:
-  - `./start.sh` (repository mode, default) stores everything inside the repository
-    folder (`backend/paperico.db` + `backend/app/storage/`);
-  - `./start.sh --app-data` stores everything in
-    `~/Library/Application Support/Paperico/` — the layout you want once the backend is
-    part of your daily setup. Existing repository data is copied over on first use.
-    The API keys you enter in Settings are stored encrypted (Fernet) in either mode.
+Service configuration, appearance and progress use UserDefaults. API keys and MinerU
+tokens use macOS Keychain. Storage failures are surfaced; corrupt or newer-version
+indexes are not silently replaced with an empty library.
 
-### macOS app
+The unversioned native JSON index from the migration is compatible with v0.2.0.
+**The old backend SQLite library and Fernet credentials remain separate and are not
+automatically converted.** Keep the old database and storage directory when upgrading.
+Back up the entire native data directory, including trash-referenced files; credentials
+require separate Keychain management.
 
-The native client is a single SwiftUI target that talks to the same backend.
-
-Prerequisites: macOS 14+, [Xcode 16+](https://developer.apple.com/xcode/).
+## Validate and package
 
 ```bash
-open macos/Paperico.xcodeproj   # select the Paperico scheme → Run (⌘R)
+./script/check.sh                    # core tests and full app build
+./script/check.sh --with-backend     # also backend tests, lint and DTO contract check
+./script/build_and_run.sh --verify   # build, launch and verify the process
+./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-On first launch, set the server address under **Settings → Server** (for example
-`http://127.0.0.1:8000` for a backend on the same machine). Build instructions and the
-API-contract check are described in [`macos/README.md`](macos/README.md).
+The DMG is written to `macos/build/Paperico-0.2.4.dmg`. Local builds use ad-hoc signing
+and are not Developer ID notarized. See the [macOS development guide](macos/README.md)
+for distribution signing options.
 
-## Configuration
+## Optional legacy API service
 
-All backend settings are optional environment variables prefixed with `PAPERICO_`
-(loaded from `backend/.env`). See [`backend/.env.example`](backend/.env.example) for the
-full list; the most common ones:
+Users who need the independent REST/SSE API can still run `./start.sh` or follow
+[backend/README.md](backend/README.md). That command starts the Python service, not the
+native app. `backend/.env` and `PAPERICO_*` variables do not configure the native app.
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `PAPERICO_LLM_BASE_URL` | OpenAI-compatible endpoint for translation/chat/notes | `https://api.openai.com/v1` |
-| `PAPERICO_LLM_API_KEY` | API key for the LLM endpoint (or set it in Settings) | — |
-| `PAPERICO_LLM_MODEL` | Model name | `gpt-4o-mini` |
-| `PAPERICO_MINERU_BASE_URL` | MinerU API base (cloud or self-hosted) | `https://mineru.net/api/v4` |
-| `PAPERICO_MINERU_API_KEY` | MinerU key (or set it in Settings) | — |
-| `PAPERICO_ENCRYPTION_KEY` | Fernet key for encrypting stored credentials | generated locally |
-| `PAPERICO_STORAGE_ROOT` | Where PDFs/figures/extracts live | `backend/app/storage` |
-| `PAPERICO_JOB_KIND_LIMITS` | Per-kind concurrency caps, e.g. `{"mineru": 4}` | — |
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
-Keys configured via the Settings page are stored encrypted in the database; environment
-variables are useful for headless setups.
-
-## Roadmap
-
-- [x] v0.1.0 — initial open-source release: parsing, bilingual reading, evidence-grounded
-      chat, notes, library, backend + macOS client
-- [ ] Batch import (Zotero / arXiv export files)
-- [ ] Multi-paper chat across a project
-- [ ] Optional multi-user mode with authentication
-
-See [`CHANGELOG.md`](CHANGELOG.md) for what shipped in each release.
-
-## Contributing
-
-Contributions are welcome — bug reports, docs, and code. Start with
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for the development setup, the backend↔client
-API-contract rule, and how to run the test suites.
-
-## Security
-
-Found a security issue? Please report it privately — see
-[`SECURITY.md`](SECURITY.md). Please do not open a public issue for vulnerabilities.
-
-## License
-
-[MIT](LICENSE) © 2026 juliusloon. MinerU is used via its public API and remains the
-property of its respective authors.
+[MIT](LICENSE) © 2026 juliusloon.

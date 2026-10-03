@@ -10,7 +10,7 @@ models get updated in the same change.
 Usage:
   python3 scripts/check_api_contract.py --base http://127.0.0.1:8000
   python3 scripts/check_api_contract.py --file openapi.json
-  python3 scripts/check_api_contract.py --file openapi.json --update   # refresh snapshot
+  python3 scripts/check_api_contract.py --file openapi.json --update   # print fields from supplied schema
 """
 from __future__ import annotations
 
@@ -46,12 +46,16 @@ SNAPSHOT: dict[str, set[str]] = {
         "id", "name", "base_url", "api_key_masked", "api_key_configured", "model",
         "temperature", "max_tokens", "reasoning_effort", "streaming",
     },
+    "TestConnectionResult": {
+        "success", "message", "supports_reasoning", "reasoning_levels", "default_max_output_tokens",
+    },
     "AppearanceSettings": {"accent_color", "theme_mode", "reading_font_size", "bilingual_layout"},
     "ChatDefaults": {"preset_prompts", "target_language", "enable_wikilinks"},
     "MethodIndexItem": {"canonical_key", "name", "category", "definition_zh", "papers"},
 }
 
 SNAPSHOT_FIELDS = {"model_profiles", "profile_assignment", "mineru", "appearance", "chat_defaults"}
+SETTINGS_SCHEMA = "AppSettingsOut"
 
 
 def load_openapi(args: argparse.Namespace) -> dict:
@@ -80,7 +84,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="http://127.0.0.1:8000", help="backend base URL")
     parser.add_argument("--file", help="read openapi.json from disk instead of --base")
-    parser.add_argument("--update", action="store_true", help="print the snapshot to paste back")
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="print actual fields from the supplied OpenAPI schemas; does not write files",
+    )
     args = parser.parse_args()
 
     document = load_openapi(args)
@@ -100,21 +108,30 @@ def main() -> int:
         if added:
             problems.append(f"{name}: fields ADDED on backend (mirror in Models.swift or extend snapshot): {sorted(added)}")
 
-    # AppSettingsOut is referenced via AppSettingsUpdate; check its parts through
-    # any schema that carries the five top-level settings keys.
-    for name, schema in schemas.items():
-        fields = schema_fields(schema, components)
-        if SNAPSHOT_FIELDS <= fields:
-            removed = SNAPSHOT_FIELDS - fields
-            added = fields - SNAPSHOT_FIELDS
-            if removed:
-                problems.append(f"{name}: settings keys REMOVED: {sorted(removed)}")
-            if added:
-                problems.append(f"{name}: settings keys ADDED on backend: {sorted(added)}")
-            break
+    # AppSettingsOut is the response schema mirrored by the native AppSettings
+    # model. Do not infer it from an unrelated schema that happens to contain
+    # the same keys (for example AppSettingsUpdate).
+    settings_schema = schemas.get(SETTINGS_SCHEMA)
+    if settings_schema is None:
+        problems.append(f"{SETTINGS_SCHEMA}: schema missing from backend OpenAPI")
+    else:
+        fields = schema_fields(settings_schema, components)
+        removed = SNAPSHOT_FIELDS - fields
+        added = fields - SNAPSHOT_FIELDS
+        if removed:
+            problems.append(f"{SETTINGS_SCHEMA}: settings keys REMOVED: {sorted(removed)}")
+        if added:
+            problems.append(f"{SETTINGS_SCHEMA}: settings keys ADDED on backend: {sorted(added)}")
 
     if args.update:
-        print(json.dumps({k: sorted(v) for k, v in SNAPSHOT.items()}, indent=2, ensure_ascii=False))
+        updated = {
+            name: sorted(schema_fields(schemas[name], components))
+            for name in SNAPSHOT
+            if name in schemas
+        }
+        if settings_schema is not None:
+            updated[SETTINGS_SCHEMA] = sorted(schema_fields(settings_schema, components))
+        print(json.dumps(updated, indent=2, ensure_ascii=False))
         return 0
 
     if problems:

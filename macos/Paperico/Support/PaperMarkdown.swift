@@ -159,7 +159,7 @@ enum PaperMarkdown {
     static func parseBlocks(_ source: String) -> [MarkdownBlock] {
         var blocks: [MarkdownBlock] = []
         var paragraph: [String] = []
-        var lines = source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        let lines = source.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
         var index = 0
 
         func flushParagraph() {
@@ -266,7 +266,7 @@ enum PaperMarkdown {
                 continue
             }
 
-            if let numberLength = orderedPrefixLength(trimmed) {
+            if orderedPrefixLength(trimmed) != nil {
                 flushParagraph()
                 var items: [String] = []
                 while index < lines.count, let n = orderedPrefixLength(lines[index].trimmed) {
@@ -275,7 +275,6 @@ enum PaperMarkdown {
                     index += 1
                 }
                 blocks.append(.ordered(items))
-                _ = numberLength
                 continue
             }
 

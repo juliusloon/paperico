@@ -1,0 +1,16 @@
+{
+  "name": "paperico-reader-renderer",
+  "version": "0.2.4",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "node bundle.mjs", "test": "node --test *.test.mjs"},
+  "dependencies": {
+    "katex": "0.16.47",
+    "rehype-katex": "7.0.1",
+    "remark-math": "6.0.0",
+    "remark-parse": "11.0.0",
+    "remark-rehype": "11.1.2",
+    "unified": "11.0.5"
+  },
+  "devDependencies": {"rolldown": "1.2.5"}
+}

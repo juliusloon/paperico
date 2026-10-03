@@ -72,15 +72,15 @@ async def send_chat_message(
     entities_result = await db.execute(select(MethodEntity).where(MethodEntity.paper_id == paper_id))
     entities = entities_result.scalars().all()
 
-    logic_chain = "\n".join(
-        f"[{b.id}] {b.section_title or ''}-{b.role_in_narrative or ''}: {b.one_liner or ''}"
-        for b in blocks if b.one_liner
-    )
-    method_index = "\n".join(
-        f"{e.name}({e.category}) → 出现于 {','.join(e.block_refs or [])}"
-        for e in entities
-    )
     if settings.chat_legacy_truncation:
+        logic_chain = "\n".join(
+            f"[{b.id}] {b.section_title or ''}-{b.role_in_narrative or ''}: {b.one_liner or ''}"
+            for b in blocks if b.one_liner
+        )
+        method_index = "\n".join(
+            f"{e.name}({e.category}) → 出现于 {','.join(e.block_refs or [])}"
+            for e in entities
+        )
         paper_context = (
             "【全文逻辑链（压缩版，按原文顺序）】\n" + logic_chain[:3000]
             + "\n\n【已识别方法/实体索引】\n" + method_index[:2000]

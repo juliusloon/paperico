@@ -1,10 +1,12 @@
 #!/bin/bash
-# Paperico — start the backend (FastAPI).
+# Paperico — start the standalone REST/SSE backend (FastAPI).
 #
-# The native macOS app (macos/) connects to this backend; see README.md.
+# The native macOS app uses its own local library and service clients; it does not
+# connect to this backend. This script serves independent API clients; see README.md.
 #
 # Usage: ./start.sh [--app-data]
-#   First run bootstraps everything: creates backend/.venv and installs
+#   Starts the standalone REST/SSE backend. The first run bootstraps everything:
+#   creates backend/.venv and installs
 #   Python dependencies, then starts the server.
 #
 #   --app-data  Store user data (database, PDFs, extracts) in
@@ -16,7 +18,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_HOST="0.0.0.0"   # LAN-visible so the app can connect from another machine
+BACKEND_HOST="0.0.0.0"   # LAN-visible so independent API clients can connect
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 
 APP_DATA=0
@@ -32,7 +34,6 @@ if ! command -v python3 >/dev/null; then
   echo "error: python3 (3.11+) is required" >&2; exit 1
 fi
 
-DATA_ENV=()
 if [ "$APP_DATA" -eq 1 ]; then
   DATA_DIR="$HOME/Library/Application Support/Paperico"
   mkdir -p "$DATA_DIR/storage"

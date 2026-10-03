@@ -1,40 +1,45 @@
 import SwiftUI
 
-// MARK: - Liquid Glass 适配(macOS 26 / iOS 26+,旧系统保持原有手绘外观)
+/// Continuous corners keep nested surfaces visually related; icon controls use circles.
+enum CornerRadius {
+    static let card: CGFloat = 20
+    static let inset: CGFloat = 12
+    static let chip: CGFloat = 8
+}
 
-/// 当前运行时是否支持 Liquid Glass(供无法内联 #available 的场景做条件分支)。
-enum LiquidGlass {
-    static var isSupported: Bool {
-        #if os(macOS)
-        if #available(macOS 26.0, *) { return true }
-        #elseif os(iOS)
-        if #available(iOS 26.0, *) { return true }
-        #endif
-        return false
+private struct BackgroundOpacityKey: EnvironmentKey { static let defaultValue: Double = 1 }
+private struct GlassOpacityKey: EnvironmentKey { static let defaultValue: Double = 0.85 }
+private struct FloatingSurfaceKey: EnvironmentKey { static let defaultValue = false }
+private struct DrawerSurfaceKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var backgroundOpacity: Double {
+        get { self[BackgroundOpacityKey.self] }
+        set { self[BackgroundOpacityKey.self] = newValue }
+    }
+    var glassOpacity: Double {
+        get { self[GlassOpacityKey.self] }
+        set { self[GlassOpacityKey.self] = newValue }
+    }
+    var floatingSurface: Bool {
+        get { self[FloatingSurfaceKey.self] }
+        set { self[FloatingSurfaceKey.self] = newValue }
+    }
+    var drawerSurface: Bool {
+        get { self[DrawerSurfaceKey.self] }
+        set { self[DrawerSurfaceKey.self] = newValue }
     }
 }
 
-/// accent 染色的交互玻璃变体(仅在 #available(macOS 26, *) / iOS 26 分支内调用)。
-@available(macOS 26.0, iOS 26.0, *)
-func accentGlass(_ color: Color) -> Glass {
-    Glass.regular.tint(color).interactive()
-}
+// MARK: - 桌面侧栏轨道的宽度断点
 
-// MARK: - 宽度断点(移植 web 端的媒体查询)
-
-/// web 端 index.css 的响应式断点;app 端按根布局实际宽度套用同一组数值,
-/// 让 macOS / iPad 缩窗时获得与 web 相同的比例适配。
+/// 根布局实际宽度决定侧栏是否收起，页面内容一直保留桌面布局。
 enum LayoutBreakpoint {
-    /// 阅读器三栏 → 分页栏(web @media max-width 900px)。
+    /// 阅读器页边逻辑链自动让位给正文的宽度。
     static let reader: CGFloat = 900
-    /// 设置页双栏 → 单栏 + 横向 tab(web @media max-width 800px)。
+    /// 设置侧栏自动收成图标轨道。
     static let settings: CGFloat = 800
-    /// 工作台页侧栏 → 抽屉 + 顶部导航条(web @media max-width 760px)。
+    /// 工作台侧栏自动收成桌面的窄轨道。
     static let workspace: CGFloat = 760
-    /// 首页 hero/下栏切换单列(web @media max-width 860px)。
-    static let hero: CGFloat = 860
-    /// 首页小屏排版(web @media max-width 640px)。
-    static let home: CGFloat = 640
 }
 
 private struct ContainerWidthKey: EnvironmentKey {
@@ -51,84 +56,106 @@ extension EnvironmentValues {
 
 // MARK: - 玻璃面板(页面级 panel 统一为液态玻璃圆角矩形)
 
-/// 页面 panel 的统一表面:macOS/iOS 26+ 用 Liquid Glass,旧系统回退到手绘卡片。
-/// 圆角由调用方保持原值(侧栏/主栏 14,卡片 12,首页指标条 12)。
-private struct LiquidPanelModifier: ViewModifier {
-    var cornerRadius: CGFloat
-    @Environment(\.palette) private var palette
-
-    func body(content: Content) -> some View {
-        #if os(macOS)
-        if #available(macOS 26.0, *) {
-            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
-        } else {
-            legacy(content)
-        }
-        #elseif os(iOS)
-        if #available(iOS 26.0, *) {
-            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
-        } else {
-            legacy(content)
-        }
-        #else
-        legacy(content)
-        #endif
-    }
-
-    private func legacy(_ content: Content) -> some View {
-        content
-            .background(RoundedRectangle(cornerRadius: cornerRadius).fill(palette.gray0))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(palette.gray300.opacity(0.68)))
-            .shadow(color: palette.shadowCard, radius: 8, y: 3)
-    }
-}
-
-/// 浮动小件(阅读器悬浮工具)的统一表面:交互玻璃 + accent 按压染色。
-struct LiquidToolModifier: ViewModifier {
-    var cornerRadius: CGFloat
+/// Fade only the material, never its foreground. Regular glass keeps light
+/// surfaces visible; the independent opacity preference permits full build tuning.
+struct GlassSurface<S: Shape>: View {
+    let shape: S
     var tint: Color? = nil
+    var interactive = false
     @Environment(\.palette) private var palette
+    @Environment(\.glassOpacity) private var glassOpacity
+    @Environment(\.floatingSurface) private var floatingSurface
+    @Environment(\.drawerSurface) private var drawerSurface
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    func body(content: Content) -> some View {
-        #if os(macOS)
-        if #available(macOS 26.0, *) {
-            content.glassEffect(glass, in: RoundedRectangle(cornerRadius: cornerRadius))
+    private var opacity: Double { reduceTransparency ? 1 : min(1, max(drawerSurface ? 0.94 : 0, glassOpacity)) }
+
+    var body: some View {
+        // Keep the effect's elevation inside its background layer. A page-wide
+        // container otherwise lifts detached glass above unrelated text/fields.
+        GlassEffectContainer(spacing: 0) { material }
+            .overlay {
+                shape.stroke(palette.dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09), lineWidth: 0.5)
+            }
+            .opacity(opacity)
+            .background {
+                // A floating surface needs to obscure large source text behind
+                // it even while the glass itself fades. Both layers follow the
+                // component preference and disappear at full transparency.
+                if floatingSurface {
+                    shape.fill(.regularMaterial).opacity(opacity)
+                        .overlay { shape.fill(Color.white.opacity(palette.dark ? 0.08 : 0.24)).opacity(opacity) }
+                }
+            }
+    }
+
+    @ViewBuilder private var material: some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            Color.clear.glassEffect(glass, in: shape).glassEffectTransition(.identity)
         } else {
-            legacy(content)
+            shape.fill(.regularMaterial)
         }
-        #elseif os(iOS)
-        if #available(iOS 26.0, *) {
-            content.glassEffect(glass, in: RoundedRectangle(cornerRadius: cornerRadius))
-        } else {
-            legacy(content)
-        }
-        #else
-        legacy(content)
-        #endif
     }
 
     @available(macOS 26.0, iOS 26.0, *)
     private var glass: Glass {
-        if let tint { return accentGlass(tint) }
-        return .regular.interactive()
+        var value = Glass.regular
+        if let tint { value = value.tint(tint) }
+        if interactive { value = value.interactive() }
+        return value
     }
+}
 
-    private func legacy(_ content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(tint ?? palette.gray0.opacity(0.92))
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
-            )
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(tint ?? palette.gray300.opacity(0.72)))
-            .shadow(color: palette.shadowFloat, radius: 10, y: 4)
+private struct LiquidPanelModifier: ViewModifier {
+    var cornerRadius: CGFloat
+    var tint: Color?
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+    func body(content: Content) -> some View {
+        content.clipShape(shape)
+            .background { GlassSurface(shape: shape, tint: tint) }
+    }
+}
+
+struct LiquidToolModifier: ViewModifier {
+    var cornerRadius: CGFloat
+    var tint: Color? = nil
+    func body(content: Content) -> some View {
+        content.background { GlassSurface(shape: Capsule(), tint: tint, interactive: true) }
+    }
+}
+
+/// Shared button geometry and glass preference, including prominent actions.
+struct LiquidActionButtonStyle: ButtonStyle {
+    var prominent = false
+    var tint: Color? = nil
+    var foreground: Color? = nil
+    var horizontalPadding: CGFloat = 14
+    var verticalPadding: CGFloat = 8
+    @Environment(\.palette) private var palette
+    @Environment(\.glassOpacity) private var glassOpacity
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(foreground ?? (prominent && glassOpacity > 0.45 ? (tint ?? palette.accent).contrastingForeground : (prominent ? tint ?? palette.accent : palette.gray800)))
+            .padding(.horizontal, horizontalPadding).padding(.vertical, verticalPadding)
+            .background { GlassSurface(shape: Capsule(), tint: prominent ? tint ?? palette.accent : nil, interactive: true) }
+            .opacity(isEnabled ? 1 : 0.5)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
 extension View {
     /// 页面级 panel:侧栏、主内容卡、首页面板、阅读器右侧卡等。
-    func liquidPanel(cornerRadius: CGFloat = 14) -> some View {
-        modifier(LiquidPanelModifier(cornerRadius: cornerRadius))
+    func liquidPanel(cornerRadius: CGFloat = CornerRadius.card, tint: Color? = nil) -> some View {
+        modifier(LiquidPanelModifier(cornerRadius: cornerRadius, tint: tint))
+    }
+
+    /// Nested notices, fields and cards share regular glass and continuous corners.
+    func liquidInset(cornerRadius: CGFloat = CornerRadius.inset, tint: Color? = nil) -> some View {
+        liquidPanel(cornerRadius: cornerRadius, tint: tint)
     }
 
     /// 浮动工具小件(阅读器悬浮工具条上的单件)。
@@ -158,9 +185,9 @@ extension View {
     /// 隐藏标题栏后红绿灯悬浮在窗口左上角;给面板/内容顶部留出安全高度。
     /// 非 macOS 平台为无操作。
     ///
-    /// 高度不再硬编码 34pt,而是取 `WindowChrome.additionalTopClearance`
-    /// (见 App/WindowChrome.swift):它已经扣掉系统自动保留的顶部安全区,
-    /// 避免在 macOS 26+ 上形成 32 + 34 = 66pt 的突兀空档。
+    /// 高度取 `WindowChrome.topClearance`(见 App/WindowChrome.swift)这一个固定值:
+    /// RootView 已忽略系统顶部安全区,不会出现"安全区 + 补白"双重叠加的空顶栏。
+    /// 紧凑页面也消费相同留白;阅读器的分段栏自行避开红绿灯。
     func trafficLightTopPadding(_ extra: CGFloat = 0) -> some View {
         modifier(TrafficLightTopPaddingModifier(extra: extra))
     }

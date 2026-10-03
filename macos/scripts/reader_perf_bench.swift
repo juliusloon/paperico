@@ -1,18 +1,20 @@
 // Reading-page render benchmark — runs the app's REAL source file (MarkdownText /
 // PaperMarkdown / Models) against REAL payloads from GET /api/papers/{id}.
 //
-// Why this exists: on this machine Swift cannot expand macros (@Observable / @State),
-// so the whole app cannot be compiled here. The dominant costs of the reading page
-// are pure functions of the payload, so they are compiled directly and measured.
+// This isolates the historical native Markdown renderer's payload processing.
+// It does not measure the current offline WKWebView document surface.
 //
 // Build & run:
 //   cd macos && ./scripts/run_reader_bench.sh /tmp/detail_9f73f3144329.json
 //
 // Or manually:
 //   xcrun --sdk macosx swiftc -O \
-//     Paperico/Support/PaperMarkdown.swift Paperico/Support/ReaderPerf.swift \
-//     Paperico/Components/MarkdownText.swift Paperico/App/Theme.swift \
-//     Paperico/Models/Models.swift scripts/reader_perf_bench.swift -o /tmp/readerbench
+//     Paperico/Support/AppPaths.swift Paperico/Support/PaperMarkdown.swift \
+//     Paperico/Support/ReaderPerf.swift Paperico/Components/MarkdownText.swift \
+//     Paperico/Components/GlassKit.swift Paperico/Core/MarkdownTable.swift \
+//     Paperico/App/Theme.swift Paperico/App/WindowChrome.swift \
+//     Paperico/Models/PaperStatus.swift Paperico/Models/Models.swift \
+//     scripts/reader_perf_bench.swift -o /tmp/readerbench
 
 import Foundation
 import SwiftUI
@@ -70,7 +72,7 @@ func attributed(_ markdown: String, fontSize: CGFloat, cached: Bool, useMathSpli
         _ = PaperMarkdown.attributedString(
             markdown: markdown,
             fontSize: fontSize,
-            codeFont: .mono(fontSize * 0.88),
+            codeFont: .system(size: fontSize * 0.88),
             codeBackground: BenchConfig.gray100,
             mathSplitter: useMathSplitter
         )
@@ -78,14 +80,15 @@ func attributed(_ markdown: String, fontSize: CGFloat, cached: Bool, useMathSpli
         _ = PaperMarkdown.attributedStringUncached(
             markdown: markdown,
             fontSize: fontSize,
-            codeFont: .mono(fontSize * 0.88),
+            codeFont: .system(size: fontSize * 0.88),
             codeBackground: BenchConfig.gray100,
             mathSplitter: useMathSplitter
         )
     }
 }
 
-/// `BlockRenderer` + captions, faithful to the bilingual default.
+/// Historical native Markdown renderer benchmark (before v0.2.3).
+/// The offline WKWebView document surface is not measured by this script.
 func renderRow(_ block: Block, cached: Bool) {
     switch block.kind {
     case "figure":

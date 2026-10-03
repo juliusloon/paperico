@@ -1,8 +1,10 @@
 # Paperico Backend
 
 FastAPI server: paper library, background job center, local storage, encrypted
-settings, and the REST + SSE API consumed by the native macOS client (and any
-other API client).
+settings, and the retained v0.1 REST + SSE API for independent API clients.
+
+The v0.2 native app runs independently and does not consume this server. Backend
+SQLite/Fernet data is not automatically migrated to native JSON/Keychain storage.
 
 ## Stack
 
@@ -42,7 +44,7 @@ all optional; see [`.env.example`](.env.example).
 
 ```bash
 pip install -e ".[dev]"
-pytest            # full suite (65 tests, incl. OpenAPI snapshot)
+pytest            # full suite, including the OpenAPI snapshot
 ruff check .      # lint (config in pyproject.toml)
 ```
 

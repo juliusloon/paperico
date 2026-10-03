@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Every token mirrors the CSS custom properties originally defined in the
 /// web client's `index.css` (web client is local-only now, but keep names in sync).
-/// `accentSoft` = 12% accent on white (light) / 19% on #20242c (dark);
+/// Translucent accent layers: 12% (light) / 19% (dark);
 /// `accentFaint` = 5% / 8%.
 struct Palette {
     var accent: Color
@@ -30,8 +30,8 @@ struct Palette {
         let accent = Color(hex: accentHex) ?? Color(hex: "#275DCE")!
         return Palette(
             accent: accent,
-            accentSoft: accent.mix(with: Color(hex: "#ffffff")!, ratio: 0.12),
-            accentFaint: accent.mix(with: Color(hex: "#ffffff")!, ratio: 0.05),
+            accentSoft: accent.opacity(0.12),
+            accentFaint: accent.opacity(0.05),
             appBase: Color(hex: "#ffffff")!,
             amber: Color(hex: "#B66A12")!,
             success: Color(hex: "#237A52")!,
@@ -55,8 +55,8 @@ struct Palette {
         let accent = userAccent.mix(with: Color(hex: "#f4f6fa")!, ratio: 0.82)
         return Palette(
             accent: accent,
-            accentSoft: accent.mix(with: Color(hex: "#20242c")!, ratio: 0.19),
-            accentFaint: accent.mix(with: Color(hex: "#20242c")!, ratio: 0.08),
+            accentSoft: accent.opacity(0.19),
+            accentFaint: accent.opacity(0.08),
             appBase: Color(hex: "#171a20")!,
             amber: Color(hex: "#e0a45b")!,
             success: Color(hex: "#65b98d")!,
@@ -132,60 +132,10 @@ extension Font {
         .system(size: size, weight: weight, design: .serif)
     }
 
-    /// ui-monospace code face.
-    static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
-    }
+
 }
 
 // MARK: - Status vocabulary (single source of truth, mirrors LibraryPage STATUS_*)
-
-enum PaperStatus: String, Hashable {
-    case uploaded, parsing, parsed, normalizing, analyzing, reducing, ready, error
-    case unknown
-
-    init(raw: String) {
-        self = PaperStatus(rawValue: raw) ?? .unknown
-    }
-
-    var label: String {
-        switch self {
-        case .uploaded: return "待解析"
-        case .parsing: return "解析中"
-        case .parsed: return "已解析"
-        case .normalizing: return "清洗中"
-        case .analyzing: return "分析中"
-        case .reducing: return "归纳中"
-        case .ready: return "已就绪"
-        case .error: return "出错"
-        case .unknown: return "未知"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .ready: return Palette.defaultLight(accentHex: "#275DCE").success
-        case .error: return Palette.defaultLight(accentHex: "#275DCE").danger
-        case .parsing, .analyzing, .reducing, .normalizing: return Palette.defaultLight(accentHex: "#275DCE").amber
-        default: return Color(hex: "#9a9a9a")!
-        }
-    }
-
-    /// ReadingArea.STATUS_COPY — shown on the preparing stage.
-    var processingCopy: String? {
-        switch self {
-        case .uploaded: return "等待开始"
-        case .parsing: return "MinerU 正在恢复版面结构"
-        case .parsed: return "结构解析完成"
-        case .normalizing: return "正在整理文本块"
-        case .analyzing: return "正在翻译并提炼段落"
-        case .reducing: return "正在重建全文逻辑"
-        default: return nil
-        }
-    }
-
-    var isActive: Bool { self != .ready && self != .error }
-}
 
 // MARK: - Method categories (mirrors MethodsPage CATEGORY_*)
 
@@ -213,12 +163,24 @@ enum MethodCategory {
     ]
 
     static func label(_ key: String) -> String { labels[key] ?? key }
-    static func color(_ key: String) -> Color { colors[key] ?? colors["OTHER"]! }
+
+    /// 深色底上保持色相、混入约 65% 亮色提亮(设计规范:中性色阶反转,
+    /// 强调色按需调明度保证对比度);浅色底用原值。
+    static func color(_ key: String, dark: Bool = false) -> Color {
+        let base = colors[key] ?? colors["OTHER"]!
+        return dark ? base.mix(with: Color(hex: "#f4f6fa")!, ratio: 0.35) : base
+    }
 }
 
 // MARK: - Shadows
 
 extension Palette {
+    /// Use the ink with the higher WCAG contrast against the actual accent.
+    var accentForeground: Color { accent.contrastingForeground }
+
+    /// Nested content needs only a subtle tonal layer over the glass panel.
+    var insetSurface: Color { dark ? Color.white.opacity(0.045) : Color.black.opacity(0.025) }
+
     /// --shadow-card
     var shadowCard: Color { dark ? Color.black.opacity(0.18) : Color(hex: "#141820")!.opacity(0.055) }
     /// --shadow-float
@@ -230,10 +192,30 @@ extension Color {
     /// `Color.cgColor` 在 macOS 上是 `CGColor?`(iOS 为非 optional),统一为可空访问。
     var rgbComponents: [CGFloat]? {
         #if os(macOS)
-        return cgColor?.components
+        let color = cgColor
         #else
-        return cgColor.components
+        let color: CGColor? = cgColor
         #endif
+        guard let color, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        return color.converted(to: space, intent: .relativeColorimetric, options: nil)?.components
+    }
+
+    /// WCAG 2 relative luminance: linearize sRGB before weighting channels.
+    var relativeLuminance: Double {
+        guard let components = rgbComponents, components.count >= 3 else { return 1 }
+        let linear = components.prefix(3).map { channel -> Double in
+            let value = Double(channel)
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+
+    /// Prefer white ink on saturated control fills; use black when the fill is
+    /// too light for 3:1 white contrast. Body text uses the semantic palette.
+    var contrastingForeground: Color {
+        let luminance = relativeLuminance
+        let whiteContrast = 1.05 / (luminance + 0.05)
+        return whiteContrast >= 3 ? .white : .black
     }
 
     var isLight: Bool {

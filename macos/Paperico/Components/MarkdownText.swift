@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Native Markdown renderer (replaces react-markdown + remark-math + rehype-katex)
 //
 // SwiftUI has no KaTeX; LaTeX segments ($$…$$ display, $…$ inline) render as
-// monospaced math blocks. Everything else (headings, lists, code, blockquotes,
+// plain-text math blocks. Everything else (headings, lists, code, blockquotes,
 // tables, links, emphasis) renders natively.
 //
 // 解析部分(`parseBlocks` / `AttributedString(markdown:)`)已经移到
@@ -42,15 +42,15 @@ struct MarkdownText: View {
             inlineParagraph(text, color: baseColor)
         case .code(let code):
             Text(code)
-                .font(.mono(fontSize * 0.88))
+                .font(.system(size: fontSize * 0.88))
                 .foregroundStyle(palette.gray800)
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 6).fill(palette.gray100))
+                .liquidInset(cornerRadius: CornerRadius.chip)
                 .textSelection(.enabled)
         case .quote(let lines):
             HStack(alignment: .top, spacing: 8) {
-                RoundedRectangle(cornerRadius: 1.5).fill(palette.accent).frame(width: 3)
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous).fill(palette.accent).frame(width: 3)
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                         inlineParagraph(line, color: palette.gray600)
@@ -70,14 +70,14 @@ struct MarkdownText: View {
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(items.enumerated()), id: \.offset) { offset, item in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("\(offset + 1).").foregroundStyle(palette.gray500).monospacedDigit()
+                        Text("\(offset + 1).").foregroundStyle(palette.gray500)
                         inlineParagraph(item, color: baseColor)
                     }
                 }
             }
         case .mathDisplay(let latex):
             Text(latex)
-                .font(.mono(fontSize * 0.92))
+                .font(.system(size: fontSize * 0.92))
                 .foregroundStyle(palette.gray800)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
@@ -100,7 +100,7 @@ struct MarkdownText: View {
     }
 
     /// Paragraph with inline math: `$…$` spans are rendered as inline code
-    /// (monospaced on the code background) inside the native markdown text so
+    /// (using the system font on the code background) inside the native markdown text so
     /// line wrapping keeps working.
     private func inlineParagraph(_ text: String, color: Color) -> some View {
         // 行内公式转换由 PaperMarkdown 在缓存 miss 时完成,这里不再每次跑正则。
@@ -113,7 +113,7 @@ struct MarkdownText: View {
         if let attributed = PaperMarkdown.attributedString(
             markdown: markdown,
             fontSize: fontSize,
-            codeFont: .mono(fontSize * 0.88),
+            codeFont: .system(size: fontSize * 0.88),
             codeBackground: palette.gray100,
             mathSplitter: mathSplitter
         ) {
@@ -139,12 +139,12 @@ struct NativeMarkdownTable: View {
     let fontSize: CGFloat
 
     var body: some View {
-        let columnCount = rows.map(\.count).max() ?? 0
+        let table = MarkdownTable(rows: rows)
         VStack(spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+            ForEach(Array(table.rows.enumerated()), id: \.offset) { rowIndex, row in
                 HStack(spacing: 0) {
-                    ForEach(0..<max(columnCount, 1), id: \.self) { columnIndex in
-                        Text(rowIndex < row.count ? cell(row[columnIndex]) : "")
+                    ForEach(Array(row.enumerated()), id: \.offset) { _, value in
+                        Text(cell(value))
                             .font(.system(size: fontSize * 0.92))
                             .foregroundStyle(rowIndex == 0 ? palette.gray800 : palette.gray700)
                             .fontWeight(rowIndex == 0 ? .semibold : .regular)
@@ -157,6 +157,7 @@ struct NativeMarkdownTable: View {
             }
         }
         .overlay(Rectangle().stroke(palette.gray200))
+        .textSelection(.enabled)
     }
 
     private func cell(_ markdown: String) -> String {

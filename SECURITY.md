@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| 0.1.x | ✅ |
+| 0.2.x native app | ✅ |
+| 0.1.x compatibility API | ✅ |
 
 ## Reporting a vulnerability
 
@@ -24,10 +25,14 @@ Paperico is designed as a **single-user, local-first** application:
 - The backend is intended to be reached from the operator's own machine or LAN. It ships
   with permissive CORS and **no authentication** by design — do not expose it directly to
   the public internet.
-- API keys entered in the Settings page are encrypted at rest with Fernet; the key lives
-  in the local storage directory (mode 0600) or `PAPERICO_ENCRYPTION_KEY`.
-- Uploaded PDFs and extraction results stay under `PAPERICO_STORAGE_ROOT` on your machine;
-  they are sent only to the MinerU / LLM endpoints you configure.
+- Native app credentials are stored in macOS Keychain; non-secret settings use UserDefaults.
+  The separate compatibility API encrypts its credentials with Fernet, using a local
+  key (mode 0600) or `PAPERICO_ENCRYPTION_KEY`.
+- The native app stores PDFs and results in its sandboxed Application Support directory.
+  The API uses `PAPERICO_STORAGE_ROOT`. Cloud parsing sends PDFs to MinerU; model requests
+  send the relevant text/context to the model endpoints you configure.
+- Native ZIP extraction validates paths, existing symlinks, sizes and CRC32. Library
+  corruption and unsupported schema versions are surfaced without replacing source files.
 
 Reports about the "no authentication / trusted LAN" model are welcome when they describe
 a way it can be bypassed or escalated (e.g. a path traversal, SSRF via server settings,

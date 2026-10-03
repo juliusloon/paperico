@@ -53,7 +53,8 @@ async def submit_task(
     is_ocr = opts.get("is_ocr", True)
     enable_formula = opts.get("enable_formula", True)
     enable_table = opts.get("enable_table", True)
-    language = opts.get("language", "en")
+    # MinerU v4 auto-detects the document language; settings no longer pin it.
+    language = "auto"
     model_backend = opts.get("model_backend", settings.mineru_model_backend)
     chem_requested = opts.get("is_chem") is True
 
