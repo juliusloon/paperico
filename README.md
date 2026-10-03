@@ -89,11 +89,11 @@ SwiftUI pages → Observable stores → PaperLibrary / PaperPipeline / ChatServi
 | `macos/Paperico/Pages/`, `Components/` | Pages, reader and reusable controls |
 | `macos/Tests/`, `macos/Package.swift` | Core tests without UI startup or external API calls |
 | `script/` | Repository-level build, run and verification entrypoints |
-| `backend/` | Retained v0.1 REST/SSE service and Python tests, independent of the app |
 | `docs/` | Current architecture, releases and historical engineering records |
 
-Ignored local `frontend/` and `design/` directories contain the retired web implementation
-and design material. They are not part of the app build.
+Ignored local `frontend/`, `backend/` and `design/` directories contain the retired web
+stack (web UI and v0.1 REST/SSE service) and design material. They are not part of the
+app build.
 
 ## Data and upgrades
 
@@ -134,11 +134,12 @@ Release configuration and attaches it to the GitHub Release. Local builds use ad
 signing and are not Developer ID notarized. See the [macOS development guide](macos/README.md)
 for distribution signing options.
 
-## Optional legacy API service
+## Legacy API service (local only)
 
-Users who need the independent REST/SSE API can still run `./start.sh` or follow
-[backend/README.md](backend/README.md). That command starts the Python service, not the
-native app. `backend/.env` and `PAPERICO_*` variables do not configure the native app.
+The retired v0.1 REST/SSE service (`backend/`) is kept out of the public repository;
+the native app has never needed it. If you keep a local copy, `./start.sh` starts the
+Python service, not the native app, and `backend/.env` / `PAPERICO_*` variables do not
+configure the native app.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
