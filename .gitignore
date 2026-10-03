@@ -16,8 +16,6 @@
 *.db.bak*
 *.sqlite
 *.sqlite3
-backend/app/storage/
-backend/storage/
 **/storage/pdfs/
 **/storage/mineru_output/
 **/storage/mineru_chem_spike/
@@ -25,7 +23,7 @@ backend/storage/
 
 # ===== Web 端 / 兼容后端已下线:本地保留,不入库 =====
 frontend/
-/backend/
+backend/
 
 # ===== 品牌设计稿:本地保留,不入库(app 图标源文件在 macos/Paperico/paperico.icon) =====
 design/
@@ -57,8 +55,7 @@ docs/ui-archives/
 docs/verification/
 
 # ===== 内部规划/工程文档:本地保留,不入库(docs/architecture.md 与 docs/releases/ 仍入库) =====
-/paper_reading_workbench_spec.md
-/Workbench.md
+/docs/Workbench.md
 /docs/README.md
 /docs/agentero-execution-plan.md
 /docs/agentero-lessons-for-paperico.md
