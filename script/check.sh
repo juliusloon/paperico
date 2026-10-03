@@ -11,8 +11,12 @@ swift test --package-path macos
 ./script/check_markdown_rendering.sh
 ./script/build_and_run.sh --build-only
 if [ "${1:-}" = "--with-backend" ]; then
-  cd backend
-  .venv/bin/python -m pytest -q
-  .venv/bin/python -m ruff check .
-  .venv/bin/python ../macos/scripts/check_api_contract.py --file tests/openapi_snapshot.json
+  if [ ! -d backend ]; then
+    echo "skip: backend/ not present (legacy API service is local-only)" >&2
+  else
+    cd backend
+    .venv/bin/python -m pytest -q
+    .venv/bin/python -m ruff check .
+    .venv/bin/python ../macos/scripts/check_api_contract.py --file tests/openapi_snapshot.json
+  fi
 fi

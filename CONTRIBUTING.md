@@ -31,6 +31,9 @@ changes normally need a build and a focused UI check, rather than implementation
 
 ## Compatibility backend
 
+The `backend/` directory is kept locally and is not part of the public repository;
+this section applies only if you have a local copy.
+
 ```bash
 cd backend
 python3 -m venv .venv

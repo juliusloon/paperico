@@ -84,10 +84,10 @@ SwiftUI 页面 → Observable Stores → PaperLibrary / PaperPipeline / ChatServ
 | `macos/Paperico/Pages/`、`Components/` | 页面、阅读器与通用控件 |
 | `macos/Tests/`、`macos/Package.swift` | 不启动 UI、不调用外部服务的核心回归测试 |
 | `script/` | 仓库级构建、启动、验证入口 |
-| `backend/` | 保留的 v0.1 REST/SSE 服务与 Python 测试，独立于新版 App |
 | `docs/` | 当前架构、版本说明和历史工程记录 |
 
-本地的 `frontend/`、`design/` 为忽略的历史 Web 实现与设计资料，不属于当前 App 构建。
+本地的 `frontend/`、`backend/`、`design/` 为忽略的历史 Web 技术栈（Web 界面与 v0.1
+REST/SSE 服务）及设计资料，不属于当前 App 构建。
 
 ## 数据与升级
 
@@ -124,11 +124,11 @@ DMG 输出在 `macos/build/Paperico-0.2.5.dmg`。推送 `v*` 标签会触发
 上传到 GitHub Release。本地构建使用临时签名，未经 Developer ID 公证；正式分发的签名
 选项见 [macOS 开发说明](macos/README.md)。
 
-## 可选的旧 API 服务
+## 旧 API 服务（仅本地保留）
 
-需要独立 REST/SSE API 的用户仍可运行 `./start.sh`，或参考 [backend/README.md](backend/README.md)。
-该命令启动 Python 服务，不是新版 App 的启动入口；`backend/.env` 与 `PAPERICO_*` 环境变量
-也不会配置原生 App。
+已下线的 v0.1 REST/SSE 服务（`backend/`）不在公开仓库中；新版 App 从不依赖它。若本地
+留有副本，`./start.sh` 启动的是 Python 服务，不是新版 App 的启动入口；`backend/.env` 与
+`PAPERICO_*` 环境变量也不会配置原生 App。
 
 贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全说明见 [SECURITY.md](SECURITY.md)。
 
