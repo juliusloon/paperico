@@ -1,48 +1,55 @@
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Paperico — a local-first, bring-your-own-key native macOS paper reading workbench. Import a paper, read it bilingually, question it with evidence, and turn the discussion into notes. The Paperico app icon, a blue P over a gray O, sits on the right.">
+</p>
+
 <div align="center">
-
-# Paperico
-
-**A local-first, bring-your-own-key native paper reading workbench.**
-
-Import PDFs, recover their structure with MinerU, then read bilingually, follow the argument,
-ask evidence-grounded questions, and turn the discussion into Markdown notes.
 
 [![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/app-v0.2.4-orange)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/download-v0.2.5-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 English · [简体中文](README.zh-CN.md)
 
 </div>
 
-## Version 0.2.4
+## What is Paperico
 
-The reader now shares one layout at every window width, with a hover table of contents,
-connected margin logic chain, and headerless glass cards that slide in from the right.
-Chat has a new multiline composer and bounded history titles. Search, circular icon
-controls, background transparency and home feature guides are consistent across the app.
-Offline math and the single streamed full-paper analysis remain available.
+Paperico is a native macOS app for deep-reading research papers. Import a PDF, let MinerU
+recover its structure, then read original and translation side by side with a logic-chain
+outline, method cards and the source PDF one click away. Ask questions with selections,
+methods or figures attached; valid block citations jump straight back to their evidence.
 
-The macOS app now owns its library, processing jobs, chat and notes in native code.
-No Python backend is needed to run the app. This update adds task management and a
-recoverable trash, and fixes startup crashes, persistence races and cancellation/retry conflicts.
+Your library lives in your own sandbox, API keys stay in the macOS Keychain, and the app
+connects directly to the services you configure. **Local-first, bring-your-own-key, no relay
+server, no Python backend needed to run the app.**
 
-See the [release notes](docs/releases/v0.2.4.md) and [architecture review](docs/architecture.md).
+## What you get
 
-## Features
+- **Library** — project groups, search, sorting, bulk moves, PDF deduplication, and per-file batch import errors.
+- **Tasks** — a pending/failed queue with stop, reparse and retranslate; later imports start automatically once services are configured.
+- **Bilingual reader** — original and translation, logic-chain outline, method cards, PDFKit reading, saved progress.
+- **Evidence chat** — attach selections, methods or figures; citations locate their source paragraph or PDF position.
+- **Notes** — synthesize selected messages into Markdown notes and export them.
+- **Trash** — deleting preserves PDFs, extracted content, conversations and notes until you restore them.
+- **Native desktop** — Liquid Glass, light/dark appearance, accent colors, offline math rendering, ⌘1–⌘3 navigation and ⌘, settings.
 
-- Project groups, search, sorting, bulk moves, PDF deduplication, and per-file batch import errors.
-- Task management with stop, reparse, and retranslate operations.
-- Bilingual text, logic-chain outlines, method cards, PDFKit reading and saved progress.
-- Chat with attached selections, methods or figures; valid block citations locate their evidence.
-- Markdown note synthesis from selected messages and file export.
-- Trash recovery preserving PDFs, extracted content, conversations and notes.
-- Native Liquid Glass, light/dark appearance, accent colors, ⌘1–⌘3 navigation and ⌘, settings.
+## What's new in v0.2.5
+
+- New Icon Composer app icon, and the monochrome Paperico mark in navigation.
+- Installable `Paperico-0.2.5.dmg` attached to the GitHub Release by the new release workflow.
+- All v0.2.1–v0.2.4 reader, library, chat and offline-renderer updates in one native app.
+
+See the [release notes](docs/releases/v0.2.5.md) and the [architecture review](docs/architecture.md).
 
 ## Run
 
-The current app target requires **macOS 26+ and Xcode 26+**. Local verification used
-macOS 27 / Xcode 27 on Apple Silicon.
+**Install:** download `Paperico-0.2.5.dmg` from the
+[latest release](https://github.com/juliusloon/paperico/releases), drag Paperico into
+Applications and replace any older copy. The DMG is not Developer ID signed or notarized;
+distribution signing options are described in the [macOS development guide](macos/README.md).
+
+**Build from source** — requires macOS 26+ and Xcode 26+; verified on macOS 27 / Xcode 27,
+Apple Silicon:
 
 ```bash
 git clone https://github.com/juliusloon/paperico.git
@@ -50,28 +57,28 @@ cd paperico
 ./script/build_and_run.sh
 ```
 
-The script builds and opens the app. It selects an Xcode installation at the standard
-path for this invocation if Command Line Tools are currently selected. You can also
-open `macos/Paperico.xcodeproj` and run the Paperico scheme on My Mac.
-The Codex Run action uses the same script.
+The script builds and opens the app and selects a standard-path Xcode if Command Line Tools
+are currently selected. You can also open `macos/Paperico.xcodeproj` and run the Paperico
+scheme on My Mac. The Codex Run action uses the same script.
 
-1. Import PDFs into the library, even before configuring AI services.
-2. Open Settings, save your model endpoint, model ID and API key, then test connectivity.
+First session:
+
+1. Import PDFs into the library — papers are kept locally even before any service is configured.
+2. In Settings, save your model endpoint, model ID and API key, then test connectivity.
 3. Configure a MinerU cloud token or your self-hosted MinerU Gradio endpoint.
-4. Start pending papers from **处理任务** (processing tasks). Later imports start automatically
-   when the service configuration is ready.
-5. Click evidence citations to locate their blocks or PDF positions while reading.
+4. Start pending papers from the processing tasks page.
+5. While reading, click evidence citations to locate their blocks or PDF positions.
 
-**Local-first does not mean offline AI.** Cloud MinerU receives your PDF; the model
-endpoint receives the text and conversation context needed for each task. The app
-connects directly to your configured services. Paperico does not operate a relay.
+**Local-first does not mean offline AI.** Cloud MinerU receives your PDF; the model endpoint
+receives the text and conversation context needed for each task. The app connects directly
+to your configured services. Paperico does not operate a relay.
 
-## Architecture
+## How it works
 
 ```text
 SwiftUI pages → Observable stores → PaperLibrary / PaperPipeline / ChatService
-                                         │                  │
-                                  local JSON/files       MinerU / LLM
+                                     │                  │
+                              local JSON/files       MinerU / LLM
 ```
 
 | Directory | Responsibility |
@@ -121,8 +128,10 @@ require separate Keychain management.
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-The DMG is written to `macos/build/Paperico-0.2.4.dmg`. Local builds use ad-hoc signing
-and are not Developer ID notarized. See the [macOS development guide](macos/README.md)
+The DMG is written to `macos/build/Paperico-0.2.5.dmg`. Pushing a `v*` tag also runs the
+[release workflow](.github/workflows/release.yml), which builds the DMG from a clean
+Release configuration and attaches it to the GitHub Release. Local builds use ad-hoc
+signing and are not Developer ID notarized. See the [macOS development guide](macos/README.md)
 for distribution signing options.
 
 ## Optional legacy API service
