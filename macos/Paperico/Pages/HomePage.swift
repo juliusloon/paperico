@@ -105,7 +105,6 @@ struct HomePage: View {
         }
         .frame(maxWidth: .infinity, minHeight: compact ? 250 : 300, alignment: .leading)
         .padding(20)
-        .liquidPanel()
     }
 
     private var heroCopy: some View {

@@ -308,7 +308,7 @@ actor PaperLibrary {
         return moved
     }
 
-    /// Soft-delete preserves all PDF, parsed content, chat and notes until restored.
+    /// Soft-delete preserves all PDF, parsed content, chat and notes until restored or permanently deleted.
     func deletePaper(id: String) throws {
         guard let record = paper(id: id) else { return }
         index.trash.insert(TrashedPaper(paper: record, deletedAt: Self.now()), at: 0)
@@ -317,6 +317,27 @@ actor PaperLibrary {
     }
 
     func listTrash() -> [TrashedPaper] { index.trash }
+
+    /// Only an explicitly selected trash entry may be purged. Keep the entry on
+    /// failure so cleanup can be retried, including when some files are missing.
+    func permanentlyDeletePaper(id: String) throws {
+        guard index.trash.contains(where: { $0.id == id }) else {
+            throw PipelineError("只能永久删除回收站中的论文。", .storageFailed)
+        }
+        // Check index persistence before making any irreversible file changes.
+        try persistIndex()
+        for url in [pdfURL(id), paperDir(id), mineruOutputDir(id), analysesDir(id)] {
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            do { try FileManager.default.removeItem(at: url) }
+            catch {
+                throw PipelineError("无法永久删除论文文件：\(error.localizedDescription)。请重试删除。", .storageFailed)
+            }
+        }
+        index.trash.removeAll { $0.id == id }
+        index.shaByPaperId[id] = nil
+        index.sourceUrlByPaperId[id] = nil
+        try persistIndex()
+    }
 
     func restorePaper(id: String) throws {
         guard let entry = index.trash.first(where: { $0.id == id }) else { return }

@@ -11,7 +11,6 @@ struct LibraryPage: View {
     @Environment(PapersStore.self) private var papersStore
     @Environment(AppServices.self) private var services
     @Environment(Router.self) private var router
-    @Environment(\.openWindow) private var openWindow
 
     @State private var showNewProject = false
     @State private var projectSidebarCollapsed = false
@@ -61,7 +60,7 @@ struct LibraryPage: View {
     }
 
     private var hasActivePapers: Bool {
-        papersStore.papers.contains { $0.statusEnum.isActive }
+        papersStore.papers.contains { $0.statusEnum.isActive || services.pipeline.isProcessing($0.id) }
     }
 
     private var pipelineReady: Bool {
@@ -175,7 +174,7 @@ struct LibraryPage: View {
             }
         }
         .clipped()
-        .liquidPanel()
+        .liquidPanel(elevated: true)
     }
 
     private var newProjectForm: some View {
@@ -343,14 +342,14 @@ struct LibraryPage: View {
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 0)
                 if containerWidth < 620 {
-                    PillIconButton(title: "处理任务", icon: "list.bullet.rectangle") { openWindow(id: "library-tasks") }
-                    PillIconButton(title: "回收站", icon: Ic.trash) { openWindow(id: "library-trash") }
+                    PillIconButton(title: "处理任务", icon: "list.bullet.rectangle") { router.libraryManagement = .tasks }
+                    PillIconButton(title: "回收站", icon: Ic.trash) { router.libraryManagement = .trash }
                 } else {
                 ToolbarButton(title: "处理任务", icon: "list.bullet.rectangle") {
-                    openWindow(id: "library-tasks")
+                    router.libraryManagement = .tasks
                 }
                 ToolbarButton(title: "回收站", icon: Ic.trash) {
-                    openWindow(id: "library-trash")
+                    router.libraryManagement = .trash
                 }
                 }
             }
@@ -360,7 +359,7 @@ struct LibraryPage: View {
             }
             contentArea.mask { ScrollTitleFade() }
         }
-        .liquidPanel()
+        .liquidPanel(elevated: true)
     }
 
     private var toolbarTitle: some View {
@@ -542,6 +541,7 @@ struct LibraryPage: View {
             ForEach(visiblePapers) { paper in
                 PaperCard(
                     paper: paper,
+                    statusLabel: services.pipeline.statusLabel(for: paper),
                     projectName: projectsStore.projects.first { $0.id == paper.projectId }?.name ?? "",
                     selected: selectedIds.contains(paper.id),
                     selectionMode: selectionMode,
@@ -805,6 +805,7 @@ struct PaperCard: View {
     @Environment(\.palette) private var palette
 
     let paper: PaperListItem
+    let statusLabel: String
     let projectName: String
     let selected: Bool
     let selectionMode: Bool
@@ -885,7 +886,7 @@ struct PaperCard: View {
                 Spacer(minLength: 0)
                 HStack(spacing: 4) {
                     StatusDot(status: paper.statusEnum)
-                    Text(paper.statusEnum.label == "未知" ? paper.status : paper.statusEnum.label)
+                    Text(statusLabel)
                 }
                 .font(.system(size: 12))
                 .foregroundStyle(palette.gray500)

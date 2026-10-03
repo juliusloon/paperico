@@ -107,6 +107,60 @@ final class LibraryTests: XCTestCase {
         } catch { XCTAssertEqual((error as? PipelineError)?.errorCode, .duplicatePaper) }
     }
 
+    func testPermanentDeletionRemovesAllArtifactsAndAllowsReimport() async throws {
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let paper = try await library.importPDF(fileData: pdf(), fileName: "test.pdf", projectId: nil)
+        let other = try await library.importPDF(fileData: pdf("other"), fileName: "other.pdf", projectId: nil)
+        let layout = LibraryLayout(root: root)
+        for dir in [layout.paperDir(paper.id), layout.mineruOutputDir(paper.id), layout.analysesDir(paper.id)] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("preserved data".utf8).write(to: dir.appendingPathComponent("data.json"))
+        }
+        try await library.deletePaper(id: paper.id)
+        try await library.permanentlyDeletePaper(id: paper.id)
+        for url in [layout.pdfURL(paper.id), layout.paperDir(paper.id), layout.mineruOutputDir(paper.id), layout.analysesDir(paper.id)] {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        }
+        let reopened = PaperLibrary(root: root)
+        try await reopened.load()
+        let trash = await reopened.listTrash()
+        let active = await reopened.listPapers()
+        XCTAssertTrue(trash.isEmpty)
+        XCTAssertEqual(active.map(\.id), [other.id])
+        _ = try await reopened.importPDF(fileData: pdf(), fileName: "again.pdf", projectId: nil)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: layout.pdfURL(other.id).path))
+    }
+
+    func testPermanentDeletionRefusesActivePaperAndUnwritableIndex() async throws {
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let paper = try await library.importPDF(fileData: pdf(), fileName: "test.pdf", projectId: nil)
+        do { try await library.permanentlyDeletePaper(id: paper.id); XCTFail("Only trash entries may be deleted") }
+        catch { XCTAssertTrue(error is PipelineError) }
+        try await library.deletePaper(id: paper.id)
+        let file = root.appendingPathComponent("library.json")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: false)
+        do { try await library.permanentlyDeletePaper(id: paper.id); XCTFail("Unwritable index must prevent file deletion") }
+        catch { XCTAssertEqual((error as? PipelineError)?.errorCode, .storageFailed) }
+        let trash = await library.listTrash()
+        XCTAssertEqual(trash.map(\.id), [paper.id])
+        XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("pdfs/\(paper.id).pdf")), pdf())
+    }
+
+    func testPermanentDeletionClearsSourceURLWhenArtifactsAreMissing() async throws {
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let paper = try await library.importSourceURL("https://example.test/paper.pdf", projectId: nil)
+        try await library.deletePaper(id: paper.id)
+        try await library.permanentlyDeletePaper(id: paper.id)
+        let source = await library.sourceURL(paperId: paper.id)
+        let trash = await library.listTrash()
+        XCTAssertNil(source)
+        XCTAssertTrue(trash.isEmpty)
+    }
+
     func testConcurrentSessionSavesAreNotLost() async throws {
         let library = PaperLibrary(root: root)
         try await library.load()

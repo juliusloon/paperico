@@ -109,12 +109,18 @@ struct GlassSurface<S: Shape>: View {
 private struct LiquidPanelModifier: ViewModifier {
     var cornerRadius: CGFloat
     var tint: Color?
+    var elevated: Bool
+    @Environment(\.palette) private var palette
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     }
     func body(content: Content) -> some View {
         content.clipShape(shape)
-            .background { GlassSurface(shape: shape, tint: tint) }
+            .background {
+                GlassSurface(shape: shape, tint: tint)
+                    .shadow(color: elevated ? Color.black.opacity(palette.dark ? 0.22 : 0.10) : .clear,
+                            radius: elevated ? 12 : 0, y: elevated ? 4 : 0)
+            }
     }
 }
 
@@ -149,8 +155,8 @@ struct LiquidActionButtonStyle: ButtonStyle {
 
 extension View {
     /// 页面级 panel:侧栏、主内容卡、首页面板、阅读器右侧卡等。
-    func liquidPanel(cornerRadius: CGFloat = CornerRadius.card, tint: Color? = nil) -> some View {
-        modifier(LiquidPanelModifier(cornerRadius: cornerRadius, tint: tint))
+    func liquidPanel(cornerRadius: CGFloat = CornerRadius.card, tint: Color? = nil, elevated: Bool = false) -> some View {
+        modifier(LiquidPanelModifier(cornerRadius: cornerRadius, tint: tint, elevated: elevated))
     }
 
     /// Nested notices, fields and cards share regular glass and continuous corners.
