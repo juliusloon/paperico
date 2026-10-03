@@ -15,7 +15,7 @@ enum MinerUClient {
         var options: MinerUDefaultOptions
     }
 
-    struct SubmitResult: Sendable {
+    struct SubmitResult: Codable, Sendable {
         var taskId: String
         var batchId: String
         var pollType: String        // "batch" | "task"
@@ -25,6 +25,28 @@ enum MinerUClient {
         var status: String          // pending | running | done | failed
         var zipURL: String
         var error: String
+        var extractedPages: Int? = nil
+        var totalPages: Int? = nil
+        var traceID: String = ""
+    }
+
+    private actor PollObservation {
+        var state: String?
+        private var activeAt: ContinuousClock.Instant?
+        func update(_ state: String) {
+            self.state = state
+            if ["running", "converting"].contains(state), activeAt == nil { activeAt = .now }
+        }
+        func deadline(start: ContinuousClock.Instant, budget: TimeInterval) -> ContinuousClock.Instant {
+            (activeAt ?? start).advanced(by: .seconds(max(0, budget)))
+        }
+    }
+
+    private struct CloudTaskCheckpoint: Codable {
+        let baseURL: String
+        let options: MinerUDefaultOptions
+        let submitted: SubmitResult
+        var completed: Bool? = nil
     }
 
     static let gradioFunction = "convert_to_markdown_stream"
@@ -42,7 +64,6 @@ enum MinerUClient {
             ]],
             "enable_formula": config.options.enableFormula,
             "enable_table": config.options.enableTable,
-            "language": "auto",
             "model_version": config.options.modelBackend,
         ]
         let body = try await postJSON(path: "/file-urls/batch", payload: payload, config: config, timeout: 120, session: session)
@@ -72,43 +93,55 @@ enum MinerUClient {
         return SubmitResult(taskId: "", batchId: batchId, pollType: "batch")
     }
 
-    static func submitURL(_ url: String, config: Config) async throws -> SubmitResult {
+    static func submitURL(_ url: String, config: Config, session: URLSession = .shared) async throws -> SubmitResult {
         let payload: [String: Any] = [
             "url": url,
             "is_ocr": config.options.isOcr,
             "enable_formula": config.options.enableFormula,
             "enable_table": config.options.enableTable,
-            "language": "auto",
             "model_version": config.options.modelBackend,
         ]
-        let body = try await postJSON(path: "/extract/task", payload: payload, config: config, timeout: 60)
+        let body = try await postJSON(path: "/extract/task", payload: payload, config: config, timeout: 60, session: session)
         let data = (body["data"] as? [String: Any]) ?? body
         let taskId = data["task_id"] as? String ?? ""
+        guard !taskId.isEmpty else {
+            throw MinerUServiceError("MinerU 未返回任务 ID", .mineruSubmitFailed)
+        }
         return SubmitResult(taskId: taskId, batchId: "", pollType: "task")
     }
 
     // MARK: - 轮询
 
-    static func poll(submit: SubmitResult, config: Config) async throws -> PollStatus {
+    static func poll(submit: SubmitResult, config: Config, session: URLSession = .shared) async throws -> PollStatus {
         if submit.pollType == "batch" {
-            let body = try await getJSON(path: "/extract-results/batch/\(submit.batchId)", config: config, timeout: 30)
-            let data = body["data"] as? [String: Any] ?? [:]
-            let results = data["extract_result"] as? [[String: Any]] ?? []
+            let body = try await getJSON(path: "/extract-results/batch/\(submit.batchId)", config: config, timeout: 30, session: session)
+            guard let data = body["data"] as? [String: Any],
+                  let results = data["extract_result"] as? [[String: Any]] else {
+                throw MinerUServiceError("MinerU 未返回批次状态，不能继续等待。", .mineruParseFailed)
+            }
             guard let item = results.first else {
                 return PollStatus(status: "pending", zipURL: "", error: "")
             }
-            return PollStatus(
-                status: item["state"] as? String ?? "pending",
-                zipURL: item["full_zip_url"] as? String ?? "",
-                error: item["err_msg"] as? String ?? ""
-            )
+            return try decodePollStatus(item, traceID: body["trace_id"] as? String ?? "")
         }
-        let body = try await getJSON(path: "/extract/task/\(submit.taskId)", config: config, timeout: 30)
+        let body = try await getJSON(path: "/extract/task/\(submit.taskId)", config: config, timeout: 30, session: session)
         let data = (body["data"] as? [String: Any]) ?? body
+        return try decodePollStatus(data, traceID: body["trace_id"] as? String ?? "")
+    }
+
+    private static func decodePollStatus(_ data: [String: Any], traceID: String) throws -> PollStatus {
+        guard let state = data["state"] as? String,
+              ["waiting-file", "uploading", "pending", "running", "converting", "done", "failed"].contains(state) else {
+            throw MinerUServiceError("MinerU 返回了无效的任务状态，不能继续等待。", .mineruParseFailed)
+        }
+        let pages = data["extract_progress"] as? [String: Any]
         return PollStatus(
-            status: data["state"] as? String ?? "pending",
+            status: state,
             zipURL: data["full_zip_url"] as? String ?? "",
-            error: data["err_msg"] as? String ?? ""
+            error: data["err_msg"] as? String ?? "",
+            extractedPages: pages?["extracted_pages"] as? Int,
+            totalPages: pages?["total_pages"] as? Int,
+            traceID: traceID
         )
     }
 
@@ -117,65 +150,184 @@ enum MinerUClient {
         fileData: Data?, fileName: String, pdfURL: String?, config: Config,
         outputDir: URL,
         pollInterval: TimeInterval = 3.0, maxWait: TimeInterval = 600.0,
-        progress: @escaping @Sendable (String) -> Void = { _ in }
+        forceNewTask: Bool = false, session: URLSession = .shared,
+        submissionGate: JobGate? = nil, waitForQueuedTask: Bool = false, queuedRetryInterval: TimeInterval = 15,
+        stateChanged: @escaping @Sendable (String) async -> Void = { _ in },
+        progress: @escaping @Sendable (String) async -> Void = { _ in }
     ) async throws -> URL {
+        try Task.checkCancellation()
+        let checkpointURL = outputDir.appendingPathComponent("cloud-task.json")
+        let checkpoint = try? JSONDecoder().decode(CloudTaskCheckpoint.self, from: Data(contentsOf: checkpointURL))
         let submitted: SubmitResult
-        if let pdfURL {
-            submitted = try await submitURL(pdfURL, config: config)
-        } else if let fileData {
-            submitted = try await submitBatch(fileData: fileData, fileName: fileName, config: config)
+        if !forceNewTask, let checkpoint,
+           checkpoint.baseURL == normalizedBase(config.baseUrl), checkpoint.options == config.options {
+            submitted = checkpoint.submitted
+            await progress("正在继续已有的 MinerU 云端任务")
         } else {
-            throw MinerUServiceError("MinerU requires either file_path or pdf_url", .mineruSubmitFailed)
-        }
-
-        var elapsed: TimeInterval = 0
-        while elapsed < maxWait {
-            let status = try await poll(submit: submitted, config: config)
-            if status.status == "done" {
-                return try await downloadAndExtractResults(zipURL: status.zipURL, outputDir: outputDir)
-            } else if status.status == "failed" {
-                throw MinerUServiceError("MinerU task failed: \(status.error.isEmpty ? "unknown" : status.error)", .mineruParseFailed)
+            let submit = {
+                await progress("正在提交并上传 PDF 到 MinerU")
+                if let pdfURL {
+                    return try await submitURL(pdfURL, config: config, session: session)
+                } else if let fileData {
+                    return try await submitBatch(fileData: fileData, fileName: fileName, config: config, session: session)
+                } else {
+                    throw MinerUServiceError("MinerU requires either file_path or pdf_url", .mineruSubmitFailed)
+                }
             }
-            progress(status.status)
-            try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
-            elapsed += pollInterval
+            if let submissionGate {
+                await progress("正在等待上传任务空位")
+                submitted = try await submissionGate.withPermit(submit)
+            } else { submitted = try await submit() }
+            try LibraryFiles.writeJSON(CloudTaskCheckpoint(baseURL: normalizedBase(config.baseUrl), options: config.options,
+                                                          submitted: submitted), to: checkpointURL, encoder: JSONEncoder())
         }
-        throw MinerUServiceError("MinerU task did not complete within time limit", .mineruTimeout)
+        var status: PollStatus
+        while true {
+            do {
+                status = try await waitForResult(submit: submitted, config: config, session: session,
+                                                pollInterval: pollInterval, maxWait: maxWait,
+                                                diagnosticURL: outputDir.appendingPathComponent("cloud-status.json"),
+                                                stateChanged: stateChanged, progress: progress)
+                break
+            } catch let error as MinerUServiceError where waitForQueuedTask && error.errorCode == .mineruTimeout
+                && error.lastState == "pending" {
+                // A valid cloud job can wait longer than the local observation
+                // window. Continue polling its ID without uploading again.
+                await progress("MinerU 云端仍在排队，尚未开始解析；将自动继续等待")
+                try await Task.sleep(for: .seconds(max(0.001, queuedRetryInterval)))
+            }
+        }
+        if status.status == "failed" {
+            try? FileManager.default.removeItem(at: checkpointURL)
+            throw MinerUServiceError("MinerU 解析失败：\(status.error.isEmpty ? "未知错误" : status.error)", .mineruParseFailed)
+        }
+        await progress("MinerU 解析完成，正在下载结果")
+        let contentList = try await downloadAndExtractResults(zipURL: status.zipURL, outputDir: outputDir, session: session)
+        try LibraryFiles.writeJSON(CloudTaskCheckpoint(baseURL: normalizedBase(config.baseUrl), options: config.options,
+                                                      submitted: submitted, completed: true), to: checkpointURL, encoder: JSONEncoder())
+        return contentList
+    }
+
+    /// Race polling against a real deadline, including time spent in requests.
+    /// Cancellation also cancels an in-flight URLSession request.
+    static func waitForResult(
+        submit: SubmitResult, config: Config, session: URLSession = .shared,
+        pollInterval: TimeInterval = 3, maxWait: TimeInterval = 600,
+        diagnosticURL: URL? = nil,
+        stateChanged: @escaping @Sendable (String) async -> Void = { _ in },
+        progress: @escaping @Sendable (String) async -> Void = { _ in }
+    ) async throws -> PollStatus {
+        let observation = PollObservation()
+        return try await withThrowingTaskGroup(of: PollStatus.self) { group in
+            group.addTask {
+                while true {
+                    try Task.checkCancellation()
+                    let status = try await poll(submit: submit, config: config, session: session)
+                    await observation.update(status.status)
+                    await stateChanged(status.status)
+                    if let diagnosticURL {
+                        var record: [String: Any] = ["updated_at": PaperLibrary.now(), "batch_id": submit.batchId,
+                            "task_id": submit.taskId, "backend": config.options.modelBackend, "state": status.status,
+                            "error": status.error, "trace_id": status.traceID, "has_result_url": !status.zipURL.isEmpty]
+                        if let pages = status.extractedPages { record["extracted_pages"] = pages }
+                        if let pages = status.totalPages { record["total_pages"] = pages }
+                        try LibraryFiles.writeJSONAny(record, to: diagnosticURL)
+                    }
+                    if status.status == "done" || status.status == "failed" { return status }
+                    let message: String
+                    switch status.status {
+                    case "waiting-file": message = "MinerU 等待确认文件上传"
+                    case "uploading": message = "MinerU 正在下载源文件"
+                    case "pending": message = "MinerU 云端排队中"
+                    case "converting": message = "MinerU 正在转换解析结果"
+                    default:
+                        if let done = status.extractedPages, let total = status.totalPages {
+                            message = "MinerU 正在解析：\(done) / \(total) 页"
+                        } else { message = "MinerU 正在解析 PDF" }
+                    }
+                    await progress(message)
+                    let interval = status.status == "pending" ? max(15, pollInterval) : max(0.01, pollInterval)
+                    try await Task.sleep(for: .seconds(interval))
+                }
+            }
+            group.addTask {
+                let start = ContinuousClock.now
+                while true {
+                    let deadline = await observation.deadline(start: start, budget: maxWait)
+                    try await Task.sleep(until: deadline, clock: .continuous)
+                    // Once cloud parsing starts, it receives its own processing
+                    // budget; time already spent in the queue is not subtracted.
+                    if await observation.deadline(start: start, budget: maxWait) <= .now { break }
+                }
+                let state = await observation.state
+                let message = state == "pending"
+                    ? "MinerU 云端仍在排队，尚未开始解析。可继续已有任务，无需重新上传 PDF。"
+                    : "MinerU 等待超时（最后状态：\(state ?? "未收到响应")），可继续已有任务。"
+                throw MinerUServiceError(message, .mineruTimeout, lastState: state)
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
     }
 
     /// 下载结果 ZIP 并解包到 outputDir,返回定位到的 content_list.json。
-    static func downloadAndExtractResults(zipURL: String, outputDir: URL) async throws -> URL {
+    static func downloadAndExtractResults(zipURL: String, outputDir: URL, session: URLSession = .shared) async throws -> URL {
         let fm = FileManager.default
         try fm.createDirectory(at: outputDir, withIntermediateDirectories: true)
-        let zipPath = outputDir.appendingPathComponent("result.zip")
+        let resultID = UUID().uuidString
+        let incoming = outputDir.appendingPathComponent(".incoming-\(resultID)", isDirectory: true)
+        try fm.createDirectory(at: incoming, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: incoming) }
+        let zipPath = incoming.appendingPathComponent("result.zip")
 
         guard let url = URL(string: zipURL), !zipURL.isEmpty else {
             throw MinerUServiceError("MinerU 结果中缺少结果 ZIP 文件", .mineruParseFailed)
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 120
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             throw MinerUServiceError("MinerU 结果下载失败 (HTTP \(status))", .mineruParseFailed)
         }
         try data.write(to: zipPath, options: .atomic)
         do {
-            try ZipArchive.extract(zipURL: zipPath, to: outputDir)
+            try ZipArchive.extract(zipURL: zipPath, to: incoming)
         } catch {
             throw MinerUServiceError("MinerU 结果解包失败：\((error as? LocalizedError)?.errorDescription ?? String(describing: error))", .mineruParseFailed)
         }
         try? fm.removeItem(at: zipPath)
 
         // MinerU v4 的条目名常带任务 UUID 前缀,如 "<task_id>_content_list.json";优先扁平 v1 结构。
-        guard let contentList = findContentList(in: outputDir) else {
+        guard let contentList = findContentList(in: incoming) else {
             throw MinerUServiceError("MinerU 结果不包含 content_list.json", .mineruParseFailed)
         }
-        return contentList
+        let relativePath = String(contentList.path.dropFirst(incoming.path.count + 1))
+        let resultDir = outputDir.appendingPathComponent("result-\(resultID)", isDirectory: true)
+        try fm.moveItem(at: incoming, to: resultDir)
+        let finalURL = resultDir.appendingPathComponent(relativePath)
+        try LibraryFiles.writeData(Data("\(resultDir.lastPathComponent)/\(relativePath)".utf8),
+                                   to: outputDir.appendingPathComponent("latest-content-list.txt"))
+        return finalURL
     }
 
     /// 在输出目录中定位 MinerU 的扁平 content list(排除 *_content_list_v2.json)。
     static func findContentList(in directory: URL) -> URL? {
+        // A newly submitted reparse supersedes older files. Until that task has
+        // downloaded successfully, "continue" must resume it rather than read
+        // an earlier parse that happens to be left in the same paper directory.
+        let checkpointURL = directory.appendingPathComponent("cloud-task.json")
+        if let checkpoint = try? JSONDecoder().decode(CloudTaskCheckpoint.self, from: Data(contentsOf: checkpointURL)),
+           checkpoint.completed != true { return nil }
+        // A retry must read the newest successful download, even if an older
+        // archive had a shallower path or an alphabetically earlier task ID.
+        if let path = try? String(contentsOf: directory.appendingPathComponent("latest-content-list.txt"), encoding: .utf8) {
+            let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+            let candidate = directory.appendingPathComponent(path).standardizedFileURL.resolvingSymlinksInPath()
+            if candidate.path.hasPrefix(root.path + "/"), FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+        }
         guard let enumerator = FileManager.default.enumerator(
             at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
         ) else { return nil }
@@ -314,6 +466,10 @@ enum MinerUClient {
     static func runLocalPipeline(
         fileData: Data, fileName: String, config: Config, outputDir: URL
     ) async throws -> URL {
+        let checkpointURL = outputDir.appendingPathComponent("cloud-task.json")
+        if FileManager.default.fileExists(atPath: checkpointURL.path) {
+            try FileManager.default.removeItem(at: checkpointURL)
+        }
         let base = (config.localUrl.isEmpty ? "http://127.0.0.1:7860" : config.localUrl).trimmingCharacters(in: .whitespaces)
         var backend = config.options.modelBackend.isEmpty ? "pipeline" : config.options.modelBackend
         if backend == "vlm" { backend = "vlm-engine" }
@@ -493,8 +649,8 @@ enum MinerUClient {
         return try await execute(request: request, session: session)
     }
 
-    private static func getJSON(path: String, config: Config, timeout: TimeInterval) async throws -> [String: Any] {
-        try await execute(request: request(path: path, config: config, timeout: timeout))
+    private static func getJSON(path: String, config: Config, timeout: TimeInterval, session: URLSession = .shared) async throws -> [String: Any] {
+        try await execute(request: request(path: path, config: config, timeout: timeout), session: session)
     }
 
     private static func execute(request: URLRequest, session: URLSession = .shared) async throws -> [String: Any] {

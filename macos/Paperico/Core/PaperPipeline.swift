@@ -14,10 +14,11 @@ final class PaperPipeline {
     private var generations: [String: UUID] = [:]
     private(set) var failures: [String: String] = [:]
     private(set) var progress: [String: String] = [:]
+    private(set) var cloudStates: [String: String] = [:]
     struct NodeProgress: Equatable { let completed: Int; let total: Int }
     private(set) var nodeProgress: [String: NodeProgress] = [:]
 
-    /// 解析/分析任务的并发闸门(mineru 网络等待多、全文分析走模型)。
+    /// 上传/本地解析和模型调用的并发闸门；云端排队不占用上传许可。
     private let mineruGate = JobGate(limit: 2)
     private let llmGate = JobGate(limit: 2)
 
@@ -39,9 +40,9 @@ final class PaperPipeline {
         spawn(paperId: paperId, mode: .full)
     }
 
-    /// 重新解析:清空既有分析,复用/重跑 MinerU。
+    /// 重新解析:明确提交新的 MinerU 任务，不复用旧任务或解析文件。
     func reparse(paperId: String) {
-        spawn(paperId: paperId, mode: .full)
+        spawn(paperId: paperId, mode: .reparse)
     }
 
     /// 重新翻译:复用已解析的 blocks,只重跑一次全文分析。
@@ -76,7 +77,12 @@ final class PaperPipeline {
         { self.tasks[$0] != nil }
     }
 
-    private enum Mode { case full, retranslate, recover }
+    func statusLabel(for paper: PaperListItem) -> String {
+        if paper.status == "parsing", cloudStates[paper.id] == "pending" { return "云端排队中" }
+        return paper.statusEnum.label == "未知" ? paper.status : paper.statusEnum.label
+    }
+
+    private enum Mode { case full, reparse, retranslate, recover }
 
     private func spawn(paperId: String, mode: Mode) {
         let previous = tasks[paperId]
@@ -85,6 +91,7 @@ final class PaperPipeline {
         generations[paperId] = generation
         failures[paperId] = nil
         progress[paperId] = "正在准备"
+        cloudStates[paperId] = nil
         nodeProgress[paperId] = nil
         tasks[paperId] = Task { [weak self] in
             guard let self else { return }
@@ -95,12 +102,14 @@ final class PaperPipeline {
                     self.tasks[paperId] = nil
                     self.generations[paperId] = nil
                     self.progress[paperId] = nil
+                    self.cloudStates[paperId] = nil
                     self.nodeProgress[paperId] = nil
                 }
             }
             guard !Task.isCancelled else { return }
             switch mode {
             case .full: await self.runFullPipeline(paperId: paperId)
+            case .reparse: await self.runFullPipeline(paperId: paperId, forceReparse: true)
             case .retranslate: await self.runRetranslate(paperId: paperId)
             case .recover: await self.runRecovery(paperId: paperId)
             }
@@ -123,7 +132,7 @@ final class PaperPipeline {
 
     // MARK: - 完整管线
 
-    private func runFullPipeline(paperId: String) async {
+    private func runFullPipeline(paperId: String, forceReparse: Bool = false) async {
         guard let paper = await library.paper(id: paperId) else { return }
         do {
             try await waitForCredentials(paperId: paperId)
@@ -139,7 +148,8 @@ final class PaperPipeline {
             // Step 1: 解析;若此前只缺 AI 分析,复用已完成的解析输出。
             let outputDir = await library.mineruOutputDir(paperId)
             var contentListURL: URL?
-            if paper.status == "parsed", let cached = MinerUClient.findContentList(in: outputDir) {
+            if !forceReparse, let cached = MinerUClient.findContentList(in: outputDir) {
+                progress[paperId] = "正在复用已完成的 MinerU 解析结果"
                 contentListURL = cached
             } else {
                 try await library.setStatus(paperId: paperId, status: "parsing")
@@ -158,21 +168,28 @@ final class PaperPipeline {
                     guard let fileData else {
                         throw PipelineError("本地 MinerU 模式仅支持直接上传的 PDF 文件", .pdfMissing)
                     }
+                    progress[paperId] = "正在等待解析任务空位"
                     contentListURL = try await mineruGate.withPermit {
-                        try await MinerUClient.runLocalPipeline(
+                        self.updateMinerUProgress(paperId: paperId, message: "本地 MinerU 正在解析 PDF")
+                        return try await MinerUClient.runLocalPipeline(
                         fileData: fileData, fileName: fileName,
                         config: mineruConfig, outputDir: outputDir
                         )
                     }
                 } else {
                     let sourceURL: String? = paper.sourceType == "url_pdf" ? await library.sourceURL(paperId: paperId) : nil
-                    contentListURL = try await mineruGate.withPermit {
-                        try await MinerUClient.runFullPipeline(
+                    contentListURL = try await MinerUClient.runFullPipeline(
                         fileData: fileData, fileName: fileName,
                         pdfURL: sourceURL,
-                        config: mineruConfig, outputDir: outputDir
+                        config: mineruConfig, outputDir: outputDir, forceNewTask: forceReparse,
+                        submissionGate: mineruGate, waitForQueuedTask: true,
+                        stateChanged: { [weak self] state in
+                            await self?.updateCloudState(paperId: paperId, state: state)
+                        },
+                        progress: { [weak self] message in
+                            await self?.updateMinerUProgress(paperId: paperId, message: message)
+                        }
                         )
-                    }
                 }
             }
             guard let contentListURL else {
@@ -289,6 +306,16 @@ final class PaperPipeline {
             try await Task.sleep(nanoseconds: 200_000_000)
         }
         try Task.checkCancellation()
+    }
+
+    private func updateMinerUProgress(paperId: String, message: String) {
+        guard !Task.isCancelled else { return }
+        progress[paperId] = message
+    }
+
+    private func updateCloudState(paperId: String, state: String) {
+        guard !Task.isCancelled else { return }
+        cloudStates[paperId] = state
     }
 
     // MARK: - 单次全文分析

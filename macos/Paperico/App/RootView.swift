@@ -22,11 +22,18 @@ struct RootView: View {
                         // in navigation, rather than interpolating page geometry.
                         .transition(.opacity)
                         .id(router.page)
+                        .disabled(router.libraryManagement != nil)
+                        .accessibilityHidden(router.libraryManagement != nil)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .overlayPreferenceValue(WorkspaceMenuPreferenceKey.self) { requests in
-                WorkspaceMenuOverlay(requests: requests)
+                WorkspaceMenuOverlay(requests: router.libraryManagement == nil ? requests : [])
+            }
+            .overlay {
+                if let section = router.libraryManagement {
+                    LibraryManagementOverlay(section: section) { router.libraryManagement = nil }
+                }
             }
             .environment(\.containerWidth, geo.size.width)
             // 红绿灯留白:单一来源,页面用 trafficLightTopPadding() 消费。
@@ -113,7 +120,7 @@ struct RootView: View {
 
     private func applyWindowChrome() {
         #if os(macOS)
-        WindowChrome.applyToAll(baseColor: NSColor(palette.appBase), opacity: reduceTransparency ? 1 : backgroundOpacity)
+        WindowChrome.applyToAll(baseColor: NSColor(palette.dark ? palette.appBase : palette.gray50), opacity: reduceTransparency ? 1 : backgroundOpacity)
         #endif
     }
 }

@@ -178,10 +178,6 @@ struct SettingsPage: View {
                 }
                 readinessRow("AI 模型", ready: settingsKnown ? llmReady : nil)
                 readinessRow("PDF 解析", ready: settingsKnown ? mineruReady : nil)
-                Text("PDF 可以先导入本地。配置完成后，在处理任务中开始解析、翻译与问答。")
-                    .font(.system(size: 11.5))
-                    .lineSpacing(3)
-                    .foregroundStyle(palette.gray400)
             }
             .padding(11)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,7 +185,7 @@ struct SettingsPage: View {
             }
         }
         .padding(isCompact ? 6 : 18)
-        .liquidPanel()
+        .liquidPanel(elevated: true)
     }
 
     private var settingsKnown: Bool { settingsStore.settings != nil }
@@ -217,7 +213,7 @@ struct SettingsPage: View {
     // MARK: content
 
     private var sectionCard: some View {
-        VStack(spacing: 0) {
+        GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if settingsStore.credentialsNeedAuthorization || (!llmReady && !settingsStore.llmProfile.model.isEmpty) {
@@ -231,19 +227,26 @@ struct SettingsPage: View {
                         case .appearance: appearanceSection
                         }
                     }
-                }.padding(containerWidth < 650 ? 16 : 30).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            HStack {
-                ToolbarButton(title: "保存配置", icon: Ic.save, kind: .primary, busy: saving) {
-                    switch tab {
-                    case .model: saveLLM()
-                    case .parser: saveMinerU()
-                    case .appearance: saveAppearance()
+                    // The footer shares the form's scroll content. The viewport
+                    // is a minimum height, so long forms push it below the text.
+                    Spacer(minLength: 32)
+                    HStack {
+                        ToolbarButton(title: "保存配置", icon: Ic.save, kind: .primary, busy: saving) {
+                            switch tab {
+                            case .model: saveLLM()
+                            case .parser: saveMinerU()
+                            case .appearance: saveAppearance()
+                            }
+                        }
+                        Spacer(minLength: 0)
                     }
                 }
-                Spacer(minLength: 0)
-            }.padding(.horizontal, containerWidth < 650 ? 16 : 30).padding(.top, 18).padding(.bottom, 66)
-        }.liquidPanel().frame(maxHeight: .infinity)
+                .padding(.horizontal, containerWidth < 650 ? 16 : 30)
+                .padding(.top, containerWidth < 650 ? 16 : 30)
+                .padding(.bottom, 66)
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
+            }
+        }.liquidPanel(elevated: true).frame(maxHeight: .infinity)
     }
 
     private var credentialAccessNotice: some View {

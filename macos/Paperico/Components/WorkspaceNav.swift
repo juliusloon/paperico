@@ -329,7 +329,6 @@ struct WorkspaceSplitLayout<Sidebar: View, Content: View>: View {
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
                 }
                 .blur(radius: compact && temporarilyExpanded ? 3 : 0)
-                .clipped()
                 if compact && temporarilyExpanded {
                     OutsideDismissArea(label: "点击空白收起侧栏", dimOpacity: palette.dark ? 0.22 : 0.12) {
                         temporarilyExpanded = false

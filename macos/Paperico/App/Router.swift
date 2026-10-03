@@ -13,13 +13,15 @@ final class Router {
     }
 
     var page: Page = .home
+    var libraryManagement: LibraryManagementSheet.Section?
 
     @ObservationIgnored var navigationGuard: ((Page) -> Bool)?
     func go(_ page: Page) {
         guard navigationGuard?(page) ?? true else { return }
+        libraryManagement = nil
         self.page = page
     }
-    func goWithoutGuard(_ page: Page) { self.page = page }
+    func goWithoutGuard(_ page: Page) { libraryManagement = nil; self.page = page }
 
     /// WorkspaceNav offers a shortcut to the last opened paper (paperico:last-paper).
     var lastPaperId: String? {

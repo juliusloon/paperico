@@ -50,7 +50,7 @@ Markdown 渲染回归在隐藏的 SwiftUI 容器中重放流式表格，覆盖�
 - `Core/ChatService.swift`、`AnalysisEngine.swift`：证据上下文与分析请求。
 - `Pages/Reader/PaperDocumentView.swift`：离线正文与原生交互桥；`ReaderDivider.swift`：屏幕坐标分隔柄输入。
 - `reader-renderer/`：Markdown / KaTeX 源码、固定依赖与生成脚本；`Resources/Reader/`：已打包的离线资源。
-- `Pages/LibraryManagementSheet.swift`：处理任务与回收站；`Pages/Reader/`：阅读器。
+- `Pages/LibraryManagementSheet.swift`：主工作台内的处理任务与回收站浮层；`Pages/Reader/`：阅读器。
 - `Components/LocalPaperImage.swift`：后台下采样与有上限的本地图像缓存。
 
 详细的数据、状态和已知限制见 [架构分析](../docs/architecture.md)。
@@ -64,7 +64,12 @@ papers、mineru_output、analyses 与 logs。普通服务设置和阅读偏好�
 阅读外观中的背景透明度与玻璃透明度分别保存，拖动即时生效；玻璃控件供 build
 确认组件材质，文字与图标不随之变淡。PDF 阅读进度包含页内位置，逻辑链与目录共用章节层级。
 
-删除只是移入回收站，数据持续保留；没有自动清空。旧后端 SQLite / Fernet 与新版数据
+删除先移入回收站，数据持续保留；回收站支持逐篇确认永久删除全部关联文件，没有自动清空。
+云端解析任务保存 ID；“继续处理”复用已有任务或解析结果，“重新解析 PDF”提交新任务。
+处理任务浮层显示上传、排队、页数与下载进度。MinerU 返回 `pending` 时继续等待同一任务，
+不因本地观察窗口结束而报解析失败，也不占用上传许可。实际开始解析后单独计算处理超时。
+`mineru_output/<id>/cloud-status.json` 保存最后状态、错误与请求 trace ID，不保存凭据或签名结果链接。
+旧后端 SQLite / Fernet 与新版数据
 独立，目前没有自动导入迁移。请保留旧目录和数据库。
 
 ## DMG

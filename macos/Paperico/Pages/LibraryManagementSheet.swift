@@ -10,11 +10,11 @@ struct LibraryManagementSheet: View {
     @Environment(PapersStore.self) private var papersStore
     @Environment(ProjectsStore.self) private var projectsStore
     let section: Section
-    @Environment(\.openWindow) private var openWindow
     @State private var papers: [PaperListItem] = []
     @State private var trash: [TrashedPaper] = []
     @State private var error = ""
     @State private var busy: Set<String> = []
+    @State private var pendingDeleteId: String?
 
     private var tasks: [PaperListItem] {
         papers.filter { $0.status != "ready" || services.pipeline.isProcessing($0.id) }
@@ -32,7 +32,7 @@ struct LibraryManagementSheet: View {
             }
             Text(section == .tasks
                  ? "查看待处理与失败的论文，停止任务或重新开始。"
-                 : "恢复论文时，原始 PDF、解析结果、对话与笔记会一同保留。")
+                 : "可恢复论文及其 PDF、解析结果、对话与笔记，也可永久删除。")
                 .font(.callout).foregroundStyle(.secondary)
             if !error.isEmpty { Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled) }
             if section == .tasks && tasks.isEmpty {
@@ -46,16 +46,7 @@ struct LibraryManagementSheet: View {
                             ForEach(tasks) { paper in taskRow(paper).modifier(ManagementRowSurface()) }
                         } else {
                             ForEach(trash) { entry in
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(entry.paper.displayTitle).font(.system(size: 13, weight: .medium)).lineLimit(2)
-                                        Text("移入时间：\(String(entry.deletedAt.prefix(10)))").font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer(minLength: 0)
-                                    ToolbarButton(title: "恢复", icon: "arrow.uturn.backward", busy: busy.contains(entry.id)) {
-                                        perform(id: entry.id) { try await services.library.restorePaper(id: entry.id) }
-                                    }
-                                }.modifier(ManagementRowSurface())
+                                trashRow(entry).modifier(ManagementRowSurface())
                             }
                         }
                     }.padding(.vertical, 2)
@@ -82,11 +73,44 @@ struct LibraryManagementSheet: View {
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func trashRow(_ entry: TrashedPaper) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.paper.displayTitle).font(.system(size: 13, weight: .medium)).lineLimit(2)
+                    Text("移入时间：\(String(entry.deletedAt.prefix(10)))").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Button("恢复") {
+                    perform(id: entry.id) { try await services.library.restorePaper(id: entry.id) }
+                }.buttonStyle(LiquidActionButtonStyle())
+                Button("永久删除", role: .destructive) { pendingDeleteId = entry.id }
+                    .buttonStyle(LiquidActionButtonStyle()).foregroundStyle(palette.danger)
+            }
+            .disabled(busy.contains(entry.id))
+            if pendingDeleteId == entry.id {
+                Text("将永久删除这篇论文的 PDF、解析结果、对话与笔记，无法恢复。")
+                    .font(.callout).foregroundStyle(palette.danger)
+                HStack {
+                    Spacer()
+                    Button("取消") { pendingDeleteId = nil }.buttonStyle(LiquidActionButtonStyle())
+                    ToolbarButton(title: "确认永久删除", icon: Ic.trash, busy: busy.contains(entry.id)) {
+                        perform(id: entry.id) {
+                            await services.pipeline.cancel(paperId: entry.id)
+                            try await services.library.permanentlyDeletePaper(id: entry.id)
+                            pendingDeleteId = nil
+                        }
+                    }.foregroundStyle(palette.danger)
+                }.disabled(busy.contains(entry.id))
+            }
+        }
+    }
+
     private func taskRow(_ paper: PaperListItem) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(paper.displayTitle).lineLimit(2)
-                Text(paper.statusEnum.label).font(.caption).foregroundStyle(.secondary)
+                Text(services.pipeline.statusLabel(for: paper)).font(.caption).foregroundStyle(.secondary)
                 if let progress = services.pipeline.progress[paper.id] {
                     Text(progress).font(.caption).foregroundStyle(.secondary)
                 }
@@ -94,12 +118,13 @@ struct LibraryManagementSheet: View {
                 if let failure = services.pipeline.failures[paper.id] { Text(failure).font(.caption).foregroundStyle(.red) }
             }
             Spacer()
-            Button("打开") { onClose(); router.go(.reader(paperId: paper.id)); openWindow(id: "workspace") }.buttonStyle(LiquidActionButtonStyle())
+            Button("打开") { onClose(); router.go(.reader(paperId: paper.id)) }.buttonStyle(LiquidActionButtonStyle())
             if services.pipeline.isProcessing(paper.id) {
                 Button("停止") { perform(id: paper.id) { await services.pipeline.cancel(paperId: paper.id) } }
                     .buttonStyle(LiquidActionButtonStyle()).disabled(busy.contains(paper.id))
             } else {
                 Menu(paper.status == "uploaded" ? "开始处理" : "重试") {
+                    Button("继续处理（复用已有结果）") { services.pipeline.startProcessing(paperId: paper.id) }
                     Button("重新解析 PDF") { services.pipeline.reparse(paperId: paper.id) }
                     Button("重新翻译已有段落") { services.pipeline.retranslate(paperId: paper.id) }
                     Button("恢复上次返回结果（不调用模型）") { services.pipeline.recoverAnalysis(paperId: paper.id) }
@@ -135,25 +160,23 @@ private struct ManagementRowSurface: ViewModifier {
     }
 }
 
-/// Separate singleton utility scenes keep task and trash windows independent.
-struct LibraryManagementWindow: View {
+/// A modal block in the workspace's existing view tree; it never creates a window.
+struct LibraryManagementOverlay: View {
     let section: LibraryManagementSheet.Section
-    @Environment(\.dismissWindow) private var dismissWindow
+    let onClose: () -> Void
     @Environment(\.palette) private var palette
-    @Environment(\.backgroundOpacity) private var backgroundOpacity
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    private var windowId: String { section == .tasks ? "library-tasks" : "library-trash" }
     var body: some View {
-        LibraryManagementSheet(onClose: { dismissWindow(id: windowId) }, section: section)
-            .padding(12).frame(minWidth: 490, minHeight: 380)
-            .onExitCommand { dismissWindow(id: windowId) }
-            .onAppear { applyWindowChrome() }
-            .onChange(of: palette.appBase) { _, _ in applyWindowChrome() }
-            .onChange(of: backgroundOpacity) { _, _ in applyWindowChrome() }
-            .onChange(of: reduceTransparency) { _, _ in applyWindowChrome() }
-    }
-
-    private func applyWindowChrome() {
-        WindowChrome.applyToAll(baseColor: NSColor(palette.appBase), opacity: reduceTransparency ? 1 : backgroundOpacity)
+        GeometryReader { geometry in
+            ZStack {
+                OutsideDismissArea(label: "关闭论文库管理", dimOpacity: palette.dark ? 0.3 : 0.15, action: onClose)
+                LibraryManagementSheet(onClose: onClose, section: section)
+                    .id(section)
+                    .frame(width: min(760, max(0, geometry.size.width - 40)),
+                           height: min(600, max(0, geometry.size.height - 80)))
+                    .shadow(color: .black.opacity(0.16), radius: 24, y: 12)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .onExitCommand(perform: onClose)
     }
 }

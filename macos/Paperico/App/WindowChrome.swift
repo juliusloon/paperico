@@ -39,6 +39,7 @@ enum WindowChrome {
         }
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
         // AppKit owns the single window canvas so its rounded frame and shadow
         // use the same silhouette. A clear native background with a white
         // hosting-view fill leaves an edge seam and a stale alpha-based shadow.

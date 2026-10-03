@@ -35,10 +35,12 @@ struct PipelineError: LocalizedError, Sendable {
 struct MinerUServiceError: LocalizedError, Sendable {
     let message: String
     let errorCode: ErrorCode
+    let lastState: String?
 
-    init(_ message: String, _ code: ErrorCode = .mineruParseFailed) {
+    init(_ message: String, _ code: ErrorCode = .mineruParseFailed, lastState: String? = nil) {
         self.message = message
         self.errorCode = code
+        self.lastState = lastState
     }
 
     var errorDescription: String? { message }

@@ -28,16 +28,6 @@ struct PapericoApp: App {
             }
         }
         #endif
-        Window("处理任务", id: "library-tasks") {
-            LibraryManagementWindow(section: .tasks).modifier(AppEnvironment(model: appModel))
-        }
-        .windowStyle(.hiddenTitleBar).defaultSize(width: 680, height: 540)
-        .defaultPosition(.center).restorationBehavior(.disabled)
-        Window("回收站", id: "library-trash") {
-            LibraryManagementWindow(section: .trash).modifier(AppEnvironment(model: appModel))
-        }
-        .windowStyle(.hiddenTitleBar).defaultSize(width: 680, height: 540)
-        .defaultPosition(.center).restorationBehavior(.disabled)
     }
 }
 
