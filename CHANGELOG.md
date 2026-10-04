@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-04
+
+### Added
+
+- Opt-in localhost MCP access with 10 read-only tools, paper resources, figure image
+  content, Keychain-backed bearer tokens and client configuration copying in settings.
+- Isolated official Swift MCP SDK package and real HTTP/client interoperability tests.
+- English/Chinese README pipeline diagrams and a file-by-file macOS architecture guide.
+- Permanent deletion for trash entries: a per-paper confirmation removes the PDF, blocks,
+  figures, chats, notes and analysis artifacts; a failed step keeps the trash entry
+  retryable, and the same PDF can be imported again afterwards.
+- MinerU polling tests and permanent-deletion core tests.
+
+### Changed
+
+- Validate Host/Origin and constrain MCP figures to active papers; reads do not change
+  last-opened timestamps, expose API credentials or trigger paid service calls.
+- Preserve App Sandbox and MCP server entitlements in release DMGs; run regression
+  tests before publishing. The retired backend snapshot check is optional when absent.
+- Validate MinerU poll responses against known task states and surface queue, page
+  progress and trace IDs; cloud tasks persist a checkpoint so continue-processing
+  reuses the submitted task instead of resubmitting.
+- Split upload permits from cloud queueing: queued tasks no longer hold an upload
+  slot, and are shown as cloud-queued while MinerU is pending.
+- Reparsing a PDF now submits a fresh MinerU task instead of reusing previous results.
+- Library management (tasks/trash) is a workspace overlay instead of a separate
+  window, and the settings footer stays visible for long forms.
+
 ## [0.2.5] - 2026-10-03
 
 ### Changed
@@ -157,5 +185,7 @@ First open-source release.
   to keep the backend's database and PDF storage under
   `~/Library/Application Support/Paperico/`).
 
-[Unreleased]: https://github.com/juliusloon/paperico/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/juliusloon/paperico/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/juliusloon/paperico/releases/tag/v0.3.0
+[0.2.5]: https://github.com/juliusloon/paperico/releases/tag/v0.2.5
 [0.1.0]: https://github.com/juliusloon/paperico/releases/tag/v0.1.0

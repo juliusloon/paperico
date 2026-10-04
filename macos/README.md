@@ -1,6 +1,6 @@
 # Paperico 原生 App
 
-v0.2.4 是独立 SwiftUI 应用。PDF、解析结构、对话和笔记由原生代码持久化；解析与模型请求
+v0.3.0 是独立 SwiftUI 应用。PDF、解析结构、对话和笔记由原生代码持久化；解析与模型请求
 直连用户配置的服务。运行 App 不需要 Python。当前 target 为 macOS 26+，构建需要 Xcode 26+。
 
 ## 构建、运行和验证
@@ -79,8 +79,14 @@ papers、mineru_output、analyses 与 logs。普通服务设置和阅读偏好�
 ```
 
 Release bundle 位于 `macos/build/DerivedData-Release/Build/Products/Release/`，DMG 位于
-`macos/build/Paperico-0.2.4.dmg`。本地临时签名不等同于 Developer ID 签名和公证。
+`macos/build/Paperico-0.3.0.dmg`。本地临时签名不等同于 Developer ID 签名和公证。
 正式分发可设置 `PAPERICO_SIGN_IDENTITY`，并自行完成所需的公证流程。
+
+## MCP 连接
+
+在「设置 → MCP 连接」启用只读服务，复制 Claude Code、Cursor 或 VS Code 配置。
+提供 10 个工具及论文资源；默认关闭，要求 App 保持运行。
+使用方式、调研修正与后续路线见 [MCP 文档](../docs/mcp.md)。
 
 ## 旧 API 契约
 

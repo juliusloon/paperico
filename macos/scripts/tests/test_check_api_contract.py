@@ -52,7 +52,11 @@ class CheckAPIContractToolTests(unittest.TestCase):
                 text=True,
             )
 
-    def test_checked_in_backend_contract(self) -> None:
+    @unittest.skipUnless(
+        (ROOT / "backend/tests/openapi_snapshot.json").is_file(),
+        "Retired backend snapshot is optional and no longer ships in this repository",
+    )
+    def test_local_backend_contract_when_available(self) -> None:
         document = json.loads((ROOT / "backend/tests/openapi_snapshot.json").read_text(encoding="utf-8"))
         result = self.run_checker(document)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

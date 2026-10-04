@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Mirrors settings/SettingsPage.tsx — three tabs (AI 模型 / PDF 解析 / 阅读外观),
+/// Native settings: AI 模型 / PDF 解析 / 阅读外观 / MCP 连接,
 /// readiness card, test-connection actions, bottom notice.
 /// 窄窗口保留桌面布局,侧栏收成三个圆形图标。
 struct SettingsPage: View {
@@ -8,6 +8,7 @@ struct SettingsPage: View {
     @Environment(\.containerWidth) private var containerWidth
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(AppStore.self) private var appStore
+    @Environment(MCPStore.self) private var mcpStore
 
     @State private var tab: Tab = .model
     @State private var saving = false
@@ -16,6 +17,7 @@ struct SettingsPage: View {
     @State private var notice: Notice?
     @State private var showLlmKey = false
     @State private var showMineruKey = false
+    @State private var showMCPToken = false
     @State private var showAccentPicker = false
 
     // LLM form (mirrors llmForm) — 连接三项默认留空,由 placeholder 承载提示;
@@ -52,12 +54,13 @@ struct SettingsPage: View {
     @State private var appearanceFontSize = 18
 
     enum Tab: String, CaseIterable {
-        case model, parser, appearance
+        case model, parser, appearance, automation
         var label: String {
             switch self {
             case .model: return "AI 模型"
             case .parser: return "PDF 解析"
             case .appearance: return "阅读外观"
+            case .automation: return "MCP 连接"
             }
         }
         var description: String {
@@ -65,6 +68,7 @@ struct SettingsPage: View {
             case .model: return "翻译、总结与问答"
             case .parser: return "MinerU 云端或本地部署"
             case .appearance: return "主题、强调色与字号"
+            case .automation: return "外部助手只读访问论文库"
             }
         }
         var icon: String {
@@ -72,6 +76,7 @@ struct SettingsPage: View {
             case .model: return Ic.bolt
             case .parser: return Ic.server
             case .appearance: return Ic.palette
+            case .automation: return Ic.bot
             }
         }
     }
@@ -225,20 +230,24 @@ struct SettingsPage: View {
                         case .model: modelSection
                         case .parser: parserSection
                         case .appearance: appearanceSection
+                        case .automation: automationSection
                         }
                     }
                     // The footer shares the form's scroll content. The viewport
                     // is a minimum height, so long forms push it below the text.
                     Spacer(minLength: 32)
-                    HStack {
-                        ToolbarButton(title: "保存配置", icon: Ic.save, kind: .primary, busy: saving) {
-                            switch tab {
-                            case .model: saveLLM()
-                            case .parser: saveMinerU()
-                            case .appearance: saveAppearance()
+                    if tab != .automation {
+                        HStack {
+                            ToolbarButton(title: "保存配置", icon: Ic.save, kind: .primary, busy: saving) {
+                                switch tab {
+                                case .model: saveLLM()
+                                case .parser: saveMinerU()
+                                case .appearance: saveAppearance()
+                                case .automation: break
+                                }
                             }
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
                     }
                 }
                 .padding(.horizontal, containerWidth < 650 ? 16 : 30)
@@ -282,8 +291,13 @@ struct SettingsPage: View {
                         mineruReady)
             case .appearance:
                 return ("READING APPEARANCE", "阅读外观", "保存在本机 App 中，只影响界面显示，修改即时生效。", true)
+            case .automation:
+                return ("MCP CONNECTION", "连接外部 AI 助手", "允许兼容 MCP 的客户端读取论文、正文、图像、方法索引、对话与笔记。客户端如何使用或发送这些内容取决于它的设置。", mcpStore.running)
             }
         }()
+
+        let statusLabel = tab == .automation ? (mcpStore.running ? "运行中" : "未运行") : (configured ? "已配置" : "需要配置")
+        let statusColor = tab == .automation && !mcpStore.enabled ? palette.gray500 : (configured ? palette.success : palette.danger)
 
         HStack(alignment: .top, spacing: containerWidth < 650 ? 12 : 30) {
             VStack(alignment: .leading, spacing: 8) {
@@ -293,13 +307,13 @@ struct SettingsPage: View {
             }
             .frame(maxWidth: 620, alignment: .leading)
             Spacer(minLength: 0)
-            Label(configured ? "已配置" : "需要配置", systemImage: configured ? Ic.check : "exclamationmark.circle")
+            Label(statusLabel, systemImage: configured ? Ic.check : (tab == .automation ? "pause.circle" : "exclamationmark.circle"))
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(configured ? palette.success : palette.danger)
+            .foregroundStyle(statusColor)
             .padding(.horizontal, 12)
             .frame(height: 30, alignment: .center)
             .fixedSize(horizontal: true, vertical: false)
-            .liquidTool(tint: (configured ? palette.success : palette.danger).opacity(0.1))
+            .liquidTool(tint: statusColor.opacity(0.1))
         }
         .padding(.bottom, 24)
         .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
@@ -335,6 +349,63 @@ struct SettingsPage: View {
 
     private func secretField(_ text: Binding<String>, placeholder: String, visible: Binding<Bool>) -> some View {
         FormSecretField(text: text, placeholder: placeholder, visible: visible)
+    }
+
+    private var automationSection: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Toggle("允许 MCP 客户端只读访问", isOn: Binding(get: { mcpStore.enabled }, set: { mcpStore.setEnabled($0) }))
+                .toggleStyle(.switch)
+                .disabled(mcpStore.busy)
+            Text("提供 10 个只读工具及论文资源。读取不会触发 MinerU、LLM 调用或修改论文。Paperico 必须保持运行，关闭开关会立即断开连接。")
+                .font(.system(size: 13)).foregroundStyle(palette.gray500).lineSpacing(5)
+            if mcpStore.busy {
+                ProgressView("正在更新连接…")
+            }
+            if !mcpStore.error.isEmpty {
+                Text(mcpStore.error).font(.system(size: 13)).foregroundStyle(palette.danger)
+                if mcpStore.enabled && !mcpStore.running {
+                    Button("重试连接") { mcpStore.retry() }.disabled(mcpStore.busy)
+                }
+            }
+            if mcpStore.running {
+                field("服务地址") {
+                    Text(mcpStore.endpoint).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                }
+                field("访问 Token") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(showMCPToken ? mcpStore.token : "••••••••••••••••••••••••")
+                            .font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                        Button(showMCPToken ? "隐藏 Token" : "显示 Token") { showMCPToken.toggle() }
+                    }
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        Button("复制 Cursor 配置") { copyMCP(mcpStore.clientConfiguration) }
+                        Button("复制 VS Code 配置") { copyMCP(mcpStore.vscodeConfiguration) }
+                        Button("复制 Claude Code 命令") { copyMCP(mcpStore.claudeCommand) }
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button("复制 Cursor 配置") { copyMCP(mcpStore.clientConfiguration) }
+                        Button("复制 VS Code 配置") { copyMCP(mcpStore.vscodeConfiguration) }
+                        Button("复制 Claude Code 命令") { copyMCP(mcpStore.claudeCommand) }
+                    }
+                }
+                Button("更换 Token 并断开现有连接") { mcpStore.rotateToken(); showMCPToken = false }
+                    .disabled(mcpStore.busy)
+                Text("Token 保存在系统钥匙串。拿到 Token 的本机程序可以读取整个活动论文库，请仅复制给你信任的客户端。更换后需更新客户端配置。")
+                    .font(.system(size: 12)).foregroundStyle(palette.gray500).lineSpacing(5)
+            }
+        }
+    }
+
+    private func copyMCP(_ value: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        #else
+        UIPasteboard.general.string = value
+        #endif
+        notice = Notice(success: true, message: "连接配置已复制。")
     }
 
     // MARK: model tab
