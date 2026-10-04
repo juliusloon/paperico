@@ -1,4 +1,4 @@
-# Paperico 原生 App
+# Paperico Mac App
 
 v1.0.0 是独立 SwiftUI 应用。PDF、解析结构、对话和笔记由原生代码持久化；解析与模型请求
 直连用户配置的服务。运行 App 不需要 Python。当前 target 为 macOS 26+，构建需要 Xcode 26+。

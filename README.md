@@ -4,7 +4,6 @@
 
 <div align="center">
 
-[![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/download-v1.0.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
@@ -161,9 +160,8 @@ require separate Keychain management.
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-The DMG is written to `macos/build/`. Pushing a `v*` tag also runs the
-[release workflow](.github/workflows/release.yml), which builds the DMG from a clean
-Release configuration and attaches it to the GitHub Release. Local builds use ad-hoc
+The DMG is written to `macos/build/`. Release packaging runs locally; the CI and release
+workflows under `.github/` are kept out of the public repository. Local builds use ad-hoc
 signing and are not Developer ID notarized. See the [macOS development guide](macos/README.md)
 for distribution signing options.
 

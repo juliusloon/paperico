@@ -8,7 +8,7 @@
     <!-- Card 1: 导入 -->
     <g transform="translate(55 48)">
       <rect width="190" height="196" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" fill="#3260CF">STEP 01</text>
+      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">STEP 01</text>
       <text x="16" y="62" font-size="21" font-weight="600" fill="#15181E">导入</text>
       <text x="16" y="94" font-size="18" fill="#3E4450">拖入 PDF</text>
       <text x="16" y="118" font-size="18" fill="#3E4450">SHA-256 去重</text>
@@ -17,7 +17,7 @@
     <!-- Card 2: 解析 -->
     <g transform="translate(280 48)">
       <rect width="190" height="196" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" fill="#3260CF">STEP 02</text>
+      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">STEP 02</text>
       <text x="16" y="62" font-size="21" font-weight="600" fill="#15181E">解析</text>
       <text x="16" y="94" font-size="18" fill="#3E4450">MinerU 云端</text>
       <text x="16" y="118" font-size="18" fill="#3E4450">或自托管</text>
@@ -27,7 +27,7 @@
     <!-- Card 3: 分析 -->
     <g transform="translate(505 48)">
       <rect width="190" height="196" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" fill="#3260CF">STEP 03</text>
+      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">STEP 03</text>
       <text x="16" y="62" font-size="21" font-weight="600" fill="#15181E">分析</text>
       <text x="16" y="94" font-size="18" fill="#3E4450">单次流式请求</text>
       <text x="16" y="118" font-size="18" fill="#3E4450">译文 · 要点</text>
@@ -37,7 +37,7 @@
     <!-- Card 4: 精读问答 -->
     <g transform="translate(730 48)">
       <rect width="190" height="196" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" fill="#3260CF">STEP 04</text>
+      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">STEP 04</text>
       <text x="16" y="62" font-size="21" font-weight="600" fill="#15181E">精读问答</text>
       <text x="16" y="94" font-size="18" fill="#3E4450">逻辑链大纲</text>
       <text x="16" y="118" font-size="18" fill="#3E4450">引用跳回证据</text>
@@ -47,7 +47,7 @@
     <!-- Card 5: 笔记 -->
     <g transform="translate(955 48)">
       <rect width="190" height="196" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" fill="#3260CF">STEP 05</text>
+      <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">STEP 05</text>
       <text x="16" y="62" font-size="21" font-weight="600" fill="#15181E">笔记</text>
       <text x="16" y="94" font-size="18" fill="#3E4450">勾选任意回答</text>
       <text x="16" y="118" font-size="18" fill="#3E4450">Markdown 笔记</text>
@@ -72,7 +72,7 @@
     <polygon points="593,282 607,282 600,293" fill="#3260CF"/>
     <rect x="55" y="296" width="1090" height="60" rx="14" fill="#3260CF" fill-opacity="0.06" stroke="#3260CF" stroke-opacity="0.28" stroke-width="1.5"/>
     <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">
-      <text x="79" y="333" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" fill="#3260CF">本地论文库</text>
+      <text x="79" y="333" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">本地论文库</text>
       <text x="216" y="333" fill="#3E4450">沙盒 JSON · 可选只读 MCP 供 Claude Code / Cursor / VS Code 读取</text>
     </g>
   </g>

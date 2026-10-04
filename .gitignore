@@ -28,6 +28,9 @@ backend/
 # ===== 品牌设计稿:本地保留,不入库(app 图标源文件在 macos/Paperico/paperico.icon) =====
 design/
 
+# ===== 更新日志:本地维护,不入库 =====
+/CHANGELOG.md
+
 # ===== Python =====
 __pycache__/
 *.py[cod]
@@ -74,6 +77,9 @@ docs/verification/
 Thumbs.db
 .zcode/
 .workbuddy/
+.agents/
+.codex/
+.github/
 
 # SwiftPM core tests
 .build/

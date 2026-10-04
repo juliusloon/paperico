@@ -4,7 +4,6 @@
 
 <div align="center">
 
-[![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/download-v1.0.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
@@ -144,9 +143,8 @@ App 沙盒中的数据根目录：
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-DMG 输出在 `macos/build/`。推送 `v*` 标签会触发
-[release 工作流](.github/workflows/release.yml)，在干净的 Release 构建上产出 DMG 并
-上传到 GitHub Release。本地构建使用临时签名，未经 Developer ID 公证；正式分发的签名
+DMG 输出在 `macos/build/`。发布打包在本地执行；`.github/` 下的 CI 与 release 工作流保留在
+本地、不入公开仓库。本地构建使用临时签名，未经 Developer ID 公证；正式分发的签名
 选项见 [macOS 开发说明](macos/README.md)。
 
 贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全说明见 [SECURITY.md](SECURITY.md)。

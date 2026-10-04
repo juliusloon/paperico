@@ -1,44 +1,94 @@
-# Backend
-backend/.venv/
-backend/__pycache__/
-backend/app/__pycache__/
-backend/*.db
-backend/storage/
-*.pyc
+# ===== Secrets / BYOK 凭证(绝不入库) =====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.mobileprovision
 
-# Web 端已下线:本地保留
+# ===== 本地数据:数据库 / 论文 PDF / MinerU 抽取结果(绝不入库) =====
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.db.bak*
+*.sqlite
+*.sqlite3
+**/storage/pdfs/
+**/storage/mineru_output/
+**/storage/mineru_chem_spike/
+**/storage/images/
+
+# ===== Web 端 / 兼容后端已下线:本地保留,不入库 =====
 frontend/
+backend/
 
-# 品牌设计稿:本地保留
+# ===== 品牌设计稿:本地保留,不入库(app 图标源文件在 macos/Paperico/paperico.icon) =====
 design/
 
-# macOS 客户端构建产物
-macos/build/
-macos/DerivedData/
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# IDE
+# ===== Frontend =====
+node_modules/
+dist/
+
+# ===== Xcode / Apple 构建产物 =====
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# ===== UI 历史归档(整仓构建快照,体积大;截图可能含论文标题) =====
+docs/ui-archives/
+
+# 验证日志/截图含论文标题/摘要/正文片段,只保留在本地
+docs/verification/
+
+# ===== 内部规划/工程文档:本地保留,不入库(docs/architecture.md 与 docs/releases/ 仍入库) =====
+/docs/Workbench.md
+/docs/README.md
+/docs/agentero-execution-plan.md
+/docs/agentero-lessons-for-paperico.md
+/docs/bbox-coordinate-system.md
+/docs/ios-app-plan.md
+/docs/macos-window-and-reader-perf.md
+/docs/mineru-chem-integration-spike.md
+/docs/storage-migration-and-ui.md
+/docs/differentiation.md
+
+# ===== IDE / OS / AI 工具本地状态 =====
 .vscode/
 .idea/
 *.swp
-
-# OS
 .DS_Store
 Thumbs.db
+.zcode/
+.workbuddy/
+.agents/
+.codex/
+.github/
 
-# Env
-.env
-*.env.local
+# SwiftPM core tests
+.build/
+.swiftpm/
 
 # ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
 .git/
 .hg/
 .svn/
-node_modules/
 bower_components/
 jspm_packages/
-__pycache__/
 site-packages/
-venv/
 coverage/
 htmlcov/
 lcov-report/
@@ -53,7 +103,6 @@ test-results/
 allure-results/
 allure-report/
 cdk.out/
-*.egg-info/
 *.dist-info/
 eggs/
 pip-wheel-metadata/
