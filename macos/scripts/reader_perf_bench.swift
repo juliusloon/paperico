@@ -11,7 +11,9 @@
 //   xcrun --sdk macosx swiftc -O \
 //     Paperico/Support/AppPaths.swift Paperico/Support/PaperMarkdown.swift \
 //     Paperico/Support/ReaderPerf.swift Paperico/Components/MarkdownText.swift \
+//     Paperico/Components/CitationInlineText.swift Paperico/Core/ChatContextBuilder.swift \
 //     Paperico/Components/GlassKit.swift Paperico/Core/MarkdownTable.swift \
+//     Paperico/Core/MethodGroup.swift Paperico/Core/ServiceErrors.swift \
 //     Paperico/App/Theme.swift Paperico/App/WindowChrome.swift \
 //     Paperico/Models/PaperStatus.swift Paperico/Models/Models.swift \
 //     scripts/reader_perf_bench.swift -o /tmp/readerbench
