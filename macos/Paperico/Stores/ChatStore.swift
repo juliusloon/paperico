@@ -14,7 +14,8 @@ final class ChatStore {
     var currentSession: ChatSession?
     var streaming = false
     private(set) var preparingRevision = false
-    var busy: Bool { streaming || preparingRevision }
+    private(set) var updatingSession = false
+    var busy: Bool { streaming || preparingRevision || updatingSession }
     var streamContent = ""
     var pendingMessage: ChatMessage?
     @ObservationIgnored private var generationTask: Task<Void, Never>?
@@ -37,6 +38,7 @@ final class ChatStore {
         currentSession = nil
         streaming = false
         preparingRevision = false
+        updatingSession = false
         streamContent = ""
         pendingMessage = nil
         error = ""
@@ -63,6 +65,46 @@ final class ChatStore {
             let loaded = try await library.chatSession(paperId: paperId, sessionId: sessionId)
             guard version == requestVersion else { return }
             currentSession = loaded
+        } catch {
+            guard version == requestVersion else { return }
+            self.error = ApiFailure.wrap(error).localizedDescription
+        }
+    }
+
+    func renameSession(paperId: String, sessionId: String, title: String) async -> Bool {
+        guard !busy, activePaperId == paperId else { return false }
+        let version = requestVersion
+        updatingSession = true
+        defer { if version == requestVersion { updatingSession = false } }
+        do {
+            try await library.renameChatSession(paperId: paperId, sessionId: sessionId, title: title)
+            let loaded = try await library.chatSessions(paperId: paperId)
+            guard version == requestVersion else { return false }
+            sessions = loaded
+            if currentSession?.id == sessionId { currentSession = loaded.first { $0.id == sessionId } }
+            return true
+        } catch {
+            guard version == requestVersion else { return false }
+            self.error = ApiFailure.wrap(error).localizedDescription
+            return false
+        }
+    }
+
+    func deleteSession(paperId: String, sessionId: String) async {
+        guard !busy, activePaperId == paperId else { return }
+        let version = requestVersion
+        updatingSession = true
+        defer { if version == requestVersion { updatingSession = false } }
+        do {
+            try await library.deleteChatSession(paperId: paperId, sessionId: sessionId)
+            let loaded = try await library.chatSessions(paperId: paperId)
+            guard version == requestVersion else { return }
+            sessions = loaded
+            if currentSession?.id == sessionId {
+                currentSession = nil
+                streamContent = ""
+                pendingMessage = nil
+            }
         } catch {
             guard version == requestVersion else { return }
             self.error = ApiFailure.wrap(error).localizedDescription

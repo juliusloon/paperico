@@ -62,6 +62,7 @@ struct GlassSurface<S: Shape>: View {
     let shape: S
     var tint: Color? = nil
     var interactive = false
+    var bordered = true
     @Environment(\.palette) private var palette
     @Environment(\.glassOpacity) private var glassOpacity
     @Environment(\.floatingSurface) private var floatingSurface
@@ -75,7 +76,9 @@ struct GlassSurface<S: Shape>: View {
         // container otherwise lifts detached glass above unrelated text/fields.
         GlassEffectContainer(spacing: 0) { material }
             .overlay {
-                shape.stroke(palette.dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09), lineWidth: 0.5)
+                if bordered {
+                    shape.stroke(palette.dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09), lineWidth: 0.5)
+                }
             }
             .opacity(opacity)
             .background {
@@ -110,6 +113,7 @@ private struct LiquidPanelModifier: ViewModifier {
     var cornerRadius: CGFloat
     var tint: Color?
     var elevated: Bool
+    var bordered = true
     @Environment(\.palette) private var palette
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -117,7 +121,7 @@ private struct LiquidPanelModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.clipShape(shape)
             .background {
-                GlassSurface(shape: shape, tint: tint)
+                GlassSurface(shape: shape, tint: tint, bordered: bordered)
                     .shadow(color: elevated ? Color.black.opacity(palette.dark ? 0.22 : 0.10) : .clear,
                             radius: elevated ? 12 : 0, y: elevated ? 4 : 0)
             }
@@ -160,8 +164,8 @@ extension View {
     }
 
     /// Nested notices, fields and cards share regular glass and continuous corners.
-    func liquidInset(cornerRadius: CGFloat = CornerRadius.inset, tint: Color? = nil) -> some View {
-        liquidPanel(cornerRadius: cornerRadius, tint: tint)
+    func liquidInset(cornerRadius: CGFloat = CornerRadius.inset, tint: Color? = nil, bordered: Bool = true) -> some View {
+        modifier(LiquidPanelModifier(cornerRadius: cornerRadius, tint: tint, elevated: false, bordered: bordered))
     }
 
     /// 浮动工具小件(阅读器悬浮工具条上的单件)。

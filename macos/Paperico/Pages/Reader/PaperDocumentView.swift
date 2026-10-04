@@ -36,6 +36,20 @@ struct PaperDocumentView: View {
                         }
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if let editor = selectionState.annotationEditor {
+                        ReaderAnnotationEditor(field: editor.field, value: editor.value, size: editor.rect.size) {
+                            selectionState.input(editor, value: $0)
+                        } onFinish: { value, commit in
+                            selectionState.input(editor, value: value, phase: commit ? "commit" : "cancel")
+                        } onResize: { size in
+                            selectionState.resize(editor, size: size)
+                        }
+                        .id(editor.blockId + ":" + editor.field)
+                        .offset(x: editor.rect.minX, y: editor.rect.minY)
+                    }
+                }
+                .clipped()
         }
     }
 
@@ -55,6 +69,7 @@ struct PaperDocumentView: View {
         }
         return ["colors":colors,"fontSize":Double(fontSize),"mode":mode.rawValue,
                 "outlineWidth":Double(outlineWidth),"compact":false,"dark":palette.dark,
+                "insetRadius":Double(CornerRadius.inset),"nativeAnnotations":true,
                 "glassOpacity":reduceTransparency ? 1 : min(1, max(0, glassOpacity)),
                 "reduceTransparency":reduceTransparency]
     }
@@ -67,13 +82,29 @@ private struct DocumentSelection {
     let rect: CGRect
 }
 
+private struct DocumentAnnotationEditor {
+    let blockId: String
+    let field: String
+    let value: String
+    let rect: CGRect
+}
+
 @MainActor @Observable
 private final class DocumentSelectionState {
     var selection: DocumentSelection?
+    var annotationEditor: DocumentAnnotationEditor?
     @ObservationIgnored weak var webView: WKWebView?
     func clear() {
         selection = nil
         webView?.evaluateJavaScript("window.papericoClearSelection()")
+    }
+    func input(_ editor: DocumentAnnotationEditor, value: String, phase: String = "draft") {
+        webView?.callAsyncJavaScript("window.papericoAnnotationInput?.(id,field,value,phase)",
+                                    arguments: ["id":editor.blockId,"field":editor.field,"value":value,"phase":phase], in: nil, in: .page)
+    }
+    func resize(_ editor: DocumentAnnotationEditor, size: CGSize) {
+        webView?.callAsyncJavaScript("window.papericoResizeAnnotation?.(id,field,width,height)",
+                                    arguments: ["id":editor.blockId,"field":editor.field,"width":size.width,"height":size.height], in: nil, in: .page)
     }
 }
 
@@ -113,6 +144,7 @@ private struct PaperWebSurface: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
+        coordinator.parent.selectionState.annotationEditor = nil
         coordinator.parent.document.onAnnotationFocus(false)
         view.configuration.userContentController.removeScriptMessageHandler(forName: "reader")
         view.navigationDelegate = nil
@@ -143,6 +175,7 @@ private struct PaperWebSurface: NSViewRepresentable {
         func update() {
             guard ready, let webView else { return }
             if loadedDetail != parent.document.detail {
+                parent.selectionState.annotationEditor = nil
                 documentReady = false
                 images.urls = Dictionary(uniqueKeysWithValues: parent.document.detail.blocks.compactMap { block in
                     guard !block.imagePath.isEmpty, let url = parent.document.layout.fileURL(forRelativePath: block.imagePath) else { return nil }
@@ -213,6 +246,19 @@ private struct PaperWebSurface: NSViewRepresentable {
             let blockId = data["blockId"] as? String
             let block = parent.document.detail.blocks.first { $0.id == blockId }
             switch type {
+            case "annotationEditor":
+                guard data["active"] as? Bool == true else {
+                    parent.selectionState.annotationEditor = nil
+                    return
+                }
+                guard let blockId, block != nil,
+                      let field = data["field"] as? String, ["title", "note"].contains(field),
+                      let values = data["rect"] as? [String: Double],
+                      let x = values["x"], let y = values["y"], let width = values["width"], let height = values["height"],
+                      [x, y, width, height].allSatisfy({ $0.isFinite }), width > 0, height >= 64 else { return }
+                parent.selectionState.selection = nil
+                parent.selectionState.annotationEditor = DocumentAnnotationEditor(blockId: blockId, field: field,
+                    value: data["value"] as? String ?? "", rect: CGRect(x: x, y: y, width: width, height: height))
             case "annotationFocus":
                 (webView as? AnnotationWebView)?.editingNodeNote = data["note"] as? Bool ?? false
                 parent.document.onAnnotationFocus(data["editing"] as? Bool ?? false)

@@ -44,23 +44,28 @@
 
 /* Reader annotation controls share the native glass opacity, accent and radii.
    Material fades independently so labels and entered text remain legible. */
-:root{--reader-glass-opacity:.85;--node-glass-rim:rgba(255,255,255,.65);--node-glass-fill:color-mix(in srgb,var(--gray-0) 68%,transparent);--node-glass-shadow:rgba(0,0,0,.09)}
-[data-theme=dark]{--node-glass-rim:rgba(255,255,255,.18);--node-glass-fill:color-mix(in srgb,var(--gray-0) 74%,transparent);--node-glass-shadow:rgba(0,0,0,.22)}
+:root{--reader-glass-opacity:.85;--node-glass-fill:color-mix(in srgb,var(--gray-0) 24%,transparent);--node-glass-highlight:rgba(255,255,255,.14)}
+[data-theme=dark]{--node-glass-fill:color-mix(in srgb,var(--gray-0) 28%,transparent);--node-glass-highlight:rgba(255,255,255,.035)}
 .node-jump{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:inherit;cursor:pointer}.node-jump[hidden]{display:none}
 .node-actions{position:absolute;z-index:2;top:0;left:8px;display:flex;gap:6px;opacity:0;pointer-events:none;transition:opacity .15s}.outline:hover .node-actions,.outline:focus-within .node-actions{opacity:1;pointer-events:auto}
-.node-glass-button,.node-edit-box,.node-note{position:relative;isolation:isolate;background:transparent;border:0}
-.node-glass-button::before,.node-edit-box::before,.node-note::before{content:"";position:absolute;z-index:-1;inset:0;border-radius:inherit;pointer-events:none;opacity:var(--reader-glass-opacity);background:linear-gradient(160deg,color-mix(in srgb,var(--gray-0) 22%,transparent),transparent 58%),var(--node-glass-fill);border:1px solid color-mix(in srgb,var(--gray-200) 65%,transparent);box-shadow:inset 0 1px 1px var(--node-glass-rim),inset 0 -1px 1px color-mix(in srgb,var(--gray-200) 25%,transparent),0 3px 12px var(--node-glass-shadow);-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6)}
-.node-glass-button{display:inline-flex;justify-content:center;align-items:center;gap:5px;border-radius:999px;color:var(--gray-800);font:500 12px/1 system-ui,-apple-system,sans-serif;cursor:pointer;transition:transform .15s}
+.node-glass-button,.node-editor-field,.node-note{position:relative;isolation:isolate;background:transparent;border:0}
+.node-glass-button::before,.node-editor-field::before,.node-note::before{content:"";position:absolute;z-index:-1;inset:0;border-radius:inherit;pointer-events:none;opacity:var(--reader-glass-opacity);background:linear-gradient(155deg,var(--node-glass-highlight),transparent 65%),var(--node-glass-fill);border:0;box-shadow:none;-webkit-backdrop-filter:blur(20px) saturate(1.4);backdrop-filter:blur(20px) saturate(1.4)}
+.node-glass-button{display:inline-flex;justify-content:center;align-items:center;gap:6px;border-radius:999px;color:var(--gray-800);font:500 12px/1 system-ui,-apple-system,sans-serif;cursor:pointer;transition:transform .15s}
 .node-actions .node-glass-button{width:30px;height:30px;padding:0;color:var(--accent)}
-.node-glass-button:hover::before{background:linear-gradient(160deg,color-mix(in srgb,var(--gray-0) 36%,transparent),transparent 58%),var(--node-glass-fill)}
-.node-glass-button:active{transform:scale(.96)}.node-glass-button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.node-glass-button:hover::before{background:linear-gradient(155deg,var(--node-glass-highlight),transparent 65%),color-mix(in srgb,var(--gray-0) 35%,transparent)}
+.node-glass-button:active{transform:scale(.98)}.node-glass-button:focus-visible{outline:0;text-decoration:underline;text-underline-offset:3px}
 .node-glass-button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
-.node-note{margin:5px 19px 8px 8px;padding:10px;border-radius:12px;font:12px/1.6 system-ui,-apple-system,sans-serif;text-align:right;overflow-wrap:anywhere}.node-note[hidden]{display:none}.node-note p{margin:0}.node-note mark{background:var(--accent-faint);color:inherit;border-radius:3px;padding:1px 2px}
-.node-edit-box{margin:5px 19px 8px 8px;padding:10px;border-radius:12px}.node-title-edit{margin:0}.node-editor{display:block;box-sizing:border-box;resize:vertical;width:100%;min-height:58px;background:transparent;border:0;outline:0;color:var(--gray-900);font:14.5px/1.6 system-ui,-apple-system,sans-serif;text-align:right}.node-edit-box:focus-within::before{border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
-.node-edit-controls{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:6px;margin-top:10px}.node-edit-controls .node-glass-button{min-height:30px;padding:7px 11px}.node-glass-primary{color:var(--node-primary-ink,var(--accent-foreground,#fff))}.node-glass-primary::before,.node-glass-primary:hover::before{background:linear-gradient(160deg,rgba(255,255,255,.16),transparent 65%),var(--accent);border-color:color-mix(in srgb,var(--accent) 70%,var(--gray-200))}
-[data-reduce-transparency=true] .node-glass-button::before,[data-reduce-transparency=true] .node-edit-box::before,[data-reduce-transparency=true] .node-note::before{background:var(--gray-0);-webkit-backdrop-filter:none;backdrop-filter:none}
+.node-note{margin:5px 19px 8px 8px;padding:9px;border-radius:var(--reader-inset-radius,12px);font:14px/1.6 system-ui,-apple-system,sans-serif;text-align:right;overflow-wrap:anywhere}.node-note[hidden]{display:none}.node-note p{margin:0}.node-note mark{background:var(--accent-faint);color:inherit;border-radius:3px;padding:1px 2px}
+.node-edit-box{margin:5px 19px 8px 8px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;background:transparent;border:0}.node-title-edit{margin:0}
+.node-editor-field{width:100%;max-width:100%;min-width:min(120px,100%);min-height:64px;padding:9px;border-radius:var(--reader-inset-radius,12px)}
+.node-editor{display:block;box-sizing:border-box;resize:none;width:100%;height:100%;min-height:46px;padding:0;background:transparent;border:0;outline:0;color:var(--gray-900);font:14px/1.6 system-ui,-apple-system,sans-serif;text-align:right}.node-title-edit .node-editor{font-size:16.5px;font-weight:600;line-height:1.48}
+.node-resize-corner{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;touch-action:none;background:none;border:0}
+.node-edit-controls{display:flex;justify-content:flex-start;flex-wrap:wrap;gap:8px}.node-edit-controls .node-glass-button{min-height:32px;padding:8px 14px}.node-glass-primary{color:var(--node-primary-ink,var(--accent-foreground,#fff))}.node-glass-primary::before,.node-glass-primary:hover::before{background:linear-gradient(155deg,var(--node-glass-highlight),transparent 65%),var(--accent)}
+.node-native-editor .node-editor-field::before{display:none}.node-native-editor .node-editor,.node-native-editor .node-edit-controls{visibility:hidden}.node-native-editor .node-edit-controls{height:38px}.node-native-editor .node-resize-corner{display:none}
+[data-reduce-transparency=true] .node-glass-button::before,[data-reduce-transparency=true] .node-editor-field::before,[data-reduce-transparency=true] .node-note::before{background:var(--gray-0);-webkit-backdrop-filter:none;backdrop-filter:none}
 [data-reduce-transparency=true] .node-glass-primary::before{background:var(--accent)}
 @media(prefers-reduced-motion:reduce){.node-actions,.node-glass-button{transition:none}.node-glass-button:active{transform:none}}
+
 
 
 .rich code,.rich pre{font-family:-apple-system,"PingFang SC",sans-serif}

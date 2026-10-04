@@ -26,6 +26,9 @@ struct ChatPanel: View {
     @State private var isExportingNote = false
     @State private var hoveredPrompt: Int?
     @State private var historyExpanded = false
+    @State private var renamingSessionId: String?
+    @State private var sessionTitle = ""
+    @State private var sessionToDelete: ChatSession?
     @FocusState private var historyFocused: Bool
 
     private var messages: [ChatMessage] {
@@ -51,7 +54,7 @@ struct ChatPanel: View {
                     ZStack(alignment: .topLeading) {
                         Color.clear.contentShape(Rectangle()).onTapGesture { closeHistory() }
                         historyPanel
-                            .frame(height: min(280, max(90, geometry.size.height - 12), CGFloat(chatStore.sessions.count) * 48 + 16))
+                            .frame(height: min(320, max(90, geometry.size.height - 12), CGFloat(chatStore.sessions.count) * 48 + (renamingSessionId == nil ? 16 : 110)))
                             .padding(.horizontal, 12)
                             .transition(.opacity.combined(with: .offset(y: -6)))
                     }
@@ -62,7 +65,7 @@ struct ChatPanel: View {
             if historyExpanded { closeHistory() }
             else if chatStore.streaming { chatStore.stopGenerating() }
         }
-        .onChange(of: paperId) { _, _ in historyExpanded = false }
+        .onChange(of: paperId) { _, _ in historyExpanded = false; renamingSessionId = nil; sessionToDelete = nil }
         .task {
             if notes.isEmpty {
                 do { notes = try await services.library.notes(paperId: paperId) }
@@ -72,6 +75,24 @@ struct ChatPanel: View {
         .alert("对话与笔记", isPresented: .init(get: { !chatStore.error.isEmpty }, set: { if !$0 { chatStore.error = "" } })) {
             Button("好") { chatStore.error = "" }
         } message: { Text(chatStore.error) }
+        .alert("删除对话？", isPresented: .init(get: { sessionToDelete != nil }, set: { if !$0 { sessionToDelete = nil } })) {
+            Button("取消", role: .cancel) { sessionToDelete = nil }
+            Button("删除", role: .destructive) {
+                guard let session = sessionToDelete else { return }
+                sessionToDelete = nil
+                let wasCurrent = session.id == chatStore.currentSession?.id
+                Task {
+                    await chatStore.deleteSession(paperId: paperId, sessionId: session.id)
+                    if renamingSessionId == session.id { renamingSessionId = nil }
+                    if wasCurrent && chatStore.currentSession == nil {
+                        selectedIds = []
+                        if editingMessageId != nil { cancelEditing() }
+                    }
+                }
+            }
+        } message: {
+            Text("将永久删除“\(sessionToDelete?.title ?? "")”及其全部消息。已导出的笔记会保留。")
+        }
     }
 
     // MARK: session bar
@@ -128,7 +149,17 @@ struct ChatPanel: View {
         ScrollView {
             LazyVStack(spacing: 3) {
                 ForEach(chatStore.sessions) { session in
-                    Button {
+                    if renamingSessionId == session.id {
+                        WorkspaceItemEditor(name: $sessionTitle, namePrompt: "对话名称", busy: chatStore.updatingSession) {
+                            Task {
+                                if await chatStore.renameSession(paperId: paperId, sessionId: session.id, title: sessionTitle) {
+                                    renamingSessionId = nil
+                                }
+                            }
+                        } onCancel: { renamingSessionId = nil }
+                        .padding(8)
+                    } else {
+                        Button {
                         closeHistory()
                         selectedIds = []
                         if editingMessageId != nil { cancelEditing() }
@@ -147,7 +178,16 @@ struct ChatPanel: View {
                         .background(session.id == chatStore.currentSession?.id ? palette.accentFaint : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .contentShape(Rectangle())
-                    }.buttonStyle(.plain).noFocusRing()
+                        }.buttonStyle(.plain).noFocusRing().disabled(chatStore.busy)
+                        .contextMenu {
+                            Button("改名", systemImage: "pencil") {
+                                sessionTitle = session.title
+                                renamingSessionId = session.id
+                            }.disabled(chatStore.busy)
+                            Button("删除", systemImage: "trash", role: .destructive) { sessionToDelete = session }
+                                .disabled(chatStore.busy)
+                        }
+                    }
                 }
             }.padding(8)
         }
@@ -162,6 +202,7 @@ struct ChatPanel: View {
 
     private func closeHistory() {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { historyExpanded = false }
+        renamingSessionId = nil
     }
 
     // MARK: messages

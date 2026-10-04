@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-10-04
+## [1.0.0] - 2026-10-05
 
 - 钥匙串改为统一凭据记录和进程内共享授权缓存，取消后不连环弹窗；已有密钥显示待解锁，
   安全迁移旧条目并在保存失败时保留原值。旧条目和签名变化的授权仍由系统控制。
@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checks in settings and the application menu.
 - Persistent method groups with all eight presets visible even when empty;
   create, rename, delete and move methods between groups, with duplicate-name checks.
+- Context-menu rename and confirmed deletion for chat history, preserving exported notes.
 
 ### Changed
 
@@ -32,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exclude formatted author/publication and reference sections from analysis; detect
   conservative unlabelled bibliography runs and reject missing translated body nodes.
 - Show article titles once in bold serif English/Chinese, preserving original blocks
-  and evidence links; give logic-chain edits and note controls matching glass surfaces.
+  and evidence links; use native Liquid Glass for logic-chain and node-note editors,
+  with direct corner resizing and dividers that do not move the app window.
 - Unify inline paper/method editing and move card and group actions into context menus.
 - Expand update settings into an About page with app information and project links;
   use an accent-colored vector wordmark in the floating navigation.

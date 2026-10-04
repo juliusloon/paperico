@@ -531,6 +531,25 @@ actor PaperLibrary {
         try LibraryFiles.writeJSON(sessions, to: chatFile(paperId), encoder: encoder)
     }
 
+    func renameChatSession(paperId: String, sessionId: String, title: String) throws {
+        try requirePaper(paperId)
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { throw PipelineError("请填写对话名称。", .internalError) }
+        var sessions = try chatSessions(paperId: paperId)
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else {
+            throw PipelineError("这段对话已不存在。", .internalError)
+        }
+        sessions[index].title = title
+        try LibraryFiles.writeJSON(sessions, to: chatFile(paperId), encoder: encoder)
+    }
+
+    func deleteChatSession(paperId: String, sessionId: String) throws {
+        try requirePaper(paperId)
+        var sessions = try chatSessions(paperId: paperId)
+        sessions.removeAll { $0.id == sessionId }
+        try LibraryFiles.writeJSON(sessions, to: chatFile(paperId), encoder: encoder)
+    }
+
     // MARK: - 笔记持久化
 
     func notes(paperId: String) throws -> [Note] {

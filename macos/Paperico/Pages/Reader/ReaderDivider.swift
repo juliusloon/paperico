@@ -22,7 +22,10 @@ struct ReaderDivider: NSViewRepresentable {
         view.window?.invalidateCursorRects(for: view)
     }
 
-    final class DividerView: NSView {
+    final class DividerView: NSControl {
+        // The workspace can move from blank background, but this input surface owns
+        // its complete drag sequence, including the first click before any motion.
+        override var mouseDownCanMoveWindow: Bool { false }
         var axis: Axis = .horizontal
         var onChange: ((CGFloat) -> Void)?
         var onEnd: (() -> Void)?

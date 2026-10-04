@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {attachAnnotationEditor, wrapSelection} from './annotations.mjs';
+import {attachAnnotationEditor, wrapSelection, annotationSize} from './annotations.mjs';
 import {renderMarkdown} from './markdown.mjs';
 
 class FakeElement {
@@ -18,6 +18,16 @@ class FakeElement {
     return this.listeners.get(type)?.({...event, preventDefault() {}, stopPropagation() {}});
   }
   setAttribute() {}
+  closest(selector) {
+    for (let element = this; element; element = element.parentElement) {
+      if ((element.className || '').split(' ').includes(selector.slice(1))) return element;
+    }
+    return null;
+  }
+  setPointerCapture(id) { this.capturedPointer = id; }
+  hasPointerCapture(id) { return this.capturedPointer === id; }
+  releasePointerCapture() { this.capturedPointer = null; }
+  getBoundingClientRect() { return {x:8,y:220,width:240,height:100}; }
   focus() {}
   setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
   remove() {
@@ -54,7 +64,7 @@ function makeEditor(id, events) {
 }
 
 function clickNote(node) { node.children[0].children[1].dispatch('click'); }
-function editorFor(node) { return node.children.at(-1).children[0]; }
+function editorFor(node) { return node.children.at(-1).children[0].children[0]; }
 
 function formatSelected(editor, key) {
   editor.value = 'abc'; editor.selectionStart = 0; editor.selectionEnd = 3;
@@ -135,4 +145,70 @@ test('visible save and cancel actions commit or discard node note drafts', () =>
   assert.equal(events.at(-2).phase,'cancel');
   assert.equal(events.some(event => event.phase === 'commit' && event.value === '取消的草稿'),false);
   assert.equal(window.papericoFinishAnnotation,null);
+}));
+
+
+test('corner resizing stays within the outline and preserves a usable input size', () => {
+  assert.deepEqual(annotationSize(240,100,200,40,290),{width:290,height:140});
+  assert.deepEqual(annotationSize(240,100,-500,-500,290),{width:120,height:64});
+  assert.deepEqual(annotationSize(240,100,20,40,90),{width:90,height:140});
+});
+
+test('invisible editor corner resizes with capture and stops after cancellation', () => withFakeEditor(() => {
+  const events = [], {node} = makeEditor('resize-note',events);
+  clickNote(node);
+  const box = node.children.at(-1), surface = box.children[0], corner = surface.children[1];
+  box.clientWidth = 290;
+  const eventCount = events.length;
+  assert.equal(corner.children.length,0);
+  corner.dispatch('pointerdown',{button:0,pointerId:1,clientX:240,clientY:100});
+  assert.equal(corner.hasPointerCapture(1),true);
+  corner.dispatch('pointermove',{pointerId:1,clientX:300,clientY:170});
+  assert.deepEqual(surface.style,{width:'290px',height:'170px'});
+  corner.dispatch('pointercancel',{pointerId:1});
+  assert.equal(corner.hasPointerCapture(1),false);
+  corner.dispatch('pointermove',{pointerId:1,clientX:140,clientY:50});
+  assert.deepEqual(surface.style,{width:'290px',height:'170px'});
+  assert.equal(events.length,eventCount);
+  window.papericoFinishAnnotation(false);
+}));
+
+test('native glass editor reserves layout, updates drafts, resizes and detaches safely', () => withFakeEditor(() => {
+  const previousRAF = globalThis.requestAnimationFrame, previousCancel = globalThis.cancelAnimationFrame;
+  const previousObserver = globalThis.ResizeObserver;
+  let nextFrame = 0; const frames = new Map(), listeners = new Map();
+  globalThis.requestAnimationFrame = callback => { frames.set(++nextFrame,callback); return nextFrame; };
+  globalThis.cancelAnimationFrame = id => frames.delete(id);
+  globalThis.ResizeObserver = class { observe() {} disconnect() { this.disconnected = true; } };
+  window.addEventListener = (type,callback) => listeners.set(type,callback);
+  window.removeEventListener = type => listeners.delete(type);
+  window.papericoNativeAnnotations = true;
+  function flush() { const pending = [...frames.values()]; frames.clear(); for (const frame of pending) frame(); }
+  try {
+    const events = [], {node} = makeEditor('native',events);
+    clickNote(node); flush();
+    const box = node.children.at(-1), surface = box.children[0]; box.clientWidth = 290;
+    assert.equal(surface.style.height,'96px');
+    assert.deepEqual(events.find(event => event.type === 'annotationEditor').rect,{x:8,y:220,width:240,height:100});
+    const staleInput = window.papericoAnnotationInput;
+    assert.equal(staleInput('other','note','wrong','commit'),false);
+    assert.equal(staleInput('native','note','记录依据','draft'),true);
+    assert.equal(events.at(-1).phase,'draft');
+    assert.equal(window.papericoResizeAnnotation('native','note',400,150),true);
+    assert.deepEqual(surface.style,{width:'290px',height:'150px'});
+    listeners.get('scroll')(); flush();
+    assert.equal(events.at(-1).value,'记录依据');
+    assert.equal(staleInput('native','note','记录依据','commit'),true);
+    assert.equal(events.some(event => event.phase === 'commit' && event.value === '记录依据'),true);
+    assert.equal(window.papericoAnnotationInput,null);
+    assert.equal(window.papericoResizeAnnotation,null);
+    assert.equal(listeners.size,0);
+    assert.equal(frames.size,0);
+    assert.equal(staleInput('native','note','不能再写入','draft'),false);
+    assert.equal(events.some(event => event.type === 'annotationEditor' && event.active === false),true);
+  } finally {
+    if (previousRAF === undefined) delete globalThis.requestAnimationFrame; else globalThis.requestAnimationFrame = previousRAF;
+    if (previousCancel === undefined) delete globalThis.cancelAnimationFrame; else globalThis.cancelAnimationFrame = previousCancel;
+    if (previousObserver === undefined) delete globalThis.ResizeObserver; else globalThis.ResizeObserver = previousObserver;
+  }
 }));

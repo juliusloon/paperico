@@ -63,6 +63,7 @@ papers、mineru_output、analyses 与 logs。普通服务设置和阅读偏好�
 
 阅读外观中的背景透明度与玻璃透明度分别保存，拖动即时生效；玻璃控件供 build
 确认组件材质，文字与图标不随之变淡。PDF 阅读进度包含页内位置，逻辑链与目录共用章节层级。
+逻辑链与节点笔记编辑框使用原生玻璃组件，直接拖动右下角调节大小；历史对话右键可改名或删除。
 
 删除先移入回收站，数据持续保留；回收站支持逐篇确认永久删除全部关联文件，没有自动清空。
 云端解析任务保存 ID；“继续处理”复用已有任务或解析结果，“重新解析 PDF”提交新任务。
@@ -115,12 +116,3 @@ AI API Key、MinerU Token 和 MCP Token 存在一个受保护的钥匙串记录�
 已有条目沿用其稳定 ID 和用户编辑后的名称、分组，类别相同不会自动合并。
 论文作者/出版信息和参考文献不进入翻译与逻辑链请求，原始块仍保留；
 正文缺块、乱序或缺译文会使分析失败。无标准标题的文献使用保守规则，分类无法保证零误判。
-
-## 旧 API 契约
-
-`Models/Models.swift` 保留与后端相兼容的 DTO 结构。`scripts/check_api_contract.py` 校验
-这份字段契约，用于兼容维护；当前 App 不从该 API 读取数据。
-
-```bash
-backend/.venv/bin/python macos/scripts/check_api_contract.py --file backend/tests/openapi_snapshot.json
-```

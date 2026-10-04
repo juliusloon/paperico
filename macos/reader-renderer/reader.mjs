@@ -137,11 +137,13 @@ window.papericoLoad = payload => {
 };
 function applyStyle(next) {
   style = next; const root = document.documentElement;
+  window.papericoNativeAnnotations = Boolean(next.nativeAnnotations);
   for (const [name,value] of Object.entries(next.colors ?? {})) root.style.setProperty(`--${name}`,value);
   root.style.setProperty('--reading-size',`${next.fontSize || 18}px`);
   root.style.setProperty('--outline-width',`${next.outlineWidth || 0}px`);
   const glassOpacity = Math.min(1,Math.max(0,next.glassOpacity ?? 0.85));
   root.style.setProperty('--reader-glass-opacity',glassOpacity);
+  root.style.setProperty('--reader-inset-radius',`${Number(next.insetRadius) || 12}px`);
   root.style.setProperty('--node-primary-ink',glassOpacity > 0.45 ? 'var(--accent-foreground,#fff)' : 'var(--accent)');
   root.dataset.reduceTransparency = String(Boolean(next.reduceTransparency));
   root.classList.toggle('outline-hidden',!next.outlineWidth || next.compact);

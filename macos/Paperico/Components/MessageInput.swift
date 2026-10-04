@@ -10,6 +10,11 @@ struct MessageInput: NSViewRepresentable {
     var onSubmit: () -> Void
     var onCancel: (() -> Void)? = nil
     var onRecall: (() -> Void)? = nil
+    var fontSize: CGFloat = 12.5
+    var fontWeight: NSFont.Weight = .regular
+    var alignment: NSTextAlignment = .left
+    var contentInset = NSSize(width: 2, height: 7)
+    var formatsMarkdown = false
     @Environment(\.palette) private var palette
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -23,7 +28,7 @@ struct MessageInput: NSViewRepresentable {
         view.textContainer?.containerSize = NSSize(width: 280, height: CGFloat.greatestFiniteMagnitude)
         view.isRichText = false; view.drawsBackground = false; view.isEditable = true
         view.isSelectable = true; view.allowsUndo = true
-        view.textContainerInset = NSSize(width: 2, height: 7)
+        view.textContainerInset = contentInset
         view.isVerticallyResizable = true; view.isHorizontallyResizable = false
         view.autoresizingMask = [.width]
         view.textContainer?.widthTracksTextView = true
@@ -36,7 +41,10 @@ struct MessageInput: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let c = context.coordinator; c.parent = self
         guard let view = c.view else { return }
-        view.font = .systemFont(ofSize: 12.5)
+        view.font = .systemFont(ofSize: fontSize, weight: fontWeight)
+        view.alignment = alignment
+        view.textContainerInset = contentInset
+        view.formatsMarkdown = formatsMarkdown
         view.textColor = NSColor(palette.gray800); view.insertionPointColor = NSColor(palette.accent)
         view.setAccessibilityLabel(placeholder)
         view.placeholder = placeholder; view.placeholderColor = NSColor(palette.gray400)
@@ -80,6 +88,21 @@ struct MessageInput: NSViewRepresentable {
     var onRecall: (() -> Void)?
     var placeholder = ""
     var placeholderColor = NSColor.placeholderTextColor
+    var formatsMarkdown = false
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if formatsMarkdown, !hasMarkedText(),
+           event.modifierFlags.intersection([.command, .control, .option]) == .command,
+           let key = event.charactersIgnoringModifiers?.lowercased(),
+           let marker = ["b": "**", "i": "*", "h": "=="][key] {
+            let range = selectedRange()
+            let selected = (string as NSString).substring(with: range)
+            insertText(marker + selected + marker, replacementRange: range)
+            setSelectedRange(NSRange(location: range.location + marker.utf16.count, length: range.length))
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         if string.isEmpty {
