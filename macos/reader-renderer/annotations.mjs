@@ -11,14 +11,33 @@ export function attachAnnotationEditor(node, id, generatedTitle, titleElement, i
   const note = document.createElement('div'); note.className = 'node-note rich';
   const icons = {
     title: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>',
-    note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+    note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v12l-4 4H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM16 21v-4h4M8 8h8M8 12h8"/></svg>'
   };
-  for (const [field, label] of [['title','编辑逻辑链'],['note','写节点笔记']]) {
+  for (const [field, label] of [['title','编辑逻辑链'],['note','节点笔记']]) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'node-glass-button'; button.innerHTML = icons[field];
     button.title = label; button.setAttribute('aria-label',label);
     button.addEventListener('click', event => { event.stopPropagation(); begin(field); }); actions.append(button);
   }
   node.append(actions,note);
+  function clearActions() {
+    if (window.papericoReportAnnotationActions !== reportActions) return;
+    window.papericoReportAnnotationActions = null;
+    send({type:'annotationActions',blockId:id,active:false});
+  }
+  function reportActions() {
+    if (!window.papericoNativeAnnotations || editor) { clearActions(); return; }
+    const rect = actions.getBoundingClientRect();
+    window.papericoReportAnnotationActions = reportActions;
+    send({type:'annotationActions',blockId:id,active:true,rect:{x:rect.x,y:rect.y,width:66,height:30}});
+  }
+  node.addEventListener('pointerenter',reportActions);
+  node.addEventListener('focusin',reportActions);
+  node.addEventListener('pointerleave',event => {
+    const rect = actions.getBoundingClientRect();
+    // Entering the native overlay must keep its buttons mounted under the mouse.
+    if (event.clientX >= rect.x && event.clientX <= rect.x + 66 && event.clientY >= rect.y && event.clientY <= rect.y + 30) return;
+    clearActions();
+  });
   function draw() {
     titleElement.textContent = value.title ?? generatedTitle;
     note.innerHTML = renderMarkdown(value.note ?? ''); note.hidden = !value.note || editingField === 'note';
@@ -40,7 +59,7 @@ export function attachAnnotationEditor(node, id, generatedTitle, titleElement, i
   }
   function finish(commit) {
     if (!editor) return true;
-    if (commit && editingField === 'title' && !editor.value.trim()) { editor.focus(); return false; }
+    if (commit && editingField === 'title' && !editor.value.trim()) { if (!window.papericoNativeAnnotations) editor.focus(); return false; }
     if (commit) {
       value = {...value,[editingField]:editor.value.trim()};
       if (value.title === generatedTitle) delete value.title;
@@ -49,10 +68,12 @@ export function attachAnnotationEditor(node, id, generatedTitle, titleElement, i
     close(); draw(); return true;
   }
   function begin(field) {
+    if (!['title','note'].includes(field)) return;
     if (window.papericoFinishAnnotation && window.papericoFinishAnnotation(true) === false) return;
     if (editor) finish(false);
     window.papericoFinishAnnotation = finish;
     editingField = field;
+    clearActions();
     const box = document.createElement('div'); box.className = 'node-edit-box';
     editor = document.createElement('textarea'); editor.className = 'node-editor'; editor.rows = field === 'note' ? 3 : 2;
     editor.value = field === 'note' ? value.note ?? '' : value.title ?? generatedTitle;
@@ -86,9 +107,11 @@ export function attachAnnotationEditor(node, id, generatedTitle, titleElement, i
     if (window.papericoNativeAnnotations) {
       box.classList.add('node-native-editor');
       fieldSurface.style.height = field === 'note' ? '96px' : '80px';
-      detachNative = attachNativeEditor(fieldSurface, editor, id, field, send, draft, finish);
+      const font = getComputedStyle(field === 'note' ? note : titleElement);
+      detachNative = attachNativeEditor(fieldSurface, editor, id, field,
+        {fontSize:parseFloat(font.fontSize) || 14,fontWeight:parseFloat(font.fontWeight) || 400}, send, draft, finish);
     } else { editor.focus(); }
-    send({type:'annotationFocus',note:field === 'note',editing:true}); draft();
+    send({type:'annotationFocus',note:field === 'note',native:Boolean(window.papericoNativeAnnotations),editing:true}); draft();
     editor.addEventListener('input',draft);
     editor.addEventListener('keydown',event=>{
       if (event.isComposing) return;
@@ -99,18 +122,18 @@ export function attachAnnotationEditor(node, id, generatedTitle, titleElement, i
     window.papericoFormatNodeNote = format;
   }
   draw();
-  return {update(next) { value = next || {}; draw(); }};
+  return {begin,update(next) { value = next || {}; draw(); }};
 }
 
 // Native SwiftUI renders the editor. The DOM keeps only its layout slot so
 // scrolling, node alignment and reflow remain owned by the document.
-function attachNativeEditor(surface, editor, id, field, send, draft, finish) {
+function attachNativeEditor(surface, editor, id, field, typography, send, draft, finish) {
   let frame = null, disposed = false;
   function report() {
     frame = null;
     if (disposed) return;
     const rect = surface.getBoundingClientRect();
-    send({type:'annotationEditor',blockId:id,field,value:editor.value,active:true,
+    send({type:'annotationEditor',blockId:id,field,value:editor.value,active:true,...typography,
           rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height}});
   }
   function schedule() { if (frame == null) frame = requestAnimationFrame(report); }

@@ -8,29 +8,13 @@ struct WorkspaceGroupEditor: View {
     var busy = false
     let onSave: () -> Void
     let onCancel: () -> Void
-    @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField("分组名称", text: $name)
-                .textFieldStyle(.plain).font(.system(size: 13))
-                .padding(.horizontal, 10).frame(height: 36)
-                .liquidInset(cornerRadius: CornerRadius.inset)
-                .focused($focused).onSubmit { if valid && !busy { onSave() } }
-            HStack(spacing: 6) {
-                Button(creating ? "创建" : "保存", action: onSave)
-                    .buttonStyle(LiquidActionButtonStyle(prominent: true))
-                    .disabled(!valid || busy)
-                Button("取消", action: onCancel)
-                    .buttonStyle(LiquidActionButtonStyle()).disabled(busy)
-                Spacer(minLength: 0)
-            }.font(.system(size: 12, weight: .medium))
-        }
+        InlineNameEditor(name: $name, prompt: "分组名称", fontSize: 14, lineLimit: 1...1,
+                         confirmTitle: creating ? "创建" : "保存", busy: busy, onSave: onSave, onCancel: onCancel)
         .padding(10).liquidInset(tint: nil)
-        .onAppear { focused = true }
         .onExitCommand { if !busy { onCancel() } }
     }
-    private var valid: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
 
 struct WorkspaceGroupRow: View {

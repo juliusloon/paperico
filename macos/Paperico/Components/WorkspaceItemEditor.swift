@@ -7,18 +7,16 @@ struct WorkspaceItemEditor: View {
     var detail: Binding<String>?
     var detailPrompt = "说明"
     var busy = false
+    var nameFontSize: CGFloat = 16.5
+    var nameFontWeight: Font.Weight = .semibold
     let onSave: () -> Void
     let onCancel: () -> Void
-    @FocusState private var nameFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField(namePrompt, text: $name, axis: .vertical)
-                .font(.system(size: 16.5, weight: .semibold)).textFieldStyle(.plain)
-                .lineLimit(1...5).focused($nameFocused)
-                .padding(9).liquidInset(cornerRadius: CornerRadius.inset)
-                .accessibilityLabel(namePrompt)
-                .onSubmit { save() }
+            InlineNameEditor(name: $name, prompt: namePrompt, fontSize: nameFontSize,
+                             fontWeight: nameFontWeight, lineLimit: 1...5, confirmTitle: "保存", busy: busy,
+                             onSave: save, onCancel: onCancel)
             if let detail {
                 TextField(detailPrompt, text: detail, axis: .vertical)
                     .font(.system(size: 14)).textFieldStyle(.plain).lineLimit(3...10)
@@ -26,13 +24,8 @@ struct WorkspaceItemEditor: View {
                     .accessibilityLabel(detailPrompt)
                     .onSubmit { save() }
             }
-            HStack(spacing: 8) {
-                ToolbarButton(title: "保存", icon: Ic.check, kind: .primary, busy: busy, disabled: !valid) { save() }
-                ToolbarButton(title: "取消", icon: Ic.close, disabled: busy, action: onCancel)
-            }
         }
         .disabled(busy)
-        .onAppear { nameFocused = true }
         .onExitCommand { if !busy { onCancel() } }
     }
 

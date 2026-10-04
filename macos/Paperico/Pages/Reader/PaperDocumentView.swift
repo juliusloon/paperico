@@ -21,6 +21,7 @@ struct PaperDocumentView: View {
     @Environment(\.palette) private var palette
     @Environment(\.glassOpacity) private var glassOpacity
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selectionState = DocumentSelectionState()
 
@@ -37,8 +38,9 @@ struct PaperDocumentView: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
-                    if let editor = selectionState.annotationEditor {
-                        ReaderAnnotationEditor(field: editor.field, value: editor.value, size: editor.rect.size) {
+                    if outlineWidth > 0, let editor = selectionState.annotationEditor {
+                        ReaderAnnotationEditor(field: editor.field, value: editor.value, size: editor.rect.size,
+                                               fontSize: editor.fontSize, fontWeight: editor.fontWeight) {
                             selectionState.input(editor, value: $0)
                         } onFinish: { value, commit in
                             selectionState.input(editor, value: value, phase: commit ? "commit" : "cancel")
@@ -47,6 +49,10 @@ struct PaperDocumentView: View {
                         }
                         .id(editor.blockId + ":" + editor.field)
                         .offset(x: editor.rect.minX, y: editor.rect.minY)
+                    } else if outlineWidth > 0, let actions = selectionState.annotationActions {
+                        ReaderAnnotationActions { field in selectionState.begin(actions.blockId, field: field) }
+                            onLeave: { selectionState.clearActions() }
+                            .offset(x: actions.rect.minX, y: actions.rect.minY)
                     }
                 }
                 .clipped()
@@ -71,7 +77,7 @@ struct PaperDocumentView: View {
                 "outlineWidth":Double(outlineWidth),"compact":false,"dark":palette.dark,
                 "insetRadius":Double(CornerRadius.inset),"nativeAnnotations":true,
                 "glassOpacity":reduceTransparency ? 1 : min(1, max(0, glassOpacity)),
-                "reduceTransparency":reduceTransparency]
+                "reduceTransparency":reduceTransparency,"reduceMotion":reduceMotion]
     }
 
 }
@@ -82,29 +88,49 @@ private struct DocumentSelection {
     let rect: CGRect
 }
 
+private struct DocumentAnnotationActions {
+    let blockId: String
+    let rect: CGRect
+}
+
 private struct DocumentAnnotationEditor {
     let blockId: String
     let field: String
     let value: String
     let rect: CGRect
+    let fontSize: CGFloat
+    let fontWeight: NSFont.Weight
 }
 
 @MainActor @Observable
 private final class DocumentSelectionState {
     var selection: DocumentSelection?
     var annotationEditor: DocumentAnnotationEditor?
+    var annotationActions: DocumentAnnotationActions?
     @ObservationIgnored weak var webView: WKWebView?
     func clear() {
         selection = nil
         webView?.evaluateJavaScript("window.papericoClearSelection()")
     }
     func input(_ editor: DocumentAnnotationEditor, value: String, phase: String = "draft") {
+        if phase == "draft", annotationEditor?.blockId == editor.blockId, annotationEditor?.field == editor.field {
+            annotationEditor = DocumentAnnotationEditor(blockId: editor.blockId, field: editor.field, value: value,
+                rect: editor.rect, fontSize: editor.fontSize, fontWeight: editor.fontWeight)
+        }
         webView?.callAsyncJavaScript("window.papericoAnnotationInput?.(id,field,value,phase)",
                                     arguments: ["id":editor.blockId,"field":editor.field,"value":value,"phase":phase], in: nil, in: .page)
     }
     func resize(_ editor: DocumentAnnotationEditor, size: CGSize) {
         webView?.callAsyncJavaScript("window.papericoResizeAnnotation?.(id,field,width,height)",
                                     arguments: ["id":editor.blockId,"field":editor.field,"width":size.width,"height":size.height], in: nil, in: .page)
+    }
+    func begin(_ blockId: String, field: String) {
+        annotationActions = nil
+        webView?.callAsyncJavaScript("window.papericoOpenAnnotation?.(id,field)", arguments: ["id":blockId,"field":field], in: nil, in: .page)
+    }
+    func clearActions() {
+        annotationActions = nil
+        webView?.evaluateJavaScript("window.papericoClearAnnotationActions?.()")
     }
 }
 
@@ -145,6 +171,7 @@ private struct PaperWebSurface: NSViewRepresentable {
 
     static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
         coordinator.parent.selectionState.annotationEditor = nil
+        coordinator.parent.selectionState.annotationActions = nil
         coordinator.parent.document.onAnnotationFocus(false)
         view.configuration.userContentController.removeScriptMessageHandler(forName: "reader")
         view.navigationDelegate = nil
@@ -176,6 +203,7 @@ private struct PaperWebSurface: NSViewRepresentable {
             guard ready, let webView else { return }
             if loadedDetail != parent.document.detail {
                 parent.selectionState.annotationEditor = nil
+                parent.selectionState.annotationActions = nil
                 documentReady = false
                 images.urls = Dictionary(uniqueKeysWithValues: parent.document.detail.blocks.compactMap { block in
                     guard !block.imagePath.isEmpty, let url = parent.document.layout.fileURL(forRelativePath: block.imagePath) else { return nil }
@@ -246,6 +274,12 @@ private struct PaperWebSurface: NSViewRepresentable {
             let blockId = data["blockId"] as? String
             let block = parent.document.detail.blocks.first { $0.id == blockId }
             switch type {
+            case "annotationActions":
+                guard data["active"] as? Bool == true else { parent.selectionState.annotationActions = nil; return }
+                guard let blockId, block != nil, parent.selectionState.annotationEditor == nil,
+                      let values = data["rect"] as? [String: Double], let x = values["x"], let y = values["y"],
+                      x.isFinite, y.isFinite else { return }
+                parent.selectionState.annotationActions = DocumentAnnotationActions(blockId: blockId, rect: CGRect(x: x, y: y, width: 66, height: 30))
             case "annotationEditor":
                 guard data["active"] as? Bool == true else {
                     parent.selectionState.annotationEditor = nil
@@ -257,10 +291,15 @@ private struct PaperWebSurface: NSViewRepresentable {
                       let x = values["x"], let y = values["y"], let width = values["width"], let height = values["height"],
                       [x, y, width, height].allSatisfy({ $0.isFinite }), width > 0, height >= 64 else { return }
                 parent.selectionState.selection = nil
+                parent.selectionState.annotationActions = nil
+                let weight = data["fontWeight"] as? Double ?? 400
+                let size = data["fontSize"] as? Double ?? 14
                 parent.selectionState.annotationEditor = DocumentAnnotationEditor(blockId: blockId, field: field,
-                    value: data["value"] as? String ?? "", rect: CGRect(x: x, y: y, width: width, height: height))
+                    value: data["value"] as? String ?? "", rect: CGRect(x: x, y: y, width: width, height: height),
+                    fontSize: min(40, max(8, size.isFinite ? size : 14)),
+                    fontWeight: weight >= 650 ? .bold : (weight >= 600 ? .semibold : (weight >= 500 ? .medium : .regular)))
             case "annotationFocus":
-                (webView as? AnnotationWebView)?.editingNodeNote = data["note"] as? Bool ?? false
+                (webView as? AnnotationWebView)?.editingNodeNote = (data["note"] as? Bool ?? false) && !(data["native"] as? Bool ?? false)
                 parent.document.onAnnotationFocus(data["editing"] as? Bool ?? false)
             case "annotation":
                 guard let blockId, block != nil, let phase = data["phase"] as? String,

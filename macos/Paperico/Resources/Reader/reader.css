@@ -62,6 +62,19 @@
 .node-resize-corner{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;touch-action:none;background:none;border:0}
 .node-edit-controls{display:flex;justify-content:flex-start;flex-wrap:wrap;gap:8px}.node-edit-controls .node-glass-button{min-height:32px;padding:8px 14px}.node-glass-primary{color:var(--node-primary-ink,var(--accent-foreground,#fff))}.node-glass-primary::before,.node-glass-primary:hover::before{background:linear-gradient(155deg,var(--node-glass-highlight),transparent 65%),var(--accent)}
 .node-native-editor .node-editor-field::before{display:none}.node-native-editor .node-editor,.node-native-editor .node-edit-controls{visibility:hidden}.node-native-editor .node-edit-controls{height:38px}.node-native-editor .node-resize-corner{display:none}
+.native-annotations .node-actions{visibility:hidden;pointer-events:none}
+/* Match the native trailing panel's 280ms entrance/exit. Divider drags do not animate. */
+#paper{max-width:100%;margin-inline:auto}
+.outline,.outline-title{opacity:1;transform:translateX(0)}
+.outline-hidden .outline,.outline-hidden .outline-title{display:block;opacity:0;transform:translateX(-24px);pointer-events:none;visibility:hidden}
+.outline-hidden .outline-title{display:grid}
+.outline-hidden:not(.outline-animating) .outline,.outline-hidden:not(.outline-animating) .outline-title{display:none}
+.outline-animating .outline,.outline-animating .outline-title{width:var(--outline-animation-width);transition:opacity .28s ease,transform .28s ease,visibility 0s}
+.outline-animating.outline-hidden .outline,.outline-animating.outline-hidden .outline-title{transition:opacity .28s ease,transform .28s ease,visibility 0s linear .28s}
+@starting-style{.outline-animating:not(.outline-hidden) .outline,.outline-animating:not(.outline-hidden) .outline-title{opacity:0;transform:translateX(-24px)}}
+.outline-animating .document-row{transition:grid-template-columns .28s ease}
+.outline-animating #paper{transition:max-width .28s ease}
+@media(prefers-reduced-motion:reduce){.outline-animating .outline,.outline-animating .outline-title,.outline-animating .document-row,.outline-animating #paper{transition:none}}
 [data-reduce-transparency=true] .node-glass-button::before,[data-reduce-transparency=true] .node-editor-field::before,[data-reduce-transparency=true] .node-note::before{background:var(--gray-0);-webkit-backdrop-filter:none;backdrop-filter:none}
 [data-reduce-transparency=true] .node-glass-primary::before{background:var(--accent)}
 @media(prefers-reduced-motion:reduce){.node-actions,.node-glass-button{transition:none}.node-glass-button:active{transform:none}}

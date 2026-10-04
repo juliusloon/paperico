@@ -4,6 +4,7 @@ import {duplicateTitleIds} from './document-title.mjs';
 let annotationViews = new Map(), annotations = {};
 
 let currentPaper = '', blocks = [], rowMap = new Map(), style = {}, initialProgress = 0;
+let outlineShown = null, outlineTransition = null, lastOutlineWidth = 250;
 const send = message => window.webkit?.messageHandlers.reader?.postMessage({...message, paperId: currentPaper});
 const element = (tag, className, text) => {
   const node = document.createElement(tag); node.className = className;
@@ -138,6 +139,7 @@ window.papericoLoad = payload => {
 function applyStyle(next) {
   style = next; const root = document.documentElement;
   window.papericoNativeAnnotations = Boolean(next.nativeAnnotations);
+  root.classList.toggle('native-annotations',window.papericoNativeAnnotations);
   for (const [name,value] of Object.entries(next.colors ?? {})) root.style.setProperty(`--${name}`,value);
   root.style.setProperty('--reading-size',`${next.fontSize || 18}px`);
   root.style.setProperty('--outline-width',`${next.outlineWidth || 0}px`);
@@ -146,12 +148,25 @@ function applyStyle(next) {
   root.style.setProperty('--reader-inset-radius',`${Number(next.insetRadius) || 12}px`);
   root.style.setProperty('--node-primary-ink',glassOpacity > 0.45 ? 'var(--accent-foreground,#fff)' : 'var(--accent)');
   root.dataset.reduceTransparency = String(Boolean(next.reduceTransparency));
-  root.classList.toggle('outline-hidden',!next.outlineWidth || next.compact);
+  const visible = Boolean(next.outlineWidth && !next.compact);
+  if (outlineShown != null && outlineShown !== visible && !next.reduceMotion) {
+    root.style.setProperty('--outline-animation-width',`${visible ? next.outlineWidth : lastOutlineWidth}px`);
+    clearTimeout(outlineTransition); root.classList.add('outline-animating');
+    outlineTransition = setTimeout(() => root.classList.remove('outline-animating'),280);
+  }
+  if (next.reduceMotion) { clearTimeout(outlineTransition); root.classList.remove('outline-animating'); }
+  outlineShown = visible;
+  if (visible) lastOutlineWidth = next.outlineWidth;
+  root.classList.toggle('outline-hidden',!visible);
   root.style.colorScheme = next.dark ? 'dark' : 'light';
   root.dataset.theme = next.dark ? 'dark' : 'light';
   root.dataset.mode = next.mode || 'bilingual';
 }
 window.papericoAnnotations = next => { annotations = next; for (const [id,view] of annotationViews) view.update(next[id]); };
+window.papericoOpenAnnotation = (id,field) => annotationViews.get(id)?.begin(field);
+window.papericoClearAnnotationActions = () => { window.papericoReportAnnotationActions = null; send({type:'annotationActions',active:false}); };
+window.addEventListener('scroll',() => window.papericoReportAnnotationActions?.(),true);
+window.addEventListener('resize',() => window.papericoReportAnnotationActions?.());
 window.papericoStyle = next => {
   // Keep the nearest paragraph in view when changing typography or language.
   const anchor = [...rowMap.values()].find(x => x.getBoundingClientRect().bottom > 70);

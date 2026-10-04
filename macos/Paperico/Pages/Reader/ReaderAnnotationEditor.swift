@@ -7,6 +7,8 @@ struct ReaderAnnotationEditor: View {
     let field: String
     let value: String
     let size: CGSize
+    let fontSize: CGFloat
+    let fontWeight: NSFont.Weight
     let onInput: (String) -> Void
     let onFinish: (String, Bool) -> Void
     let onResize: (CGSize) -> Void
@@ -20,8 +22,7 @@ struct ReaderAnnotationEditor: View {
             MessageInput(text: $text, height: $measuredHeight, focused: $focused,
                          placeholder: field == "note" ? "节点笔记" : "逻辑链内容",
                          onSubmit: save, onCancel: { onFinish(text, false) },
-                         fontSize: field == "note" ? 14 : 16.5,
-                         fontWeight: field == "note" ? .regular : .semibold,
+                         fontSize: fontSize, fontWeight: fontWeight,
                          alignment: .right, contentInset: .zero, formatsMarkdown: field == "note")
                 .padding(9)
                 .frame(width: size.width, height: size.height)
@@ -47,6 +48,18 @@ struct ReaderAnnotationEditor: View {
 
     private var valid: Bool { field == "note" || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private func save() { if valid { onFinish(text, true) } }
+}
+
+struct ReaderAnnotationActions: View {
+    let onAction: (String) -> Void
+    let onLeave: () -> Void
+    var body: some View {
+        HStack(spacing: 6) {
+            PillIconButton(title: "编辑逻辑链", icon: Ic.pencil, size: 30) { onAction("title") }
+            PillIconButton(title: "节点笔记", icon: "note.text", size: 30) { onAction("note") }
+        }
+        .onHover { if !$0 { onLeave() } }
+    }
 }
 
 /// Invisible corner: owns the mouse sequence so resizing never moves a window.

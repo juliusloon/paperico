@@ -810,7 +810,7 @@ struct PaperCard: View {
 
     private var renameField: some View {
         WorkspaceItemEditor(name: Binding(get: { renameValue }, set: onRenameChange),
-                            namePrompt: "论文标题", busy: saving,
+                            namePrompt: "论文标题", busy: saving, nameFontWeight: .medium,
                             onSave: onConfirmRename, onCancel: onCancelRename)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

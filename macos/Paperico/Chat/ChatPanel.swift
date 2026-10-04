@@ -37,6 +37,7 @@ struct ChatPanel: View {
         return result
     }
     private var prompts: [PresetPrompt] { settingsStore.settings?.chatDefaults.presetPrompts ?? [] }
+    private var citationIds: Set<String> { Set(readerStore.paper?.blocks.map(\.id) ?? []) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,7 +55,7 @@ struct ChatPanel: View {
                     ZStack(alignment: .topLeading) {
                         Color.clear.contentShape(Rectangle()).onTapGesture { closeHistory() }
                         historyPanel
-                            .frame(height: min(320, max(90, geometry.size.height - 12), CGFloat(chatStore.sessions.count) * 48 + (renamingSessionId == nil ? 16 : 110)))
+                            .frame(height: min(280, max(90, geometry.size.height - 12), CGFloat(chatStore.sessions.count) * 48 + 16))
                             .padding(.horizontal, 12)
                             .transition(.opacity.combined(with: .offset(y: -6)))
                     }
@@ -150,14 +151,14 @@ struct ChatPanel: View {
             LazyVStack(spacing: 3) {
                 ForEach(chatStore.sessions) { session in
                     if renamingSessionId == session.id {
-                        WorkspaceItemEditor(name: $sessionTitle, namePrompt: "对话名称", busy: chatStore.updatingSession) {
+                        InlineNameEditor(name: $sessionTitle, prompt: "对话名称", fontSize: 12, busy: chatStore.updatingSession) {
                             Task {
                                 if await chatStore.renameSession(paperId: paperId, sessionId: session.id, title: sessionTitle) {
                                     renamingSessionId = nil
                                 }
                             }
                         } onCancel: { renamingSessionId = nil }
-                        .padding(8)
+                        .padding(.horizontal, 10).frame(minHeight: 45)
                     } else {
                         Button {
                         closeHistory()
@@ -301,24 +302,11 @@ struct ChatPanel: View {
                 }
                 messageActions(message, isUser: true)
             } else {
-                MarkdownText(text: message.content, fontSize: 13, color: palette.gray800)
+                MarkdownText(text: message.content, fontSize: 13, color: palette.gray800,
+                             citationIds: citationIds, onCitation: { readerStore.scrollToBlock($0, centered: true) })
                     .lineSpacing(4)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
-                if let cited = message.citedBlockIds, !cited.isEmpty {
-                    FlowChips {
-                        ForEach(cited, id: \.self) { blockId in
-                            Button {
-                                readerStore.scrollToBlock(blockId, centered: true)
-                            } label: {
-                                Label("证据 \(blockId.split(separator: "-").last.map(String.init) ?? blockId)", systemImage: "arrow.up.right")
-                                    .font(.system(size: 10)).foregroundStyle(palette.accent)
-                                    .padding(.horizontal, 7).padding(.vertical, 4)
-                                    .liquidInset(cornerRadius: CornerRadius.chip, tint: palette.accentFaint)
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                }
                 if let state = message.generationState {
                     Text(state == "stopped" ? "已停止生成" : "回答中断，可重新生成")
                         .font(.system(size: 10)).foregroundStyle(palette.gray500)
@@ -368,7 +356,8 @@ struct ChatPanel: View {
                     Text("正在思考…").font(.system(size: 12)).foregroundStyle(palette.gray500)
                 }
             } else {
-                MarkdownText(text: chatStore.streamContent, fontSize: 13, color: palette.gray800)
+                MarkdownText(text: chatStore.streamContent, fontSize: 13, color: palette.gray800,
+                             citationIds: citationIds, onCitation: { readerStore.scrollToBlock($0, centered: true) })
                     .lineSpacing(4)
                 SpinnerIcon(size: 11)
             }
@@ -514,7 +503,7 @@ struct ChatPanel: View {
                                  else if chatStore.streaming { chatStore.stopGenerating() }
                              }, onRecall: {
                                  if let message = messages.last(where: { $0.role == "user" }) { beginEditing(message) }
-                             })
+                             }, fontSize: editingMessageId == nil ? 12.5 : 13)
                     .frame(height: inputHeight).frame(maxWidth: .infinity)
                     .accessibilityLabel("针对这篇论文提问")
                 Button {

@@ -35,6 +35,12 @@ class FakeElement {
     this.parentElement.children = this.parentElement.children.filter(child => child !== this);
     this.parentElement = null;
   }
+  after(element) {
+    if (!this.parentElement) return;
+    const siblings = this.parentElement.children;
+    element.parentElement = this.parentElement;
+    siblings.splice(siblings.indexOf(this)+1,0,element);
+  }
 }
 
 function withFakeEditor(callback) {
@@ -190,6 +196,7 @@ test('native glass editor reserves layout, updates drafts, resizes and detaches 
     const box = node.children.at(-1), surface = box.children[0]; box.clientWidth = 290;
     assert.equal(surface.style.height,'96px');
     assert.deepEqual(events.find(event => event.type === 'annotationEditor').rect,{x:8,y:220,width:240,height:100});
+    assert.equal(events.find(event => event.type === 'annotationEditor').fontSize,14);
     const staleInput = window.papericoAnnotationInput;
     assert.equal(staleInput('other','note','wrong','commit'),false);
     assert.equal(staleInput('native','note','记录依据','draft'),true);
@@ -210,5 +217,43 @@ test('native glass editor reserves layout, updates drafts, resizes and detaches 
     if (previousRAF === undefined) delete globalThis.requestAnimationFrame; else globalThis.requestAnimationFrame = previousRAF;
     if (previousCancel === undefined) delete globalThis.cancelAnimationFrame; else globalThis.cancelAnimationFrame = previousCancel;
     if (previousObserver === undefined) delete globalThis.ResizeObserver; else globalThis.ResizeObserver = previousObserver;
+  }
+}));
+
+test('native entry actions remain mounted when entering their overlay and clear on leaving', () => withFakeEditor(() => {
+  window.papericoNativeAnnotations = true;
+  const events = [], {node} = makeEditor('native-actions',events);
+  node.dispatch('pointerenter');
+  assert.deepEqual(events.at(-1),{type:'annotationActions',blockId:'native-actions',active:true,rect:{x:8,y:220,width:66,height:30}});
+  const count = events.length;
+  node.dispatch('pointerleave',{clientX:20,clientY:235});
+  assert.equal(events.length,count);
+  node.dispatch('pointerleave',{clientX:200,clientY:235});
+  assert.equal(events.at(-1).active,false);
+  assert.equal(window.papericoReportAnnotationActions,null);
+}));
+
+test('native title editor inherits the visible node font size', () => withFakeEditor(() => {
+  const savedRAF = globalThis.requestAnimationFrame, savedCancel = globalThis.cancelAnimationFrame;
+  const savedObserver = globalThis.ResizeObserver, savedStyle = globalThis.getComputedStyle;
+  const frames = [];
+  globalThis.requestAnimationFrame = callback => { frames.push(callback); return frames.length; };
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  globalThis.getComputedStyle = () => ({fontSize:'13.5px',fontWeight:'450'});
+  window.addEventListener = () => {}; window.removeEventListener = () => {}; window.papericoNativeAnnotations = true;
+  try {
+    const node = document.createElement('aside'), parent = document.createElement('button'), title = document.createElement('strong'), events = [];
+    parent.append(title); node.append(parent);
+    const view = attachAnnotationEditor(node,'title','原标题',title,{},value => events.push(value));
+    view.begin('title'); frames.shift()();
+    const payload = events.find(event => event.type === 'annotationEditor');
+    assert.equal(payload.fontSize,13.5); assert.equal(payload.fontWeight,450);
+    assert.equal(window.papericoFinishAnnotation(false),true);
+  } finally {
+    if (savedRAF === undefined) delete globalThis.requestAnimationFrame; else globalThis.requestAnimationFrame = savedRAF;
+    if (savedCancel === undefined) delete globalThis.cancelAnimationFrame; else globalThis.cancelAnimationFrame = savedCancel;
+    if (savedObserver === undefined) delete globalThis.ResizeObserver; else globalThis.ResizeObserver = savedObserver;
+    globalThis.getComputedStyle = savedStyle;
   }
 }));

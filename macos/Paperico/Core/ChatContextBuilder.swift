@@ -1,5 +1,21 @@
 import Foundation
 
+enum ChatCitation {
+    struct Match: Equatable {
+        let blockId: String
+        let range: NSRange
+    }
+    static func matches(in text: String, validIds: Set<String>) -> [Match] {
+        guard !validIds.isEmpty,
+              let regex = try? NSRegularExpression(pattern: #"\[([A-Za-z0-9][A-Za-z0-9_-]{0,100})\]"#) else { return [] }
+        let source = text as NSString
+        return regex.matches(in: text, range: NSRange(location: 0, length: source.length)).compactMap { match in
+            let id = source.substring(with: match.range(at: 1))
+            return validIds.contains(id) ? Match(blockId: id, range: match.range) : nil
+        }
+    }
+}
+
 /// 分层、限额的对话上下文组装(逐字移植 backend/app/services/context.py)。
 ///
 /// 截断只发生在完整语义行上;章节标题永远保留。行形:

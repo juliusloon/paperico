@@ -42,9 +42,13 @@ struct MessageInput: NSViewRepresentable {
         let c = context.coordinator; c.parent = self
         guard let view = c.view else { return }
         view.font = .systemFont(ofSize: fontSize, weight: fontWeight)
+        view.formatBaseFont = .systemFont(ofSize: fontSize, weight: fontWeight)
         view.alignment = alignment
         view.textContainerInset = contentInset
         view.formatsMarkdown = formatsMarkdown
+        view.isRichText = formatsMarkdown
+        view.formatHighlightColor = NSColor(palette.accentSoft)
+        view.updateFormatMonitor()
         view.textColor = NSColor(palette.gray800); view.insertionPointColor = NSColor(palette.accent)
         view.setAccessibilityLabel(placeholder)
         view.placeholder = placeholder; view.placeholderColor = NSColor(palette.gray400)
@@ -61,7 +65,11 @@ struct MessageInput: NSViewRepresentable {
                 view.window?.makeFirstResponder(view)
             }
         }
+        view.applyNoteFormatting()
         view.needsDisplay = true
+    }
+    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+        (scroll.documentView as? InputTextView)?.removeFormatMonitor()
     }
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MessageInput
@@ -69,7 +77,7 @@ struct MessageInput: NSViewRepresentable {
         init(_ parent: MessageInput) { self.parent = parent }
         func textDidChange(_ notification: Notification) {
             guard let view else { return }
-            parent.text = view.string; view.needsDisplay = true; measure()
+            parent.text = view.string; view.applyNoteFormatting(); view.needsDisplay = true; measure()
         }
         func textDidBeginEditing(_ notification: Notification) { parent.focused = true }
         func textDidEndEditing(_ notification: Notification) { parent.focused = false }
@@ -89,19 +97,70 @@ struct MessageInput: NSViewRepresentable {
     var placeholder = ""
     var placeholderColor = NSColor.placeholderTextColor
     var formatsMarkdown = false
+    var formatHighlightColor = NSColor.selectedTextBackgroundColor
+    var formatBaseFont = NSFont.systemFont(ofSize: 14)
+    private var styling = false
+    private var formatMonitor: Any?
     override var mouseDownCanMoveWindow: Bool { false }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if format(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+    func updateFormatMonitor() {
+        if !formatsMarkdown { removeFormatMonitor(); return }
+        guard formatMonitor == nil else { return }
+        // Cmd-H is normally intercepted by the app's Hide menu before the
+        // responder chain. Consume formatting only while this note owns focus.
+        formatMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.window?.firstResponder === self else { return event }
+            return self.format(event) ? nil : event
+        }
+    }
+    func removeFormatMonitor() {
+        if let formatMonitor { NSEvent.removeMonitor(formatMonitor) }
+        formatMonitor = nil
+    }
+    private func format(_ event: NSEvent) -> Bool {
         if formatsMarkdown, !hasMarkedText(),
            event.modifierFlags.intersection([.command, .control, .option]) == .command,
            let key = event.charactersIgnoringModifiers?.lowercased(),
            let marker = ["b": "**", "i": "*", "h": "=="][key] {
-            let range = selectedRange()
-            let selected = (string as NSString).substring(with: range)
-            insertText(marker + selected + marker, replacementRange: range)
-            setSelectedRange(NSRange(location: range.location + marker.utf16.count, length: range.length))
+            let result = ReaderNoteFormatting.toggle(string, selection: selectedRange(), marker: marker)
+            insertText(result.value, replacementRange: NSRange(location: 0, length: (string as NSString).length))
+            setSelectedRange(result.selection)
             return true
         }
-        return super.performKeyEquivalent(with: event)
+        return false
+    }
+    func applyNoteFormatting() {
+        guard formatsMarkdown, !hasMarkedText(), !styling, let storage = textStorage else { return }
+        let font = formatBaseFont
+        styling = true
+        defer { styling = false }
+        let whole = NSRange(location: 0, length: storage.length)
+        storage.beginEditing()
+        storage.addAttributes([.font:font,.foregroundColor:textColor ?? NSColor.labelColor],range:whole)
+        storage.removeAttribute(.backgroundColor,range:whole)
+        let code = (try? NSRegularExpression(pattern: #"`[^`\n]*`"#))?.matches(in: string, range: whole).map(\.range) ?? []
+        let formats: [(String,NSFontTraitMask,Bool)] = [
+            (#"\*\*(.+?)\*\*"#,.boldFontMask,false),
+            (#"(?<!\*)\*([^*\n]+)\*(?!\*)"#,.italicFontMask,false),
+            (#"\*\*\*(.+?)\*\*\*"#,[.boldFontMask,.italicFontMask],false),
+            (#"==(.+?)=="#,[],true)
+        ]
+        for (pattern,traits,highlight) in formats {
+            guard let regex = try? NSRegularExpression(pattern:pattern) else { continue }
+            for match in regex.matches(in:string,range:whole) where !code.contains(where:{ NSIntersectionRange($0,match.range).length > 0 }) {
+                let range = match.range(at:1)
+                if highlight { storage.addAttribute(.backgroundColor,value:formatHighlightColor,range:range) }
+                else {
+                    storage.enumerateAttribute(.font,in:range) { current,subrange,_ in
+                        storage.addAttribute(.font,value:NSFontManager.shared.convert(current as? NSFont ?? font,toHaveTrait:traits),range:subrange)
+                    }
+                }
+            }
+        }
+        storage.endEditing()
     }
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)

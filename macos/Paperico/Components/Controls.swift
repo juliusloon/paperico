@@ -96,14 +96,15 @@ struct PillIconButton: View {
     let title: String
     let icon: String
     var active = false
+    var size: CGFloat = ControlSpec.height
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image.ic(icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: min(15, size / 2), weight: .medium))
                 .foregroundStyle(active ? palette.accent : palette.gray600)
-                .frame(width: ControlSpec.height, height: ControlSpec.height)
+                .frame(width: size, height: size)
         }
         .buttonStyle(.plain).noFocusRing()
         .liquidTool(tint: active ? palette.accentFaint : nil)

@@ -17,6 +17,8 @@ struct MarkdownText: View {
     let text: String
     var fontSize: CGFloat = 14
     var color: Color?
+    var citationIds: Set<String> = []
+    var onCitation: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -34,7 +36,7 @@ struct MarkdownText: View {
         switch block {
         case .heading(let level, let text):
             // 标题原文直出,不套 `$…$` → 行内代码 的转换(与修改前一致)。
-            inlineText(text, mathSplitter: false)
+            inlineText(text, mathSplitter: false, size: fontSize * headingScale(level), bold: true)
                 .font(.system(size: fontSize * headingScale(level), weight: .semibold))
                 .foregroundStyle(palette.gray900)
                 .padding(.top, 2)
@@ -83,7 +85,7 @@ struct MarkdownText: View {
                 .padding(.vertical, 8)
                 .horizontalScrollIfAvailable()
         case .table(let rows):
-            NativeMarkdownTable(rows: rows, fontSize: fontSize)
+            NativeMarkdownTable(rows: rows, fontSize: fontSize, citationIds: citationIds, onCitation: onCitation)
         case .rule:
             Rectangle().fill(palette.gray200).frame(height: 1).padding(.vertical, 4)
         }
@@ -104,22 +106,26 @@ struct MarkdownText: View {
     /// line wrapping keeps working.
     private func inlineParagraph(_ text: String, color: Color) -> some View {
         // 行内公式转换由 PaperMarkdown 在缓存 miss 时完成,这里不再每次跑正则。
-        return inlineText(text, mathSplitter: true)
+        return inlineText(text, mathSplitter: true, color: color)
             .font(.system(size: fontSize))
             .foregroundStyle(color)
     }
 
-    private func inlineText(_ markdown: String, mathSplitter: Bool) -> Text {
-        if let attributed = PaperMarkdown.attributedString(
+    @ViewBuilder private func inlineText(_ markdown: String, mathSplitter: Bool, size: CGFloat? = nil, color: Color? = nil, bold: Bool = false) -> some View {
+        if let onCitation, !ChatCitation.matches(in: markdown, validIds: citationIds).isEmpty {
+            CitationInlineText(markdown: markdown, fontSize: size ?? fontSize, color: color ?? self.color ?? palette.gray800,
+                               validIds: citationIds, onCitation: onCitation, baseWeight: bold ? .semibold : .regular, mathSplitter: mathSplitter)
+        } else if let attributed = PaperMarkdown.attributedString(
             markdown: markdown,
             fontSize: fontSize,
             codeFont: .system(size: fontSize * 0.88),
             codeBackground: palette.gray100,
             mathSplitter: mathSplitter
         ) {
-            return Text(attributed)
+            Text(attributed)
+        } else {
+            Text(markdown)
         }
-        return Text(markdown)
     }
 }
 
@@ -137,6 +143,8 @@ struct NativeMarkdownTable: View {
     @Environment(\.palette) private var palette
     let rows: [[String]]
     let fontSize: CGFloat
+    var citationIds: Set<String> = []
+    var onCitation: ((String) -> Void)?
 
     var body: some View {
         let table = MarkdownTable(rows: rows)
@@ -144,7 +152,7 @@ struct NativeMarkdownTable: View {
             ForEach(Array(table.rows.enumerated()), id: \.offset) { rowIndex, row in
                 HStack(spacing: 0) {
                     ForEach(Array(row.enumerated()), id: \.offset) { _, value in
-                        Text(cell(value))
+                        cellView(value, heading: rowIndex == 0)
                             .font(.system(size: fontSize * 0.92))
                             .foregroundStyle(rowIndex == 0 ? palette.gray800 : palette.gray700)
                             .fontWeight(rowIndex == 0 ? .semibold : .regular)
@@ -158,6 +166,12 @@ struct NativeMarkdownTable: View {
         }
         .overlay(Rectangle().stroke(palette.gray200))
         .textSelection(.enabled)
+    }
+
+    @ViewBuilder private func cellView(_ value: String, heading: Bool) -> some View {
+        if let onCitation, !ChatCitation.matches(in: value, validIds: citationIds).isEmpty {
+            CitationInlineText(markdown: value, fontSize: fontSize * 0.92, color: palette.gray800, validIds: citationIds, onCitation: onCitation, baseWeight: heading ? .semibold : .regular)
+        } else { Text(cell(value)) }
     }
 
     private func cell(_ markdown: String) -> String {
