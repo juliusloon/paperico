@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v0.2.5-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v0.3.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 [English](README.md) · 简体中文
 
@@ -21,6 +21,39 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 论文库保存在你自己的沙盒中，API Key 存于 macOS 钥匙串，App 直连你配置的服务。
 **本地优先、自带 Key、无中转服务器，运行 App 也无需启动 Python 后端。**
 
+## 核心差异
+
+普通 PDF 阅读器优化的是"看清一份文档"；Paperico 把论文重组为带稳定 id 的类型化分块
+逻辑链——大纲、译文、对话引用、方法卡片和批注共用同一套坐标。
+
+- **读的是结构，不是页面。** MinerU 恢复标题、段落、图表、公式及其版面位置，出版元信息
+  与参考文献被分离出正文链。你在重排版的双语精读面上阅读（衬线正文、离线 KaTeX），
+  旁边是逻辑链大纲，每次跳转都精确落到原文段落或 PDF 区域。
+- **一次请求，整篇论文。** 单次流式 LLM 请求同时产出逐块对齐的译文、各段要点与论证
+  角色、论文级 TL;DR / 核心贡献 / 难度估计，以及方法与实体索引。输出经过严格校验；
+  中断的任务从已保存的原始响应本地恢复，不产生第二次付费调用。
+- **回答钉在证据上。** 选中文本、图表或方法卡作为上下文提问；回答中的 block 引用可以
+  直接跳回来源段落，或在原始 PDF 中闪烁定位。方法实体跨整个论文库归并——一张方法卡
+  列出它出现的每一篇论文与每一处段落。
+- **本地优先、自带 Key、为存续而设计。** 管线支持云端任务断点续跑、排队任务不重新
+  上传、应用重启后的中断对账、按内容哈希去重与可恢复的回收站；本地文件保存在沙盒，
+  密钥保存在钥匙串；解析与 AI 请求会把内容直接发送给你配置的服务。
+
+| | PDF 阅读器 / 翻译插件 | Chat-with-PDF 服务 | Paperico |
+|---|---|---|---|
+| 阅读面 | 固定页面，叠加翻译 | 片段查看器 | 重排版双语精读 + 原始 PDF，块级精确互跳 |
+| 论文理解 | — | 单文件问答 | TL;DR、贡献、难度、逻辑链、方法索引 |
+| 问答证据 | — | 至多到页级 | block 引用 → 段落或 PDF 区域 |
+| 跨论文 | — | — | 全库归一的方法索引 |
+| 笔记 | 手工搬运 | 手工搬运 | 从选中回答合成为带双链的 Markdown |
+| 数据与模型 | 本地文件 | 厂商云 | 沙盒 + 钥匙串 + 你自己的端点 |
+
+
+
+
+
+
+
 ## 你能得到什么
 
 - **论文库**：项目分组、搜索、排序、多选移动、PDF 去重、批量导入逐文件错误报告。
@@ -28,21 +61,16 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 - **双语精读**：原文与译文、逻辑链大纲、方法卡片、PDFKit 原文阅读与进度记忆。
 - **证据问答**：可附带选段、方法或图表；引用可定位到来源段落或 PDF 位置。
 - **笔记**：选择对话生成 Markdown 笔记，支持导出。
-- **回收站**：删除后保留 PDF、解析结果、对话和笔记，可随时恢复。
+- **回收站**：删除后保留 PDF、解析结果、对话和笔记，可随时恢复，也可逐篇确认后永久删除。
+- **MCP**：默认关闭的 localhost 只读服务，提供 10 个工具、证据块与图像；在设置中复制客户端配置。详见 [连接说明](docs/mcp.md)。
 - **原生桌面**：Liquid Glass、深浅色外观、自定义强调色、离线公式渲染、⌘1–⌘3 导航与 ⌘, 设置。
 
-## v0.2.5 更新
 
-- 全新 Icon Composer 应用图标，导航使用单色 Paperico 标志。
-- 全新 release 工作流构建可安装的 `Paperico-0.2.5.dmg` 并附到 GitHub Release。
-- v0.2.1–v0.2.4 的阅读器、论文库、对话与离线渲染更新均已包含在这一原生 App 中。
-
-详见[更新说明](docs/releases/v0.2.5.md)与[仓库分析与架构说明](docs/architecture.md)。
+详见[更新说明](docs/releases/v0.3.0.md)与[仓库分析与架构说明](docs/architecture.md)。
 
 ## 运行
 
-**安装**：从 [最新 Release](https://github.com/juliusloon/paperico/releases) 下载
-`Paperico-0.2.5.dmg`，将 Paperico 拖入 Applications 并替换旧版。此包未使用 Developer ID
+**安装**：从 [最新 Release](https://github.com/juliusloon/paperico/releases) 下载 dmg 安装即可。本 app 未使用 Developer ID
 签名或 Apple 公证；正式分发的签名选项见 [macOS 开发说明](macos/README.md)。
 
 **从源码构建**——要求 macOS 26+、Xcode 26+；已验证环境为 macOS 27 / Xcode 27、Apple Silicon：
@@ -65,16 +93,13 @@ My Mac → Run。Codex 的 Run 按钮使用同一脚本。
 4. 配置完成后，从处理任务页开始解析。
 5. 阅读过程中点击回答的证据引用，可跳转到对应段落或 PDF 位置。
 
-**本地优先不等于离线 AI**：使用云端 MinerU 会上传 PDF；模型端点会接收任务所需的论文
-文本和对话上下文。App 直连你配置的服务，Paperico 不提供中转服务器。
+**本地优先不等于离线 AI**：使用云端 MinerU 会上传 PDF；模型端点会接收任务所需的论文文本和对话上下文。App 直连你配置的服务，Paperico 不提供中转服务器。
 
 ## 工作原理
 
-```text
-SwiftUI 页面 → Observable Stores → PaperLibrary / PaperPipeline / ChatService
-                                     │                  │
-                              本地 JSON 与文件      MinerU / LLM
-```
+<p align="center">
+  <img src="./assets/readme/pipeline.zh.svg" width="100%" alt="Paperico 的五阶段流程：导入 PDF 并做 SHA-256 去重；用 MinerU（云端或自托管）解析为类型化分块；单次流式 LLM 分析生成译文、角色与方法索引；在逻辑链中精读并按证据引用提问，引用可跳回原文；把选中的回答沉淀为 Markdown 笔记。">
+</p>
 
 | 目录 | 职责 |
 |---|---|
@@ -84,10 +109,9 @@ SwiftUI 页面 → Observable Stores → PaperLibrary / PaperPipeline / ChatServ
 | `macos/Paperico/Pages/`、`Components/` | 页面、阅读器与通用控件 |
 | `macos/Tests/`、`macos/Package.swift` | 不启动 UI、不调用外部服务的核心回归测试 |
 | `script/` | 仓库级构建、启动、验证入口 |
-| `docs/` | 当前架构、版本说明和历史工程记录 |
+| `docs/` | 架构与版本说明 |
 
-本地的 `frontend/`、`backend/`、`design/` 为忽略的历史 Web 技术栈（Web 界面与 v0.1
-REST/SSE 服务）及设计资料，不属于当前 App 构建。
+
 
 ## 数据与升级
 
@@ -106,7 +130,7 @@ App 沙盒中的数据根目录：
 服务配置、外观与进度在 UserDefaults；API Key 与 MinerU Token 在 macOS 钥匙串。
 存储错误会明确显示，损坏或未知版本的索引不会被当作空库覆盖。
 
-v0.2.0 可读取原生迁移期间的无版本 JSON 索引。**旧 Python 后端的 SQLite 论文库、Fernet
+可读取原生迁移期间的无版本 JSON 索引。**旧 Python 后端的 SQLite 论文库、Fernet
 密钥和原生论文库仍是两份独立数据，目前不会自动转换**；升级前请保留旧数据库和存储目录。
 备份原生库时请复制整个数据根目录，包括回收站引用的数据；钥匙串凭据需要单独管理。
 
@@ -119,16 +143,10 @@ v0.2.0 可读取原生迁移期间的无版本 JSON 索引。**旧 Python 后端
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-DMG 输出在 `macos/build/Paperico-0.2.5.dmg`。推送 `v*` 标签会触发
+DMG 输出在 `macos/build/`。推送 `v*` 标签会触发
 [release 工作流](.github/workflows/release.yml)，在干净的 Release 构建上产出 DMG 并
 上传到 GitHub Release。本地构建使用临时签名，未经 Developer ID 公证；正式分发的签名
 选项见 [macOS 开发说明](macos/README.md)。
-
-## 旧 API 服务（仅本地保留）
-
-已下线的 v0.1 REST/SSE 服务（`backend/`）不在公开仓库中；新版 App 从不依赖它。若本地
-留有副本，`./start.sh` 启动的是 Python 服务，不是新版 App 的启动入口；`backend/.env` 与
-`PAPERICO_*` 环境变量也不会配置原生 App。
 
 贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全说明见 [SECURITY.md](SECURITY.md)。
 

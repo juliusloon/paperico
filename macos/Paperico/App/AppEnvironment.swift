@@ -15,6 +15,7 @@ struct AppEnvironment: ViewModifier {
             .environment(model.chatStore)
             .environment(model.router)
             .environment(model.services)
+            .environment(model.mcpStore)
             .environment(\.palette, model.palette)
             .environment(\.backgroundOpacity, model.appStore.backgroundOpacity)
             .environment(\.glassOpacity, model.appStore.glassOpacity)

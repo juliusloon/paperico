@@ -13,6 +13,7 @@ final class AppModel {
     let papersStore: PapersStore
     let readerStore: ReaderStore
     let chatStore: ChatStore
+    let mcpStore: MCPStore
 
     /// 视图通过环境取用的本地服务句柄(actor 引用)。
     let services: AppServices
@@ -34,6 +35,7 @@ final class AppModel {
         self.papersStore = PapersStore(library: library, pipeline: pipeline)
         self.readerStore = ReaderStore(library: library)
         self.chatStore = ChatStore(library: library, settings: settingsStore)
+        self.mcpStore = MCPStore(library: library)
         self.services = AppServices(library: library, pipeline: pipeline)
 
         // 启动即装载本地论文库(含中断对账);设置本地合成,无需网络。
@@ -92,6 +94,7 @@ final class AppModel {
             try await library.load()
             ready = true
             await settingsStore.fetch()
+            await mcpStore.restore()
         } catch {
             startupError = ApiFailure.wrap(error).localizedDescription
         }

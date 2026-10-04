@@ -9,6 +9,7 @@ enum KeychainStore {
     enum Account: String {
         case llmApiKey = "llm.api-key"
         case mineruToken = "mineru.token"
+        case mcpToken = "mcp.access-token"
     }
 
     struct ReadResult: Sendable {

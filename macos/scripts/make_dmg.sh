@@ -54,8 +54,33 @@ PY
 
 if [ -n "${PAPERICO_SIGN_IDENTITY:-}" ]; then
   echo "Signing with '$PAPERICO_SIGN_IDENTITY'…"
-  codesign --deep --force --options runtime --sign "$PAPERICO_SIGN_IDENTITY" "$APP"
+  codesign --force --options runtime --entitlements Paperico/Support/Paperico.entitlements \
+    --sign "$PAPERICO_SIGN_IDENTITY" "$APP"
+else
+  # Even unsigned CI builds must retain App Sandbox and localhost MCP entitlements.
+  codesign --force --entitlements Paperico/Support/Paperico.entitlements --sign - "$APP"
 fi
+codesign --verify --strict "$APP"
+python3 - "$APP" "$VERSION" <<'PY'
+import plistlib
+import subprocess
+import sys
+from pathlib import Path
+
+app = Path(sys.argv[1])
+with (app / "Contents/Info.plist").open("rb") as handle:
+    info = plistlib.load(handle)
+assert info["CFBundleShortVersionString"] == sys.argv[2], info
+signature = subprocess.run(
+    ["codesign", "-d", "--entitlements", ":-", str(app)],
+    capture_output=True, check=True,
+)
+entitlements = plistlib.loads(signature.stdout)
+for key in ("com.apple.security.app-sandbox", "com.apple.security.network.client", "com.apple.security.network.server"):
+    assert entitlements.get(key) is True, (key, entitlements)
+assert (app / "Contents/Resources/Resources/MCP-LICENSES.txt").is_file()
+print("Validated release version, Sandbox/MCP entitlements and bundled licenses.")
+PY
 
 echo "Packaging DMG…"
 rm -rf "$STAGE" "$DMG"
@@ -63,5 +88,14 @@ mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 hdiutil create -volname "Paperico $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+hdiutil verify "$DMG"
+python3 - "$DMG" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+image = Path(sys.argv[1])
+digest = hashlib.sha256(image.read_bytes()).hexdigest()
+image.with_suffix(image.suffix + ".sha256").write_text(f"{digest}  {image.name}\n")
+PY
 
 echo "DMG ready: $DMG"

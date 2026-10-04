@@ -9,8 +9,8 @@
 
 ## How was this tested?
 
-- [ ] Backend: `pytest` (and `ruff check .`) from `backend/`
-- [ ] macOS client: `xcodebuild -project macos/Paperico.xcodeproj -scheme Paperico -destination 'platform=macOS' build` (only if `macos/` changed)
+- [ ] Backend (local copy only): `pytest` (and `ruff check .`) from `backend/`
+- [ ] macOS client: `./script/check.sh` (only if `macos/` changed)
 - [ ] API schema changed → updated `backend/tests/openapi_snapshot.json` and ran `macos/scripts/check_api_contract.py` until `contract OK`
 
 ## Checklist

@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/juliusloon/paperico/actions/workflows/ci.yml/badge.svg)](https://github.com/juliusloon/paperico/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v0.2.5-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v0.3.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 English · [简体中文](README.zh-CN.md)
 
@@ -23,6 +23,39 @@ Your library lives in your own sandbox, API keys stay in the macOS Keychain, and
 connects directly to the services you configure. **Local-first, bring-your-own-key, no relay
 server, no Python backend needed to run the app.**
 
+## Why it's different
+
+Ordinary PDF readers optimize *viewing a document*. Paperico restructures the paper into a
+logic chain of typed blocks with stable ids — one coordinate system shared by the outline,
+the translation, chat citations, method cards and annotations.
+
+- **Structure, not pages.** MinerU recovers headings, paragraphs, figures, tables and
+  equations with their positions; front matter, references and publisher boilerplate are
+  separated out. You read a re-typeset bilingual surface — serif body, offline KaTeX —
+  next to a logic-chain outline, and every jump lands on the exact block or PDF region.
+- **One pass, whole paper.** A single streaming LLM request produces the block-aligned
+  translation, per-paragraph takeaways and narrative roles, the paper-level TL;DR /
+  contributions / difficulty estimate, and a method & entity index. Output is strictly
+  validated, and an interrupted run recovers locally from the saved raw response — no
+  second paid call.
+- **Answers pinned to evidence.** Attach a selection, figure or method card to the
+  question; replies cite block ids that jump straight back to their source paragraph or
+  flash the region in the original PDF. Method entities merge across the whole library,
+  so one card lists every paper and paragraph where a method appears.
+- **Local-first, BYOK, built to survive.** The pipeline checkpoints cloud tasks, continues
+  queued jobs without re-uploading, reconciles jobs interrupted by a restart, dedups
+  imports by content hash and keeps a restorable trash — while library files stay in the sandbox and API credentials are stored in Keychain.
+  Parsing and AI requests send content directly to your configured services.
+
+| | PDF reader / translation plugin | Chat-with-PDF service | Paperico |
+|---|---|---|---|
+| Reading surface | fixed pages, overlay translation | snippet viewer | re-typeset bilingual reader + original PDF, block-accurate jumps |
+| Paper understanding | — | per-file chat | TL;DR, contributions, difficulty, logic chain, method index |
+| Q&A evidence | — | page-level at best | block-id citations → paragraph or PDF region |
+| Across papers | — | — | one merged method index for the whole library |
+| Notes | manual copying | manual copying | synthesized from selected answers into Markdown with wikilinks |
+| Data & models | local files | vendor cloud | sandbox + Keychain, your own endpoints |
+
 ## What you get
 
 - **Library** — project groups, search, sorting, bulk moves, PDF deduplication, and per-file batch import errors.
@@ -30,20 +63,17 @@ server, no Python backend needed to run the app.**
 - **Bilingual reader** — original and translation, logic-chain outline, method cards, PDFKit reading, saved progress.
 - **Evidence chat** — attach selections, methods or figures; citations locate their source paragraph or PDF position.
 - **Notes** — synthesize selected messages into Markdown notes and export them.
-- **Trash** — deleting preserves PDFs, extracted content, conversations and notes until you restore them.
+- **Trash** — deleting preserves PDFs, extracted content, conversations and notes until you restore or permanently delete them.
+- **MCP** — opt-in localhost access with 10 read-only tools, evidence blocks and figures; copy client configuration from settings. See the [connection guide](docs/mcp.md).
 - **Native desktop** — Liquid Glass, light/dark appearance, accent colors, offline math rendering, ⌘1–⌘3 navigation and ⌘, settings.
 
-## What's new in v0.2.5
 
-- New Icon Composer app icon, and the monochrome Paperico mark in navigation.
-- Installable `Paperico-0.2.5.dmg` attached to the GitHub Release by the new release workflow.
-- All v0.2.1–v0.2.4 reader, library, chat and offline-renderer updates in one native app.
 
-See the [release notes](docs/releases/v0.2.5.md) and the [architecture review](docs/architecture.md).
+See the [release notes](docs/releases/v0.3.0.md) and the [architecture review](docs/architecture.md).
 
 ## Run
 
-**Install:** download `Paperico-0.2.5.dmg` from the
+**Install:** download `Paperico-0.3.0.dmg` from the
 [latest release](https://github.com/juliusloon/paperico/releases), drag Paperico into
 Applications and replace any older copy. The DMG is not Developer ID signed or notarized;
 distribution signing options are described in the [macOS development guide](macos/README.md).
@@ -75,11 +105,9 @@ to your configured services. Paperico does not operate a relay.
 
 ## How it works
 
-```text
-SwiftUI pages → Observable stores → PaperLibrary / PaperPipeline / ChatService
-                                     │                  │
-                              local JSON/files       MinerU / LLM
-```
+<p align="center">
+  <img src="./assets/readme/pipeline.svg" width="100%" alt="The Paperico pipeline in five stages: import a PDF with SHA-256 deduplication, parse it with MinerU into typed blocks with positions, run one streaming LLM analysis that produces translation, roles, methods and a TL;DR, read and ask with evidence citations that jump back to the exact block or PDF region, and turn selected answers into Markdown notes.">
+</p>
 
 | Directory | Responsibility |
 |---|---|
@@ -89,12 +117,7 @@ SwiftUI pages → Observable stores → PaperLibrary / PaperPipeline / ChatServi
 | `macos/Paperico/Pages/`, `Components/` | Pages, reader and reusable controls |
 | `macos/Tests/`, `macos/Package.swift` | Core tests without UI startup or external API calls |
 | `script/` | Repository-level build, run and verification entrypoints |
-| `docs/` | Current architecture, releases and historical engineering records |
-
-Ignored local `frontend/`, `backend/` and `design/` directories contain the retired web
-stack (web UI and v0.1 REST/SSE service) and design material. They are not part of the
-app build.
-
+| `docs/` | Current architecture and releases |
 ## Data and upgrades
 
 The sandboxed app stores its library under:
@@ -113,7 +136,7 @@ Service configuration, appearance and progress use UserDefaults. API keys and Mi
 tokens use macOS Keychain. Storage failures are surfaced; corrupt or newer-version
 indexes are not silently replaced with an empty library.
 
-The unversioned native JSON index from the migration is compatible with v0.2.0.
+The unversioned native JSON index from the migration is compatible.
 **The old backend SQLite library and Fernet credentials remain separate and are not
 automatically converted.** Keep the old database and storage directory when upgrading.
 Back up the entire native data directory, including trash-referenced files; credentials
@@ -128,18 +151,13 @@ require separate Keychain management.
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-The DMG is written to `macos/build/Paperico-0.2.5.dmg`. Pushing a `v*` tag also runs the
+The DMG is written to `macos/build/`. Pushing a `v*` tag also runs the
 [release workflow](.github/workflows/release.yml), which builds the DMG from a clean
 Release configuration and attaches it to the GitHub Release. Local builds use ad-hoc
 signing and are not Developer ID notarized. See the [macOS development guide](macos/README.md)
 for distribution signing options.
 
-## Legacy API service (local only)
 
-The retired v0.1 REST/SSE service (`backend/`) is kept out of the public repository;
-the native app has never needed it. If you keep a local copy, `./start.sh` starts the
-Python service, not the native app, and `backend/.env` / `PAPERICO_*` variables do not
-configure the native app.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
