@@ -91,6 +91,13 @@ actor PaperLibrary {
             index.papers[i].errorCode = ErrorCode.interruptedByRestart.rawValue
             changed = true
         }
+        // Preserve legacy/unrecognized categories alongside all eight presets.
+        if let items = try? methodIndex() {
+            for item in items where !index.methodGroups.contains(where: { $0.id == item.category }) {
+                index.methodGroups.append(MethodGroup(id: item.category, name: item.category))
+                changed = true
+            }
+        }
         if changed { try persistIndex() }
         loaded = true
     }
@@ -119,6 +126,7 @@ actor PaperLibrary {
     // MARK: - 项目
 
     func createProject(name: String, description: String) throws -> ProjectGroup {
+        let name = try GroupName.validate(name, existing: index.projects.map(\.name))
         let project = ProjectGroup(
             id: Self.newId(), name: name, description: description,
             colorTag: "", paperCount: 0, createdAt: Self.now()
@@ -141,7 +149,7 @@ actor PaperLibrary {
             throw PipelineError("Project not found", .internalError)
         }
         var project = index.projects[projectIndex]
-        project.name = name
+        project.name = try GroupName.validate(name, existing: index.projects.filter { $0.id != id }.map(\.name))
         project.description = description
         index.projects[projectIndex] = project
         try persistIndex()
@@ -263,9 +271,17 @@ actor PaperLibrary {
         try requirePaper(paperId)
         try LibraryFiles.writeJSON(entities, to: entitiesFile(paperId), encoder: encoder)
         let newKeys = Set(entities.map(\.canonicalKey)).filter { index.methodAddedAt[$0] == nil }
-        if !newKeys.isEmpty {
+        let newCategories = Set(entities.filter { !index.hiddenMethods.contains(methodKey($0.canonicalKey)) }
+            .map { index.methodContent[methodKey($0.canonicalKey)]?.category ?? $0.category })
+            .subtracting(index.methodGroups.map(\.id)).sorted()
+        if !newKeys.isEmpty || !newCategories.isEmpty {
             let timestamp = Self.now()
             for key in newKeys { index.methodAddedAt[key] = timestamp }
+            for category in newCategories {
+                let label = MethodGroup.presets.first { $0.id == category }?.name ?? category
+                let name = index.methodGroups.contains { $0.name == label } ? "\(label)（\(category)）" : label
+                index.methodGroups.append(MethodGroup(id: category, name: name))
+            }
             try persistIndex()
         }
     }
@@ -415,6 +431,48 @@ actor PaperLibrary {
         var key = original, visited: Set<String> = []
         while let next = index.methodAliases[key], visited.insert(key).inserted { key = next }
         return key
+    }
+
+    func listMethodGroups() -> [MethodGroup] { index.methodGroups }
+
+    func createMethodGroup(name: String) throws -> MethodGroup {
+        let name = try GroupName.validate(name, existing: index.methodGroups.map(\.name))
+        let group = MethodGroup(id: "custom_\(Self.newId())", name: name)
+        index.methodGroups.append(group)
+        try persistIndex()
+        return group
+    }
+
+    func renameMethodGroup(id: String, name: String) throws {
+        guard let i = index.methodGroups.firstIndex(where: { $0.id == id }) else {
+            throw PipelineError("方法分组已不存在。", .internalError)
+        }
+        index.methodGroups[i].name = try GroupName.validate(name, existing: index.methodGroups.filter { $0.id != id }.map(\.name))
+        try persistIndex()
+    }
+
+    func deleteMethodGroup(id: String) throws {
+        guard index.methodGroups.contains(where: { $0.id == id }) else {
+            throw PipelineError("方法分组已不存在。", .internalError)
+        }
+        let keys = try methodIndex(category: id).map(\.id)
+        index.hiddenMethods = Array(Set(index.hiddenMethods).union(keys)).sorted()
+        index.methodGroups.removeAll { $0.id == id }
+        try persistIndex()
+    }
+
+    func moveMethods(keys: [String], groupId: String) throws {
+        guard index.methodGroups.contains(where: { $0.id == groupId }) else {
+            throw PipelineError("目标方法分组已不存在。", .internalError)
+        }
+        let items = try methodIndex()
+        guard !keys.isEmpty, Set(keys).isSubset(of: Set(items.map(\.id))) else {
+            throw PipelineError("方法条目已不存在，请刷新后重试。", .internalError)
+        }
+        for item in items where keys.contains(item.id) {
+            index.methodContent[item.id] = MethodIndexContent(name: item.name, category: groupId, definitionZh: item.definitionZh)
+        }
+        try persistIndex()
     }
 
     func editMethod(key: String, name: String, definitionZh: String) throws {

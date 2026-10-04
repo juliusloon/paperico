@@ -36,13 +36,13 @@ Paperico 的 P0 MCP 支持使用 App 内嵌的 localhost Streamable HTTP 服务�
 
 1. 构建或启动新版 Paperico，进入设置的「MCP 连接」。
 2. 打开「允许 MCP 客户端只读访问」。首次开启会在 Keychain 创建独立的随机访问 Token。
-3. 复制对应客户端的配置或命令。Token 不等于 LLM / MinerU 凭据。
+3. 复制服务地址与访问 Token，填入支持 Streamable HTTP 的 MCP 客户端；也可复制通用 JSON 配置。Token 不等于 LLM / MinerU 凭据。
 4. 保持 Paperico 运行。关闭开关立即断开所有连接；更换 Token 后需要更新客户端配置。
 
 首次启动由系统选择随机可用端口，并记住这个端口。之后尽量复用；端口被占用或尚在 TCP 释放等待期时会换到
 另一个随机端口，请从设置重新复制配置。地址形式为 `http://127.0.0.1:<port>/mcp`。
 
-Claude Code 可直接使用设置页复制的命令。手动配置示例：
+客户端需为请求设置 `Authorization: Bearer <token>`。以下是 CLI 客户端的手动配置示例（设置页不再提供软件专属按钮）：
 
 ```sh
 claude mcp add --transport http paperico 'http://127.0.0.1:<port>/mcp' \

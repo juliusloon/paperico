@@ -1,5 +1,6 @@
 import {renderMarkdown} from './markdown.mjs';
 import {attachAnnotationEditor} from './annotations.mjs';
+import {duplicateTitleIds} from './document-title.mjs';
 let annotationViews = new Map(), annotations = {};
 
 let currentPaper = '', blocks = [], rowMap = new Map(), style = {}, initialProgress = 0;
@@ -102,18 +103,23 @@ window.papericoLoad = payload => {
   initialProgress = payload.progress || 0; rowMap.clear();
   window.getSelection()?.removeAllRanges(); send({type:'selectionChanged'});
   const entities = new Map(payload.entities.map(x => [x.id,x]));
-  const outlines = new Map((payload.outline_entries ?? []).map(x => [x.block_id, x]));
+  const duplicateTitles = duplicateTitleIds(paper, blocks);
+  const outlines = new Map((payload.outline_entries ?? []).filter(x => !duplicateTitles.has(x.block_id)).map(x => [x.block_id, x]));
   const lastOutlineId = [...outlines.keys()].at(-1);
   const article = document.getElementById('paper'); article.replaceChildren();
   const row = element('div','document-row header-row');
   const label = element('aside','outline-title');
-  label.append(element('span','','OUTLINE'), element('strong','','论文逻辑链'),element('small','',`${outlines.size} 个节点`));
+  label.append(element('strong','','论文逻辑链'),element('small','',`${outlines.size} 个节点`));
   const header = element('header','content paper-header');
-  header.append(element('span','document-label','RESEARCH ARTICLE'),element('h1','',paper.title || paper.original_file_name || '未命名论文'));
+  header.append(element('h1','',paper.title || paper.original_file_name || '未命名论文'));
   if (paper.title_zh && paper.title_zh !== paper.title) header.append(element('p','',paper.title_zh));
   header.append(element('div','author-line',(paper.authors?.slice(0,6).join(' · ') || paper.original_file_name) + (paper.year ? ` · ${paper.year}` : '')));
   row.append(label,header); article.append(row);
+  const headerRow = row;
   for (const [index,block] of blocks.entries()) {
+    // Source IDs and evidence jumps remain valid: redundant title blocks point
+    // to the single document header, while their stored contents stay intact.
+    if (duplicateTitles.has(block.id)) { rowMap.set(block.id, headerRow); continue; }
     const row = element('div',`document-row kind-${block.kind}`); row.id = `block-${block.id}`; row.dataset.blockId = block.id;
     row.dataset.level = String(outlines.get(block.id)?.level ?? (block.kind === 'section_heading' ? 1 : 2));
     const entry = outlines.get(block.id);
@@ -122,7 +128,7 @@ window.papericoLoad = payload => {
     row.append(entry ? outline(block,index,entities,entry) : element('aside','outline empty'),content(block));
     rowMap.set(block.id,row); article.append(row);
   }
-  const footer = element('div','document-row footer-row'); footer.append(element('span',''),element('footer','content','END OF PAPER')); article.append(footer);
+  const footer = element('div','document-row footer-row'); footer.append(element('span',''),element('footer','content','论文结束')); article.append(footer);
   applyStyle(style);
   document.fonts.ready.then(() => requestAnimationFrame(() => {
     window.scrollTo(0, Math.max(0, document.documentElement.scrollHeight - innerHeight) * initialProgress / 100);
@@ -134,6 +140,10 @@ function applyStyle(next) {
   for (const [name,value] of Object.entries(next.colors ?? {})) root.style.setProperty(`--${name}`,value);
   root.style.setProperty('--reading-size',`${next.fontSize || 18}px`);
   root.style.setProperty('--outline-width',`${next.outlineWidth || 0}px`);
+  const glassOpacity = Math.min(1,Math.max(0,next.glassOpacity ?? 0.85));
+  root.style.setProperty('--reader-glass-opacity',glassOpacity);
+  root.style.setProperty('--node-primary-ink',glassOpacity > 0.45 ? 'var(--accent-foreground,#fff)' : 'var(--accent)');
+  root.dataset.reduceTransparency = String(Boolean(next.reduceTransparency));
   root.classList.toggle('outline-hidden',!next.outlineWidth || next.compact);
   root.style.colorScheme = next.dark ? 'dark' : 'light';
   root.dataset.theme = next.dark ? 'dark' : 'light';

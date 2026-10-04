@@ -9,6 +9,8 @@ struct SettingsPage: View {
     @Environment(SettingsStore.self) private var settingsStore
     @Environment(AppStore.self) private var appStore
     @Environment(MCPStore.self) private var mcpStore
+    @Environment(UpdateStore.self) private var updateStore
+    @Environment(\.openURL) private var openURL
 
     @State private var tab: Tab = .model
     @State private var saving = false
@@ -54,21 +56,14 @@ struct SettingsPage: View {
     @State private var appearanceFontSize = 18
 
     enum Tab: String, CaseIterable {
-        case model, parser, appearance, automation
+        case model, parser, appearance, automation, about
         var label: String {
             switch self {
             case .model: return "AI 模型"
             case .parser: return "PDF 解析"
             case .appearance: return "阅读外观"
             case .automation: return "MCP 连接"
-            }
-        }
-        var description: String {
-            switch self {
-            case .model: return "翻译、总结与问答"
-            case .parser: return "MinerU 云端或本地部署"
-            case .appearance: return "主题、强调色与字号"
-            case .automation: return "外部助手只读访问论文库"
+            case .about: return "关于"
             }
         }
         var icon: String {
@@ -77,6 +72,7 @@ struct SettingsPage: View {
             case .parser: return Ic.server
             case .appearance: return Ic.palette
             case .automation: return Ic.bot
+            case .about: return "info.circle"
             }
         }
     }
@@ -127,6 +123,10 @@ struct SettingsPage: View {
         .task {
             hydrateAppearance()
             hydrateFromSettings()
+            if updateStore.wantsUpdateSettings { tab = .about; updateStore.wantsUpdateSettings = false }
+        }
+        .onChange(of: updateStore.wantsUpdateSettings) { _, requested in
+            if requested { tab = .about; updateStore.wantsUpdateSettings = false }
         }
         .overlay(alignment: .bottomTrailing) { noticeOverlay }
     }
@@ -155,7 +155,6 @@ struct SettingsPage: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.label).font(.system(size: 15, weight: tab == item ? .semibold : .regular))
                                     .foregroundStyle(tab == item ? palette.accent : palette.gray500)
-                                Text(item.description).font(.system(size: 12)).foregroundStyle(palette.gray400)
                             }
                             Spacer(minLength: 0)
                             Image.ic(Ic.chevronRight).font(.system(size: 12)).foregroundStyle(palette.gray400)
@@ -181,8 +180,8 @@ struct SettingsPage: View {
                         .foregroundStyle(settingsKnown && llmReady && mineruReady ? palette.success : palette.accent)
                     Text("使用前置条件").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.gray700)
                 }
-                readinessRow("AI 模型", ready: settingsKnown ? llmReady : nil)
-                readinessRow("PDF 解析", ready: settingsKnown ? mineruReady : nil)
+                readinessRow("AI 模型", ready: settingsKnown ? llmReady : nil, awaitingAuthorization: settingsStore.credentialNeedsAuthorization(.llmApiKey))
+                readinessRow("PDF 解析", ready: settingsKnown ? mineruReady : nil, awaitingAuthorization: mineruMode != "local" && settingsStore.credentialNeedsAuthorization(.mineruToken))
             }
             .padding(11)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -196,7 +195,7 @@ struct SettingsPage: View {
     private var settingsKnown: Bool { settingsStore.settings != nil }
 
     /// 就绪清单行:配置完成显示绿色对勾,否则提示待配置;设置读不到时无法确认。
-    private func readinessRow(_ label: String, ready: Bool?) -> some View {
+    private func readinessRow(_ label: String, ready: Bool?, awaitingAuthorization: Bool = false) -> some View {
         HStack(spacing: 6) {
             Text(label).font(.system(size: 12.5)).foregroundStyle(palette.gray600)
             Spacer(minLength: 0)
@@ -208,7 +207,7 @@ struct SettingsPage: View {
                 }
                 .foregroundStyle(palette.success)
             case .some(false):
-                Text("待配置").font(.system(size: 12)).foregroundStyle(palette.gray400)
+                Text(awaitingAuthorization ? "待解锁" : "待配置").font(.system(size: 12)).foregroundStyle(palette.gray400)
             case .none:
                 Text("无法确认").font(.system(size: 12)).foregroundStyle(palette.gray400)
             }
@@ -221,7 +220,7 @@ struct SettingsPage: View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if settingsStore.credentialsNeedAuthorization || (!llmReady && !settingsStore.llmProfile.model.isEmpty) {
+                    if tab != .about && settingsStore.credentialsNeedAuthorization {
                         credentialAccessNotice
                     }
                     sectionHeader
@@ -231,19 +230,21 @@ struct SettingsPage: View {
                         case .parser: parserSection
                         case .appearance: appearanceSection
                         case .automation: automationSection
+                        case .about: aboutSection
                         }
                     }
+                    sectionNotes.padding(.top, 24)
                     // The footer shares the form's scroll content. The viewport
                     // is a minimum height, so long forms push it below the text.
                     Spacer(minLength: 32)
-                    if tab != .automation {
+                    if tab != .automation && tab != .about {
                         HStack {
                             ToolbarButton(title: "保存配置", icon: Ic.save, kind: .primary, busy: saving) {
                                 switch tab {
                                 case .model: saveLLM()
                                 case .parser: saveMinerU()
                                 case .appearance: saveAppearance()
-                                case .automation: break
+                                case .automation, .about: break
                                 }
                             }
                             Spacer(minLength: 0)
@@ -260,15 +261,18 @@ struct SettingsPage: View {
 
     private var credentialAccessNotice: some View {
         HStack(spacing: 12) {
-            Text(settingsStore.credentialsNeedAuthorization
-                 ? "已保存的凭据需要钥匙串授权，本地论文库仍可正常使用。"
-                 : "如果以前保存过 API Key，可重新读取系统钥匙串中的凭据。")
+            Text(settingsStore.credentialError.isEmpty
+                 ? "已保存的凭据待解锁。在系统窗口中授权后，AI、PDF 解析与 MCP 共用本次读取结果。"
+                 : settingsStore.credentialError)
                 .font(.system(size: 12)).foregroundStyle(palette.gray600)
             Spacer(minLength: 0)
-            Button(settingsStore.readingCredentials ? "正在读取…" : "读取已保存凭据") {
-                Task { await settingsStore.readSavedCredentials(allowInteraction: true) }
+            Button(settingsStore.readingCredentials ? "正在解锁…" : "解锁已保存凭据") {
+                Task {
+                    await settingsStore.readSavedCredentials(allowInteraction: true)
+                    await mcpStore.restore()
+                }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(LiquidActionButtonStyle())
             .disabled(settingsStore.readingCredentials)
         }
         .padding(12)
@@ -276,48 +280,113 @@ struct SettingsPage: View {
         .padding(.bottom, 20)
     }
 
-    @ViewBuilder
     private var sectionHeader: some View {
-        let (kicker, title, description, configured): (String, String, String, Bool) = {
-            switch tab {
-            case .model:
-                return ("MODEL CONNECTION", "AI 模型连接",
-                        "使用 OpenAI-compatible Chat Completions 接口。API Key 保存在本机钥匙串中，一个配置自动用于翻译、逻辑归纳、Chatbot 和笔记生成。", llmReady)
-            case .parser:
-                let local = mineruMode == "local"
-                return ("DOCUMENT PARSER", "MinerU 精准解析",
-                        local ? "调用本机部署的 MinerU Gradio 服务（如 Docker 版 mineru-gradio），无需 Token；MinerU.Chem 化学解析目前仅云端提供。"
-                              : "MinerU Token 保存在本机钥匙串中。本地 PDF 会申请官方签名上传地址，上传后自动轮询批任务。",
-                        mineruReady)
-            case .appearance:
-                return ("READING APPEARANCE", "阅读外观", "保存在本机 App 中，只影响界面显示，修改即时生效。", true)
-            case .automation:
-                return ("MCP CONNECTION", "连接外部 AI 助手", "允许兼容 MCP 的客户端读取论文、正文、图像、方法索引、对话与笔记。客户端如何使用或发送这些内容取决于它的设置。", mcpStore.running)
-            }
-        }()
-
-        let statusLabel = tab == .automation ? (mcpStore.running ? "运行中" : "未运行") : (configured ? "已配置" : "需要配置")
-        let statusColor = tab == .automation && !mcpStore.enabled ? palette.gray500 : (configured ? palette.success : palette.danger)
-
-        HStack(alignment: .top, spacing: containerWidth < 650 ? 12 : 30) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(kicker).font(.system(size: 10, weight: .bold)).kerning(1.6).foregroundStyle(palette.accent)
-                Text(title).font(.reading(containerWidth < 650 ? 24 : 30, weight: .medium)).foregroundStyle(palette.gray900).padding(.vertical, 4)
-                Text(description).font(.system(size: 14.5)).lineSpacing(6).foregroundStyle(palette.gray500)
-            }
-            .frame(maxWidth: 620, alignment: .leading)
+        let configured = tab == .model ? llmReady : tab == .parser ? mineruReady : tab == .automation ? mcpStore.running : true
+        let title = tab == .model ? "AI 模型连接" : tab == .parser ? "PDF 解析" : tab == .automation ? "MCP 连接" : tab.label
+        let awaitingAuthorization = tab == .model ? settingsStore.credentialNeedsAuthorization(.llmApiKey) : tab == .parser && mineruMode != "local" ? settingsStore.credentialNeedsAuthorization(.mineruToken) : false
+        let status = tab == .automation ? (mcpStore.running ? "运行中" : "未运行") : (configured ? "已配置" : awaitingAuthorization ? "待解锁" : "需要配置")
+        return HStack(alignment: .center, spacing: 18) {
+            Text(title).font(.system(size: containerWidth < 650 ? 24 : 30, weight: .medium)).foregroundStyle(palette.gray900)
             Spacer(minLength: 0)
-            Label(statusLabel, systemImage: configured ? Ic.check : (tab == .automation ? "pause.circle" : "exclamationmark.circle"))
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(statusColor)
-            .padding(.horizontal, 12)
-            .frame(height: 30, alignment: .center)
-            .fixedSize(horizontal: true, vertical: false)
-            .liquidTool(tint: statusColor.opacity(0.1))
+            if tab != .about {
+                Label(status, systemImage: configured ? Ic.check : "exclamationmark.circle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(configured ? palette.success : palette.gray500)
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .liquidTool(tint: configured ? palette.success.opacity(0.1) : nil)
+            }
         }
         .padding(.bottom, 24)
         .overlay(alignment: .bottom) { Rectangle().fill(palette.gray200).frame(height: 1) }
         .padding(.bottom, 31)
+    }
+
+    private var notes: [String] {
+        switch tab {
+        case .model:
+            return ["兼容 OpenAI Chat Completions 接口，配置用于全文翻译、逻辑归纳、论文问答与笔记生成。API Key 保存在本机钥匙串。",
+                llmGateOpen ? "已获取模型能力，确认思考强度与对话输出上限后保存配置。" : "填好配置后点击「测试连通性」，即可选择思考强度与对话输出上限。",
+                "全文翻译与分析合并为一次请求，输出容量按论文长度估算并受模型上限限制。"]
+        case .parser:
+            return [mineruMode == "local" ? "连接本机 MinerU Gradio 服务，无需 Token；MinerU.Chem 化学解析目前仅云端提供。" : "MinerU Token 保存在本机钥匙串。PDF 上传到解析服务后，Paperico 自动等待解析结果。",
+                "可检索文字型 PDF 建议关闭强制 OCR，并开启公式与表格识别；扫描版或图片型 PDF 建议开启强制 OCR。"]
+        case .appearance:
+            return ["外观设置保存在本机，修改即时生效。正文字号仅影响论文正文，其他界面统一使用系统默认字体。",
+                "背景透明度与玻璃透明度分别调节，文字和图标保持清晰。"]
+        case .automation:
+            return ["支持 MCP Streamable HTTP 的客户端可通过服务地址与访问 Token 连接，也可使用通用 JSON 配置。认证请求头为 Authorization: Bearer <Token>。",
+                "提供 10 个只读工具及论文资源，不会触发解析或模型调用。Paperico 需要保持运行，关闭开关会断开连接。",
+                "Token 保存在本机钥匙串。连接后可读取活动论文库中的正文、图像、方法、对话与笔记；更换 Token 后需更新客户端配置。"]
+        case .about:
+            return ["自动检查每天最多一次，只检测 GitHub 的正式发布版本。有新版本时提醒，可前往发布页下载并安装。"]
+        }
+    }
+
+    private var sectionNotes: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(notes, id: \.self) { text in Text(text).fixedSize(horizontal: false, vertical: true) }
+        }
+        .font(.system(size: 12.5)).foregroundStyle(palette.gray500).lineSpacing(4)
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .liquidInset(cornerRadius: CornerRadius.inset)
+    }
+
+    private var aboutSection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 16) {
+                Image("PapericoMark").renderingMode(.template).resizable().scaledToFit()
+                    .foregroundStyle(palette.accent).frame(width: 58, height: 58)
+                VStack(alignment: .leading, spacing: 8) {
+                    PapericoWordmark().frame(width: 146, height: 32)
+                    Text("版本 \(updateStore.currentVersion) · 构建 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")")
+                        .font(.system(size: 12)).foregroundStyle(palette.gray500)
+                }
+            }
+            Text("将论文原文、双语精读、逻辑链与证据问答串联在一起的 macOS 阅读工作台。")
+                .font(.system(size: 14)).foregroundStyle(palette.gray600)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 14) {
+                field("开发者") { Text("juliusloon") }
+                field("开源许可") { Text("MIT License") }
+            }
+            .font(.system(size: 14)).padding(16)
+            .liquidInset(cornerRadius: CornerRadius.inset)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { aboutLinks }
+                VStack(alignment: .leading, spacing: 10) { aboutLinks }
+            }
+            Text("论文库、阅读进度、对话与笔记保存在本机；解析和 AI 请求由你配置的服务处理。")
+                .font(.system(size: 12.5)).foregroundStyle(palette.gray500)
+                .fixedSize(horizontal: false, vertical: true)
+            Rectangle().fill(palette.gray200).frame(height: 1)
+            VStack(alignment: .leading, spacing: 16) {
+                Text("软件更新").font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.gray800)
+                Toggle("自动检查新版本", isOn: Binding(get: { updateStore.automaticallyChecks }, set: { updateStore.automaticallyChecks = $0 }))
+                    .toggleStyle(.switch)
+                HStack(spacing: 10) {
+                    ToolbarButton(title: "检查更新", icon: "arrow.triangle.2.circlepath", busy: updateStore.checking) {
+                        Task { await updateStore.check(manual: true) }
+                    }
+                    if let release = updateStore.available, let url = release.pageURL {
+                        ToolbarButton(title: "下载新版本", icon: "arrow.down.circle", kind: .primary) { openURL(url) }
+                    }
+                }
+                if !updateStore.message.isEmpty {
+                    Text(updateStore.message).font(.system(size: 13)).foregroundStyle(updateStore.failed ? palette.danger : palette.gray600)
+                }
+                if let date = updateStore.lastChecked {
+                    Text("上次检查：\(date.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.system(size: 12)).foregroundStyle(palette.gray500)
+                }
+            }
+            Text("© 2026 juliusloon").font(.system(size: 12)).foregroundStyle(palette.gray500)
+        }
+    }
+
+    @ViewBuilder private var aboutLinks: some View {
+        ToolbarButton(title: "项目主页", icon: "globe") { openURL(URL(string: "https://github.com/juliusloon/Paperico")!) }
+        ToolbarButton(title: "反馈问题", icon: "bubble.left") { openURL(URL(string: "https://github.com/juliusloon/Paperico/issues")!) }
+        ToolbarButton(title: "发布记录", icon: "clock") { openURL(URL(string: "https://github.com/juliusloon/Paperico/releases")!) }
     }
 
     /// 字段行:名称与控件同一行,提示文字由控件的 placeholder 承载。
@@ -354,58 +423,58 @@ struct SettingsPage: View {
     private var automationSection: some View {
         VStack(alignment: .leading, spacing: 22) {
             Toggle("允许 MCP 客户端只读访问", isOn: Binding(get: { mcpStore.enabled }, set: { mcpStore.setEnabled($0) }))
-                .toggleStyle(.switch)
-                .disabled(mcpStore.busy)
-            Text("提供 10 个只读工具及论文资源。读取不会触发 MinerU、LLM 调用或修改论文。Paperico 必须保持运行，关闭开关会立即断开连接。")
-                .font(.system(size: 13)).foregroundStyle(palette.gray500).lineSpacing(5)
-            if mcpStore.busy {
-                ProgressView("正在更新连接…")
-            }
+                .toggleStyle(.switch).disabled(mcpStore.busy)
+            if mcpStore.busy { ProgressView("正在更新连接…") }
             if !mcpStore.error.isEmpty {
                 Text(mcpStore.error).font(.system(size: 13)).foregroundStyle(palette.danger)
                 if mcpStore.enabled && !mcpStore.running {
-                    Button("重试连接") { mcpStore.retry() }.disabled(mcpStore.busy)
+                    ToolbarButton(title: "重试连接", icon: Ic.refresh, disabled: mcpStore.busy) { mcpStore.retry() }
                 }
             }
             if mcpStore.running {
                 field("服务地址") {
-                    Text(mcpStore.endpoint).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                    HStack(spacing: 8) {
+                        Text(mcpStore.endpoint).font(.system(size: 12)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        RoundIconButton(systemName: "doc.on.doc", size: 30, title: "复制服务地址") { copyMCP(mcpStore.endpoint, label: "服务地址") }
+                            .liquidTool()
+                    }
                 }
                 field("访问 Token") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
                         Text(showMCPToken ? mcpStore.token : "••••••••••••••••••••••••")
-                            .font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
-                        Button(showMCPToken ? "隐藏 Token" : "显示 Token") { showMCPToken.toggle() }
+                            .font(.system(size: 12)).lineLimit(1).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        RoundIconButton(systemName: showMCPToken ? "eye.slash" : "eye", size: 30,
+                            title: showMCPToken ? "隐藏 Token" : "显示 Token") { showMCPToken.toggle() }
+                            .liquidTool()
+                        RoundIconButton(systemName: "doc.on.doc", size: 30, title: "复制 Token") { copyMCP(mcpStore.token, label: "Token") }
+                            .liquidTool()
                     }
                 }
                 ViewThatFits(in: .horizontal) {
-                    HStack {
-                        Button("复制 Cursor 配置") { copyMCP(mcpStore.clientConfiguration) }
-                        Button("复制 VS Code 配置") { copyMCP(mcpStore.vscodeConfiguration) }
-                        Button("复制 Claude Code 命令") { copyMCP(mcpStore.claudeCommand) }
-                    }
-                    VStack(alignment: .leading, spacing: 10) {
-                        Button("复制 Cursor 配置") { copyMCP(mcpStore.clientConfiguration) }
-                        Button("复制 VS Code 配置") { copyMCP(mcpStore.vscodeConfiguration) }
-                        Button("复制 Claude Code 命令") { copyMCP(mcpStore.claudeCommand) }
-                    }
+                    HStack(spacing: 10) { mcpActions }
+                    VStack(alignment: .leading, spacing: 10) { mcpActions }
                 }
-                Button("更换 Token 并断开现有连接") { mcpStore.rotateToken(); showMCPToken = false }
-                    .disabled(mcpStore.busy)
-                Text("Token 保存在系统钥匙串。拿到 Token 的本机程序可以读取整个活动论文库，请仅复制给你信任的客户端。更换后需更新客户端配置。")
-                    .font(.system(size: 12)).foregroundStyle(palette.gray500).lineSpacing(5)
             }
         }
     }
 
-    private func copyMCP(_ value: String) {
+    @ViewBuilder private var mcpActions: some View {
+        ToolbarButton(title: "复制连接配置", icon: "doc.on.doc") { copyMCP(mcpStore.clientConfiguration, label: "连接配置") }
+        ToolbarButton(title: "更换 Token", icon: "arrow.triangle.2.circlepath", disabled: mcpStore.busy) {
+            mcpStore.rotateToken(); showMCPToken = false
+        }
+    }
+
+    private func copyMCP(_ value: String, label: String) {
         #if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
         #else
         UIPasteboard.general.string = value
         #endif
-        notice = Notice(success: true, message: "连接配置已复制。")
+        notice = Notice(success: true, message: "\(label)已复制。")
     }
 
     // MARK: model tab
@@ -429,7 +498,7 @@ struct SettingsPage: View {
                         $llmApiKey,
                         placeholder: llmReady
                             ? "已保存：\(settingsStore.settings?.modelProfiles.first?.apiKeyMasked ?? "")。留空会继续使用，不会覆盖。"
-                            : "填入服务商提供的 API Key，仅保存在本机钥匙串",
+                            : settingsStore.credentialNeedsAuthorization(.llmApiKey) ? "已保存，解锁后可使用；留空不会覆盖。" : "填入服务商提供的 API Key，仅保存在本机钥匙串",
                         visible: $showLlmKey
                     )
                     ToolbarButton(title: "测试连通性", icon: Ic.testTube, busy: testingLlm) {
@@ -449,16 +518,6 @@ struct SettingsPage: View {
                         .opacity(llmGateOpen ? 1 : 0.55)
                 }
             }
-            Text(llmGateOpen
-                 ? "已获取该模型能力，确认思考强度与对话输出上限后，点击「保存配置」生效。"
-                 : "填好配置名称、模型、Base URL 与 API Key，点击「测试连通性」后即可选择思考强度与对话输出上限。")
-                .font(.system(size: 12.5))
-                .lineSpacing(4)
-                .foregroundStyle(palette.gray400)
-            Text("全文翻译与分析合并为一次请求，输出容量按论文长度估算并受模型上限限制。")
-                .font(.system(size: 12.5))
-                .foregroundStyle(palette.gray400)
-
         }
     }
 
@@ -488,7 +547,7 @@ struct SettingsPage: View {
                             $mineruApiKey,
                             placeholder: settingsStore.settings?.mineru.apiKeyConfigured == true
                                 ? "已保存。留空保存不会覆盖。"
-                                : "粘贴在 MinerU API 管理页面创建的 Token",
+                                : settingsStore.credentialNeedsAuthorization(.mineruToken) ? "已保存，解锁后可使用；留空不会覆盖。" : "粘贴在 MinerU API 管理页面创建的 Token",
                             visible: $showMineruKey
                         )
                         ToolbarButton(title: "测试连接", icon: Ic.testTube, busy: testingMineru) {
@@ -512,14 +571,6 @@ struct SettingsPage: View {
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 52)
-
-            Text("对于可检索文字型 PDF，建议关闭“强制 OCR”，公式与表格识别保持开启；对于扫描版或图片型 PDF，建议开启“强制 OCR”。")
-                .font(.system(size: 13))
-                .lineSpacing(4)
-                .foregroundStyle(palette.gray500)
-                .padding(.leading, 13)
-                .overlay(alignment: .leading) { Rectangle().fill(palette.accent).frame(width: 2) }
-                .padding(.vertical, 11)
 
         }
     }
@@ -754,7 +805,7 @@ struct SettingsPage: View {
             return
         }
         if profile.apiKey.isEmpty && !llmReady {
-            notice = Notice(success: false, message: "请先填写 API Key，再测试连通性。")
+            notice = Notice(success: false, message: settingsStore.credentialNeedsAuthorization(.llmApiKey) ? "请先点击「解锁已保存凭据」，再测试连通性。" : "请先填写 API Key，再测试连通性。")
             return
         }
         testingLlm = true

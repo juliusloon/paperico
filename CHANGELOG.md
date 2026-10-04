@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-04
+
+- 钥匙串改为统一凭据记录和进程内共享授权缓存，取消后不连环弹窗；已有密钥显示待解锁，
+  安全迁移旧条目并在保存失败时保留原值。旧条目和签名变化的授权仍由系统控制。
+
+### Added
+
+- Pass all current user method groups and existing method identities into new-paper
+  analysis, validate categories and preserve manually edited/moved index items.
+- Daily opt-out checks for official GitHub releases, update reminders, and manual
+  checks in settings and the application menu.
+- Persistent method groups with all eight presets visible even when empty;
+  create, rename, delete and move methods between groups, with duplicate-name checks.
+
+### Changed
+
+- Share rounded Liquid Glass group controls and drag feedback between papers and
+  methods; anchor drag previews at the pointer and mark target groups with a plus.
+- Use platform system fonts throughout the interface while preserving paper-body
+  typography; remove decorative English headings and enlarge translated paper titles.
+- Offer generic MCP connection configuration and inline token copying with glass controls.
+- Place settings guidance below each form and consolidate the home feature overview.
+- Exclude formatted author/publication and reference sections from analysis; detect
+  conservative unlabelled bibliography runs and reject missing translated body nodes.
+- Show article titles once in bold serif English/Chinese, preserving original blocks
+  and evidence links; give logic-chain edits and note controls matching glass surfaces.
+- Unify inline paper/method editing and move card and group actions into context menus.
+- Expand update settings into an About page with app information and project links;
+  use an accent-colored vector wordmark in the floating navigation.
+
 ## [0.3.0] - 2026-10-04
 
 ### Added

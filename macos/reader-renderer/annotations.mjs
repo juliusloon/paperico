@@ -14,7 +14,7 @@ export function attachAnnotationEditor(node, id, generatedTitle, titleElement, i
     note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
   };
   for (const [field, label] of [['title','编辑逻辑链'],['note','写节点笔记']]) {
-    const button = document.createElement('button'); button.type = 'button'; button.innerHTML = icons[field];
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'node-glass-button'; button.innerHTML = icons[field];
     button.title = label; button.setAttribute('aria-label',label);
     button.addEventListener('click', event => { event.stopPropagation(); begin(field); }); actions.append(button);
   }
@@ -58,6 +58,20 @@ export function attachAnnotationEditor(node, id, generatedTitle, titleElement, i
     editor.placeholder = field === 'note' ? '写下这个节点的笔记…' : '修改逻辑链…';
     editor.setAttribute('aria-label', field === 'note' ? '节点笔记' : '逻辑链内容');
     box.append(editor);
+    const controls = document.createElement('div'); controls.className = 'node-edit-controls';
+    for (const [commit,label,icon] of [
+      [true,'保存','<path d="M5 12l4 4L19 6"/>'],
+      [false,'取消','<path d="M6 6l12 12M18 6L6 18"/>']
+    ]) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.className = 'node-glass-button' + (commit ? ' node-glass-primary' : '');
+      button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`;
+      const text = document.createElement('span'); text.textContent = label; button.append(text);
+      button.setAttribute('aria-label',label);
+      button.addEventListener('click', event => { event.stopPropagation(); finish(commit); });
+      controls.append(button);
+    }
+    box.append(controls);
     if (field === 'title') {
       box.classList.add('node-title-edit');
       editor.style.font = getComputedStyle(titleElement).font;

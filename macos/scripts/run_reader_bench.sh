@@ -51,6 +51,8 @@ xcrun --sdk macosx swiftc -O \
   "$ROOT/Paperico/Components/MarkdownText.swift" \
   "$ROOT/Paperico/Components/GlassKit.swift" \
   "$ROOT/Paperico/Core/MarkdownTable.swift" \
+  "$ROOT/Paperico/Core/MethodGroup.swift" \
+  "$ROOT/Paperico/Core/ServiceErrors.swift" \
   "$ROOT/Paperico/App/Theme.swift" \
   "$ROOT/Paperico/App/WindowChrome.swift" \
   "$ROOT/Paperico/Models/PaperStatus.swift" \

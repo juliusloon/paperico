@@ -43,7 +43,10 @@ final class SettingsStore {
     private var mineruCredential = ""
     private var lockedAccounts: Set<KeychainStore.Account> = []
     private var credentialVersion: UInt = 0
+    private let credentials: CredentialStore
+    private(set) var credentialError = ""
     var credentialsNeedAuthorization: Bool { !lockedAccounts.isEmpty }
+    func credentialNeedsAuthorization(_ account: KeychainStore.Account) -> Bool { lockedAccounts.contains(account) }
     private(set) var readingCredentials = false
 
     /// 外观等合成设置刷新后的回调(AppStore 借此做一次性迁移)。
@@ -53,7 +56,8 @@ final class SettingsStore {
     private static let llmKey = "paperico:llm-profile"
     private static let mineruKey = "paperico:mineru-config"
 
-    init() {
+    init(credentials: CredentialStore = .shared) {
+        self.credentials = credentials
         llmProfile = Self.loadConfig(LLMProfileConfig.self, key: Self.llmKey, defaults: UserDefaults.standard) ?? LLMProfileConfig()
         mineruConfig = Self.loadConfig(MinerUConfigCore.self, key: Self.mineruKey, defaults: UserDefaults.standard) ?? MinerUConfigCore()
         settings = synthesized
@@ -151,16 +155,14 @@ final class SettingsStore {
         readingCredentials = true
         let version = credentialVersion
         defer { readingCredentials = false }
-        let (llm, mineru) = await Task.detached(priority: .userInitiated) {
-            (KeychainStore.read(.llmApiKey, allowInteraction: allowInteraction),
-             KeychainStore.read(.mineruToken, allowInteraction: allowInteraction))
-        }.value
+        let snapshot = await credentials.readAll(allowInteraction: allowInteraction)
         guard version == credentialVersion else { return }
-        llmCredential = llm.value
-        mineruCredential = mineru.value
-        lockedAccounts = []
-        if llm.needsAuthorization { lockedAccounts.insert(.llmApiKey) }
-        if mineru.needsAuthorization { lockedAccounts.insert(.mineruToken) }
+        let llm = snapshot[.llmApiKey]
+        let mineru = snapshot[.mineruToken]
+        if !llm.needsAuthorization { llmCredential = llm.value }
+        if !mineru.needsAuthorization { mineruCredential = mineru.value }
+        credentialError = snapshot.error
+        lockedAccounts = Set(KeychainStore.Account.allCases.filter { snapshot[$0].needsAuthorization })
         settings = synthesized
         onSettingsApplied?()
     }
@@ -173,7 +175,7 @@ final class SettingsStore {
         }
         if !profile.apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
             let key = profile.apiKey.trimmingCharacters(in: .whitespaces)
-            try await Task.detached { try KeychainStore.write(key, to: .llmApiKey) }.value
+            try await credentials.write(key, to: .llmApiKey)
             llmCredential = key
             credentialVersion &+= 1
             lockedAccounts.remove(.llmApiKey)
@@ -198,7 +200,7 @@ final class SettingsStore {
         _ = try ServiceURL.endpoint(base: mineru.mode == "local" ? mineru.localUrl : mineru.baseUrl, path: "")
         if !mineru.apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
             let token = mineru.apiKey.trimmingCharacters(in: .whitespaces)
-            try await Task.detached { try KeychainStore.write(token, to: .mineruToken) }.value
+            try await credentials.write(token, to: .mineruToken)
             mineruCredential = token
             credentialVersion &+= 1
             lockedAccounts.remove(.mineruToken)

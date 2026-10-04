@@ -32,10 +32,12 @@ struct LibraryPage: View {
     @State private var renamingProjectName = ""
     @State private var renamingPaperId: String?
     @State private var renamingPaperTitle = ""
+    @State private var savingPaperTitle = false
     @State private var paperPendingDelete: PaperListItem?
     @State private var projectPendingDelete: ProjectGroup?
     @State private var showBatchDeleteConfirm = false
     @State private var showFileImporter = false
+    @State private var dropTarget: String?
 
     private var isCompact: Bool { containerWidth < LayoutBreakpoint.workspace }
     private var sidebarCollapsed: Bool { isCompact ? !temporarilyExpanded : projectSidebarCollapsed }
@@ -178,144 +180,30 @@ struct LibraryPage: View {
     }
 
     private var newProjectForm: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image.ic(Ic.folderPlus).font(.system(size: 12)).foregroundStyle(palette.accent)
-                Text("新建项目").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.gray700)
-            }
-            TextField("项目名称", text: $newProjectName)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .padding(.horizontal, 10)
-                .frame(height: 36)
-                .liquidInset(cornerRadius: CornerRadius.inset)
-                .onSubmit { Task { await createProject() } }
-            HStack(spacing: 6) {
-                Button {
-                    Task { await createProject() }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image.ic(Ic.check).font(.system(size: 11))
-                        Text("创建")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.accentForeground)
-                    .frame(maxWidth: .infinity, minHeight: 32)
-                    .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(newProjectName.trimmingCharacters(in: .whitespaces).isEmpty ? palette.accent.opacity(0.42) : palette.accent))
-                }
-                .buttonStyle(.plain)
-                .disabled(newProjectName.trimmingCharacters(in: .whitespaces).isEmpty)
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { showNewProject = false }
-                    newProjectName = ""
-                } label: {
-                    Text("取消")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(palette.gray600)
-                        .frame(maxWidth: .infinity, minHeight: 32)
-                        .liquidInset(cornerRadius: CornerRadius.inset)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(10)
-        .liquidInset(tint: palette.accentFaint)
+        WorkspaceGroupEditor(name: $newProjectName, creating: true,
+            onSave: { Task { await createProject() } },
+            onCancel: { showNewProject = false; newProjectName = "" })
     }
 
     private var allPapersRow: some View {
-        Button {
-            filterByProject(nil)
-        } label: {
-            HStack {
-                Text("全部论文").font(.system(size: 14)).foregroundStyle(papersStore.filter.projectId == nil ? palette.accent : palette.gray700)
-                Spacer(minLength: 0)
-                Text("\(papersStore.filter.projectId == nil ? papersStore.papers.count : totalProjectPapers)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(palette.gray500.opacity(0.6))
-            }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 42)
-            .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(papersStore.filter.projectId == nil ? palette.accentSoft : Color.clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        WorkspaceGroupRow(name: "全部论文", count: papersStore.filter.projectId == nil ? papersStore.papers.count : totalProjectPapers,
+            active: papersStore.filter.projectId == nil, onSelect: { filterByProject(nil) })
     }
 
     private func projectRow(_ project: ProjectGroup) -> some View {
         Group {
             if renamingProjectId == project.id {
-                VStack(spacing: 5) {
-                    TextField("项目名称", text: $renamingProjectName)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .padding(.horizontal, 8)
-                        .frame(height: 30)
-                        .liquidInset(cornerRadius: CornerRadius.chip)
-                        .overlay(RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous).stroke(palette.accent))
-                        .onSubmit { Task { await confirmRenameProject() } }
-                    HStack(spacing: 4) {
-                        Button { Task { await confirmRenameProject() } } label: {
-                            Image.ic(Ic.check).font(.system(size: 11)).foregroundStyle(palette.accentForeground)
-                                .frame(width: 26, height: 26)
-                                .background(RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous).fill(palette.accent))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(renamingProjectName.trimmingCharacters(in: .whitespaces).isEmpty)
-                        Button { cancelRenameProject() } label: {
-                            Image.ic(Ic.close).font(.system(size: 11)).foregroundStyle(palette.gray600)
-                                .frame(width: 26, height: 26)
-                                .liquidInset(cornerRadius: CornerRadius.chip)
-                        }
-                        .buttonStyle(.plain)
-                        Spacer(minLength: 0)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                WorkspaceGroupEditor(name: $renamingProjectName,
+                    onSave: { Task { await confirmRenameProject() } }, onCancel: cancelRenameProject)
             } else {
-                Button {
-                    filterByProject(project.id)
-                } label: {
-                    HStack(spacing: 7) {
-                        Circle().fill(project.colorTag.isEmpty ? palette.accent : (Color(hex: project.colorTag) ?? palette.accent))
-                            .frame(width: 7, height: 7)
-                        Text(project.name)
-                            .font(.system(size: 14))
-                            .foregroundStyle(papersStore.filter.projectId == project.id ? palette.accent : palette.gray700)
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text("\(project.paperCount)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(palette.gray500.opacity(0.6))
-                        HStack(spacing: 2) {
-                            Button {
-                                renamingProjectId = project.id
-                                renamingProjectName = project.name
-                            } label: {
-                                Image.ic(Ic.pencil).font(.system(size: 10)).foregroundStyle(palette.gray400)
-                                    .frame(width: 22, height: 22)
-                            }
-                            .buttonStyle(.plain)
-                            .help("重命名")
-                            Button {
-                                projectPendingDelete = project
-                            } label: {
-                                Image.ic(Ic.trash).font(.system(size: 10)).foregroundStyle(palette.gray400)
-                                    .frame(width: 22, height: 22)
-                            }
-                            .buttonStyle(.plain)
-                            .help("删除分组")
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 42)
-                    .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(papersStore.filter.projectId == project.id ? palette.accentSoft : Color.clear))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                WorkspaceGroupRow(name: project.name, count: project.paperCount,
+                    active: papersStore.filter.projectId == project.id,
+                    color: project.colorTag.isEmpty ? palette.accent : (Color(hex: project.colorTag) ?? palette.accent),
+                    targeted: dropTarget == project.id, onSelect: { filterByProject(project.id) },
+                    onRename: { renamingProjectId = project.id; renamingProjectName = project.name },
+                    onDelete: { projectPendingDelete = project })
                 #if os(macOS)
-                .onDrop(of: [.text], delegate: ProjectDropDelegate { ids in
+                .onDrop(of: [WorkspaceDragKind.papers.type], delegate: WorkspaceGroupDropDelegate(kind: .papers, target: $dropTarget, groupId: project.id) { ids in
                     Task { await move(ids: ids, projectId: project.id) }
                 })
                 #endif
@@ -331,12 +219,6 @@ struct LibraryPage: View {
             HStack(spacing: 8) {
                 ToolbarButton(title: "上传论文", icon: Ic.upload, kind: .primary) {
                     openUpload()
-                }
-                PillIconButton(title: selectionMode ? "退出选择" : "选择论文", icon: Ic.cursor, active: selectionMode) {
-                    withAnimation(.smooth(duration: 0.24)) {
-                        selectionMode.toggle()
-                        if !selectionMode { selectedIds = [] }
-                    }
                 }
                 Text("\(papersStore.papers.count) 篇论文")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -364,8 +246,7 @@ struct LibraryPage: View {
 
     private var toolbarTitle: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("LIBRARY").font(.system(size: 8, weight: .bold)).kerning(1.2).foregroundStyle(palette.accent)
-            Text("论文库").font(.reading(22, weight: .medium)).foregroundStyle(palette.gray900)
+            Text("论文库").font(.system(size: 22, weight: .medium)).foregroundStyle(palette.gray900)
         }
         .frame(width: 90, alignment: .leading)
     }
@@ -547,6 +428,7 @@ struct LibraryPage: View {
                     selectionMode: selectionMode,
                     renaming: renamingPaperId == paper.id,
                     renameValue: renamingPaperId == paper.id ? renamingPaperTitle : "",
+                    saving: savingPaperTitle,
                     onToggle: { toggleSelection(paper.id) },
                     onStartRename: {
                         renamingPaperId = paper.id
@@ -570,6 +452,7 @@ struct LibraryPage: View {
     // MARK: actions
 
     private func toggleSelection(_ id: String) {
+        selectionMode = true
         if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
     }
 
@@ -637,8 +520,10 @@ struct LibraryPage: View {
     }
 
     private func confirmRenamePaper() async {
-        let title = renamingPaperTitle.trimmingCharacters(in: .whitespaces)
-        guard let id = renamingPaperId, !title.isEmpty else { return }
+        let title = renamingPaperTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let id = renamingPaperId, !title.isEmpty, !savingPaperTitle else { return }
+        savingPaperTitle = true
+        defer { savingPaperTitle = false }
         do { try await papersStore.renamePaper(id: id, title: title) }
         catch { actionError = ApiFailure.wrap(error).localizedDescription; return }
         renamingPaperId = nil
@@ -811,6 +696,7 @@ struct PaperCard: View {
     let selectionMode: Bool
     let renaming: Bool
     let renameValue: String
+    let saving: Bool
     let onToggle: () -> Void
     let onStartRename: () -> Void
     let onRenameChange: (String) -> Void
@@ -820,7 +706,6 @@ struct PaperCard: View {
     let onClick: () -> Void
 
     @State private var hovered = false
-    @State private var cornerHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -830,7 +715,7 @@ struct PaperCard: View {
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(paper.displayTitle)
-                            .font(.reading(16.5, weight: .medium))
+                            .font(.system(size: 16.5, weight: .medium))
                             .foregroundStyle(palette.gray800)
                             .fixedSize(horizontal: false, vertical: true)
                         if !paper.titleZh.isEmpty && paper.titleZh != paper.title {
@@ -879,7 +764,7 @@ struct PaperCard: View {
                                 .foregroundStyle(palette.accent)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous).fill(palette.accentSoft))
+                                .liquidInset(cornerRadius: CornerRadius.chip, tint: palette.accentFaint)
                         }
                     }
                 }
@@ -897,100 +782,36 @@ struct PaperCard: View {
         .frame(minHeight: 108, alignment: .topLeading)
         .padding(17)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .mask(CardCornerContentMask(active: cornerHovered && !renaming))
         .liquidPanel(tint: renaming || selected ? palette.accentFaint : nil)
         .overlay(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
             .stroke(renaming || selected ? palette.accent.opacity(0.6) : (hovered ? palette.gray300 : Color.clear)))
-        .overlay(alignment: .topTrailing) {
-            if !renaming {
-                CardCornerActions(hovered: $cornerHovered) {
-                    RoundIconButton(systemName: selected ? Ic.checkSquare : Ic.square, size: 30, title: selected ? "取消选择" : "选择", action: onToggle)
-                    RoundIconButton(systemName: Ic.pencil, size: 30, title: "重命名", action: onStartRename)
-                    RoundIconButton(systemName: Ic.trash, size: 30, title: "删除", action: onDelete)
-                }
-            }
-        }
         .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
-        .onHover { hovered = $0; if !$0 { cornerHovered = false } }
+        .onHover { hovered = $0 }
         .onTapGesture {
             if !renaming { onClick() }
         }
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(renaming ? [] : .isButton)
         .accessibilityAction { if !renaming { onClick() } }
-        .contextMenu {
-            Button(selected ? "取消选择" : "选择", action: onToggle)
-            Button("重命名", action: onStartRename)
-            Button("删除", role: .destructive, action: onDelete)
-        }
         #if os(macOS)
-        .onDrag {
-            NSItemProvider(object: dragIds.joined(separator: ",") as NSString)
-        }
+        .workspaceDraggable(kind: .papers, ids: dragIds, title: paper.displayTitle, subtitle: paper.titleZh,
+                            enabled: !renaming, palette: palette, onClick: onClick)
         #endif
+        .contextMenu {
+            Button(selected ? "取消选择" : "多选", systemImage: selected ? Ic.checkSquare : Ic.square, action: onToggle)
+                .disabled(renaming)
+            Button("编辑条目", systemImage: Ic.pencil, action: onStartRename).disabled(renaming)
+            Button("删除条目", systemImage: Ic.trash, role: .destructive, action: onDelete).disabled(renaming)
+        }
     }
 
     /// Dragging a selected card drags the whole selection; otherwise just this card.
     var dragIds: [String] = []
 
     private var renameField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField("论文标题", text: Binding(get: { renameValue }, set: onRenameChange))
-                .textFieldStyle(.plain)
-                .font(.reading(15, weight: .medium))
-                .padding(.horizontal, 10)
-                .frame(minHeight: 36)
-                .liquidInset(cornerRadius: CornerRadius.inset)
-                .overlay(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).stroke(palette.accent))
-                .onSubmit { onConfirmRename() }
-            HStack(spacing: 5) {
-                Button(action: onConfirmRename) {
-                    HStack(spacing: 4) {
-                        Image.ic(Ic.check).font(.system(size: 11))
-                        Text("保存")
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(palette.accentForeground)
-                    .padding(.horizontal, 8)
-                    .frame(minHeight: 28)
-                    .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(palette.accent))
-                }
-                .buttonStyle(.plain)
-                .disabled(renameValue.trimmingCharacters(in: .whitespaces).isEmpty)
-                Button(action: onCancelRename) {
-                    HStack(spacing: 4) {
-                        Image.ic(Ic.close).font(.system(size: 11))
-                        Text("取消")
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(palette.gray600)
-                    .padding(.horizontal, 8)
-                    .frame(minHeight: 28)
-                    .liquidInset(cornerRadius: CornerRadius.inset)
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        WorkspaceItemEditor(name: Binding(get: { renameValue }, set: onRenameChange),
+                            namePrompt: "论文标题", busy: saving,
+                            onSave: onConfirmRename, onCancel: onCancelRename)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-
-#if os(macOS)
-/// Decodes the paper-id list dragged from a card onto a project row.
-struct ProjectDropDelegate: DropDelegate {
-    let onDropIds: ([String]) -> Void
-
-    func performDrop(info: DropInfo) -> Bool {
-        guard let provider = info.itemProviders(for: [.text]).first else { return false }
-        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
-            guard let text = object as? String else { return }
-            let ids = text.components(separatedBy: ",").filter { !$0.isEmpty }
-            guard !ids.isEmpty else { return }
-            Task { @MainActor in onDropIds(ids) }
-        }
-        return true
-    }
-
-    func dropEntered(info: DropInfo) {}
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-}
-#endif

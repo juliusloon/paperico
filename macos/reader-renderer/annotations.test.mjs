@@ -122,3 +122,17 @@ test('stale annotation close cannot clear a newer formatter', () => withFakeEdit
   assert.equal(secondEditor.value, '**abc**');
   assert.equal(secondEvents.some(event => event.phase === 'draft' && event.blockId === 'second'), true);
 }));
+
+test('visible save and cancel actions commit or discard node note drafts', () => withFakeEditor(() => {
+  const events = [], {node} = makeEditor('glass-note',events);
+  clickNote(node);
+  editorFor(node).value = '保存的证据';
+  node.children.at(-1).children[1].children[0].dispatch('click');
+  assert.equal(events.some(event => event.phase === 'commit' && event.value === '保存的证据'),true);
+  clickNote(node);
+  editorFor(node).value = '取消的草稿';
+  node.children.at(-1).children[1].children[1].dispatch('click');
+  assert.equal(events.at(-2).phase,'cancel');
+  assert.equal(events.some(event => event.phase === 'commit' && event.value === '取消的草稿'),false);
+  assert.equal(window.papericoFinishAnnotation,null);
+}));

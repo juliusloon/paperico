@@ -34,9 +34,18 @@ enum PaperContentScope {
            }) {
             start = summary
         }
-        let end = items.indices.first { index in
+        let labelledEnd = items.indices.first { index in
             index >= start && isBackMatter(items[index])
-        } ?? items.count
+        }
+        // Missing reference headings: require a late, consecutive bibliography
+        // with author initials and publication years, not ordinary numbered prose.
+        let referenceRun = items.indices.first { index in
+            guard index >= start + (items.count - start) / 2 else { return false }
+            let lines = items[index].text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            if lines.count >= 3 && lines.prefix(3).allSatisfy(isBibliographicEntry) { return true }
+            return index + 2 < items.count && items[index...index + 2].allSatisfy { isBibliographicEntry($0.text) }
+        }
+        let end = min(labelledEnd ?? items.count, referenceRun ?? items.count)
         return items.indices.map { index in
             if index >= end { return .backMatter }
             if index < start || isMetadata(items[index].text) { return .frontMatter }
@@ -47,7 +56,7 @@ enum PaperContentScope {
     private static let abstractLabels: Set<String> = ["abstract", "summary", "摘要", "概要"]
     private static let introductionLabels: Set<String> = ["introduction", "background", "引言", "绪论", "背景"]
     private static let backLabels: Set<String> = [
-        "references", "bibliography", "literature cited", "works cited", "参考文献", "引用文献", "文献引用",
+        "references", "references and notes", "references & notes", "bibliography", "literature cited", "works cited", "参考文献", "引用文献", "文献引用",
         "acknowledgments", "acknowledgements", "致谢", "author contributions", "作者贡献",
         "data availability", "data availability statement", "code availability", "代码可用性", "数据可用性",
         "competing interests", "conflict of interest", "conflicts of interest", "利益冲突", "funding", "funding information",
@@ -56,9 +65,13 @@ enum PaperContentScope {
     ]
 
     private static func normalized(_ source: String) -> String {
-        source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let text = source.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"[*_`]+"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             .replacingOccurrences(of: #"^(?:#+\s*|\d+(?:\.\d+)*[.、:]?\s+)"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: " .:："))
+        let compact = text.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+        return ["abstract", "summary", "introduction", "references", "bibliography", "acknowledgements", "acknowledgments"].contains(compact) ? compact : text
     }
 
     private static func isStart(_ item: Item, labels: Set<String>) -> Bool {
@@ -76,13 +89,20 @@ enum PaperContentScope {
         })
     }
 
+    private static func isBibliographicEntry(_ source: String) -> Bool {
+        let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let numberedAuthor = #"^(?:\[\d{1,3}\]|\d{1,3}[.)])\s+.{0,100}(?:,\s*\p{Lu}\.|\p{Lu}\.\s+\p{L})"#
+        return text.range(of: numberedAuthor, options: .regularExpression) != nil &&
+            text.range(of: #"\b(?:18|19|20)\d{2}\b"#, options: .regularExpression) != nil
+    }
+
     private static func isMetadata(_ source: String) -> Bool {
         let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty { return false }
         let patterns = [
             #"^(?:https?://(?:dx\.)?doi\.org/\S+|doi\s*:?\s*10\.\S+)\s*$"#,
             #"^(?:received|accepted|published(?: online)?|收稿日期|接受日期|发表日期)\s*[:：]"#,
-            #"^(?:correspondence|corresponding author|e-?mail|通讯作者)\s*[:：]"#,
+            #"^(?:correspondence|corresponding authors?|e-?mail|authors?|affiliations?|author information|通讯作者|作者|作者单位|单位)\s*[:：]"#,
             #"^(?:<sup>[\d,*]+</sup>\s*|\d+\s*)?(?:college|department|school|institute|laboratory)\b"#,
             #"^[A-Z][a-z]+\s+[A-Z][a-z]+\s*<sup>[\d,*]+</sup>\s*,"#,
             #"^[^\n]+\.pdf$"#

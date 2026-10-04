@@ -19,6 +19,19 @@ struct PapericoApp: App {
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1360, height: 860)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("关于 Paperico…") {
+                    appModel.updateStore.wantsUpdateSettings = true
+                    appModel.router.go(.settings)
+                }
+                Divider()
+                Button("检查更新…") {
+                    appModel.updateStore.wantsUpdateSettings = true
+                    appModel.router.go(.settings)
+                    Task { await appModel.updateStore.check(manual: true) }
+                }
+                    .disabled(appModel.updateStore.checking)
+            }
             WorkspaceSettingsCommands(router: appModel.router)
             ReaderAnnotationCommands()
             CommandMenu("工作台") {

@@ -6,12 +6,13 @@ private final class SingleAnalysisProtocol: URLProtocol {
     static let lock = NSLock()
     static var completionCount = 0
     static var seenBlocks: [[String: Any]] = []
+    static var seenCatalog: [String: Any] = [:]
     static var requestedBudget = 0
     static var mode = "complete"
 
     static func reset(_ mode: String = "complete") {
         lock.lock(); defer { lock.unlock() }
-        completionCount = 0; seenBlocks = []; requestedBudget = 0; self.mode = mode
+        completionCount = 0; seenBlocks = []; seenCatalog = [:]; requestedBudget = 0; self.mode = mode
     }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -29,7 +30,11 @@ private final class SingleAnalysisProtocol: URLProtocol {
         let content = messages.last!["content"] as! String
         let input = try! JSONSerialization.jsonObject(with: Data(content.components(separatedBy: .newlines).last!.utf8)) as! [[String: Any]]
         Self.lock.lock()
-        Self.completionCount += 1; Self.seenBlocks = input; Self.requestedBudget = payload["max_tokens"] as! Int
+        Self.completionCount += 1; Self.seenBlocks = input;
+        if let catalogLine = content.components(separatedBy: .newlines).first(where: { $0.hasPrefix("当前方法目录：") }) {
+            Self.seenCatalog = (try? JSONSerialization.jsonObject(with: Data(catalogLine.dropFirst("当前方法目录：".count).utf8))) as? [String: Any] ?? [:]
+        }
+        Self.requestedBudget = payload["max_tokens"] as! Int
         let mode = Self.mode
         Self.lock.unlock()
         if mode == "denied" {
@@ -40,7 +45,7 @@ private final class SingleAnalysisProtocol: URLProtocol {
         for block in (mode == "missing" ? Array(input.dropLast()) : input) {
             records.append(["id": block["id"]!, "zh": "完整中文翻译", "note": "具体中文要点", "role": "方法设计"])
         }
-        records.append(["methods": [["name": "Graph model", "category": "ML_MODEL", "definition_zh": "学习分子性质", "refs": [mode == "badRef" ? "invented-id" : input.first!["id"]!]]]])
+        records.append(["methods": [["name": "Graph model", "category": mode == "customGroup" ? "custom_group" : "ML_MODEL", "definition_zh": "学习分子性质", "refs": [mode == "badRef" ? "invented-id" : input.first!["id"]!]]]])
         let document: [String: Any] = ["paper": paper, "methods": records.last!["methods"]!, "nodes": Array(records.dropFirst().dropLast())]
         let lines = AnalysisEngine.jsonString(document)
         if payload["stream"] as? Bool == true {
@@ -164,6 +169,42 @@ final class SingleAnalysisTests: XCTestCase {
         XCTAssertEqual(result.nodes[2]["zh"] as? String, "")
         XCTAssertEqual(result.nodes[2]["role"] as? String, "")
         XCTAssertEqual(result.nodes[4]["zh"] as? String, "")
+    }
+
+    func testAnalysisReceivesAllCurrentGroupsAndExistingMethods() async throws {
+        SingleAnalysisProtocol.reset("customGroup")
+        let groups = [MethodGroup(id: "custom_group", name: "用户自定义类别"), MethodGroup(id: "METRIC", name: "已改名的空类别")]
+        let existing = [MethodIndexItem(canonicalKey: "known", name: "Known", category: "custom_group", definitionZh: "已有方法说明", papers: [])]
+        let result = try await AnalysisEngine.analyzePaper(llm: llm(), blocks: blocks(), title: "test", methodGroups: groups, existingMethods: existing, session: session())
+        XCTAssertEqual((SingleAnalysisProtocol.seenCatalog["groups"] as? [[String: String]])?.map { $0["name"]! }, groups.map(\.name))
+        XCTAssertEqual((SingleAnalysisProtocol.seenCatalog["existing_methods"] as? [[String: String]])?.first?["key"], "known")
+        XCTAssertEqual(result.methods.first?["category"] as? String, "custom_group")
+        XCTAssertEqual(SingleAnalysisProtocol.completionCount, 1)
+    }
+
+    func testMethodSuggestionsPreserveEditedNameMovedGroupAndEvidence() throws {
+        let groups = [MethodGroup(id: "custom", name: "自定义分组")]
+        let existing = [MethodIndexItem(canonicalKey: "stable_key", name: "Edited Name", category: "custom", definitionZh: "用户说明", papers: [])]
+        let methods: [[String: Any]] = [
+            ["name": "Full synonym", "category": "ML_MODEL", "existing_key": "stable_key", "refs": ["b1"]],
+            ["name": "Edited Name", "category": "OTHER", "refs": ["b2"]]
+        ]
+        let result = try AnalysisEngine.resolveMethods(methods, groups: groups, existing: existing)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0]["canonical_key"] as? String, "stable_key")
+        XCTAssertEqual(result[0]["name"] as? String, "Edited Name")
+        XCTAssertEqual(result[0]["category"] as? String, "custom")
+        XCTAssertEqual(result[0]["refs"] as? [String], ["b1", "b2"])
+    }
+
+    func testSharedCategoryDoesNotMergeDifferentMethodsAndUnknownCatalogIdsFail() throws {
+        let groups = [MethodGroup(id: "custom", name: "自定义分组")]
+        let existing = [MethodIndexItem(canonicalKey: "known", name: "Known", category: "custom", definitionZh: "用户说明", papers: [])]
+        let fresh: [String: Any] = ["name": "Different", "category": "custom", "refs": ["b1"]]
+        let result = try AnalysisEngine.resolveMethods([fresh], groups: groups, existing: existing)
+        XCTAssertEqual(result.first?["canonical_key"] as? String, "different")
+        XCTAssertThrowsError(try AnalysisEngine.resolveMethods([["name": "New", "category": "deleted"]], groups: groups, existing: existing))
+        XCTAssertThrowsError(try AnalysisEngine.resolveMethods([["name": "New", "category": "custom", "existing_key": "invented"]], groups: groups, existing: existing))
     }
 
     func testFrontMatterNeverEntersModelRequest() async throws {

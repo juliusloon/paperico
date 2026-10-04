@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Mirrors projects/HomePage.tsx — hero, orbit art, metrics, recent list, workflow.
+/// Home overview with recent papers and the core evidence reading workflow.
 /// 所有窗口保留桌面内容层级，插图始终在文字右侧。
 struct HomePage: View {
     @Environment(\.palette) private var palette
@@ -36,7 +36,6 @@ struct HomePage: View {
                     hero
                     metrics
                     lowerGrid
-                    featureGuide
                 }
             }
             // 所有模块共用内容宽度,缩放窗口时保持同一条左右边线。
@@ -52,45 +51,6 @@ struct HomePage: View {
 
     private var readyCount: Int {
         papersStore.papers.filter { $0.statusEnum == .ready }.count
-    }
-
-    private var featureGuide: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("YOUR RESEARCH DESK").font(.system(size: 9, weight: .bold)).kerning(1.4).foregroundStyle(palette.accent)
-                    Text("从第一遍阅读，到有据可查的理解。")
-                        .font(.reading(compact ? 21 : 25, weight: .medium)).foregroundStyle(palette.gray900)
-                }
-                Spacer(minLength: 0)
-            }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: compact ? 12 : 24), count: 3), alignment: .leading, spacing: 16) {
-                feature(icon: Ic.languages, title: "双语精读", text: "原文与译文按段对照，公式、图表与上下标保留学术排版。顶部工具可调节阅读比例。")
-                feature(icon: Ic.listTree, title: "顺着逻辑读", text: "逻辑链与段落相连。点击左下角目录，跳到段落；选中文本，把它加入论文对话。")
-                feature(icon: Ic.messagesSquare, title: "答案回到证据", text: "回答附带原文定位，点击证据即可回到段落。历史对话与笔记留在本地论文库。")
-            }
-            HStack(alignment: .top, spacing: 14) {
-                Image.ic(Ic.sparkles).font(.system(size: 18)).foregroundStyle(palette.accent).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("第一次使用").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.gray800)
-                    Text("在设置中配置 MinerU 与模型 → 上传 PDF → 打开双语正文 → 选中段落追问。想让阅读更轻盈，可在阅读外观中调节背景透明度。")
-                        .font(.system(size: 13)).foregroundStyle(palette.gray600).lineSpacing(5)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(18).liquidInset(cornerRadius: CornerRadius.card, tint: palette.accentFaint)
-        }
-        .padding(cardPadding).frame(maxWidth: .infinity, alignment: .leading).liquidPanel().padding(.top, 12)
-    }
-
-    private func feature(icon: String, title: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image.ic(icon).font(.system(size: 20)).foregroundStyle(palette.accent)
-                .frame(width: 42, height: 42).background(palette.accentSoft, in: Circle())
-            Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(palette.gray800)
-            Text(text).font(.system(size: 13)).foregroundStyle(palette.gray600).lineSpacing(5)
-                .fixedSize(horizontal: false, vertical: true)
-        }.frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
     }
 
     // MARK: hero
@@ -109,24 +69,14 @@ struct HomePage: View {
 
     private var heroCopy: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
-                Image.ic(Ic.sparkles).font(.system(size: 11, weight: .semibold))
-                Text("PAPER READING WORKBENCH")
-                    .lineLimit(1).minimumScaleFactor(0.65)
-            }
-            .font(.system(size: 10, weight: .bold))
-            .kerning(1.6)
-            .foregroundStyle(palette.accent)
-            .padding(.bottom, 18)
-
             Text("读懂论文，\n让判断有据可循。")
-                .font(.reading(heroTitleSize, weight: .medium))
+                .font(.system(size: heroTitleSize, weight: .medium))
                 .kerning(-0.8)
                 .lineSpacing(6)
                 .foregroundStyle(palette.gray900)
                 .lineLimit(2).minimumScaleFactor(0.75)
 
-            Text("上传 PDF，拆解文本与图表，生成双语阅读与逻辑链，沿着原文证据持续追问。")
+            Text("把论文读成逻辑链，让每次追问回到原文证据。")
                 .font(.system(size: compact ? 13.5 : 16.5))
                 .lineSpacing(7)
                 .foregroundStyle(palette.gray600)
@@ -176,7 +126,7 @@ struct HomePage: View {
                     .font(.system(size: 16))
                     .foregroundStyle(palette.accent)
                 Text("\(value)")
-                    .font(.reading(25, weight: .medium))
+                    .font(.system(size: 25, weight: .medium))
                     .foregroundStyle(palette.gray900)
                 if !compact {
                     Text(label).font(.system(size: 13)).foregroundStyle(palette.gray500)
@@ -206,12 +156,8 @@ struct HomePage: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("RECENT")
-                        .font(.system(size: 10, weight: .bold))
-                        .kerning(1.6)
-                        .foregroundStyle(palette.accent)
                     Text("继续阅读")
-                        .font(.reading(compact ? 19 : 21, weight: .medium))
+                        .font(.system(size: compact ? 19 : 21, weight: .medium))
                         .foregroundStyle(palette.gray900)
                 }
                 Spacer(minLength: 0)
@@ -289,42 +235,28 @@ struct HomePage: View {
     }
 
     private var workflowPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("WORKFLOW")
-                .font(.system(size: 10, weight: .bold))
-                .kerning(1.6)
-                .foregroundStyle(palette.accent)
-            Text("一条连贯的阅读路径")
-                .font(.reading(compact ? 19 : 21, weight: .medium))
-                .foregroundStyle(palette.gray900)
-                .padding(.top, 5)
-
-            VStack(spacing: 16) {
-                workflowStep(number: "01", title: "文件拆解", detail: "解析文本与图表，重构成连贯的流式阅读版式。")
-                workflowStep(number: "02", title: "提炼逻辑", detail: "分析论文叙述逻辑，生成与阅读进度同步的逻辑链。")
-                workflowStep(number: "03", title: "证据问答", detail: "与论文解析得到的丰富背景进行直接对话。")
-            }
-            .padding(.top, 20)
+        VStack(alignment: .leading, spacing: 20) {
+            Text("从论文到有据可查的理解")
+                .font(.system(size: compact ? 19 : 21, weight: .medium)).foregroundStyle(palette.gray900)
+            researchFeature(icon: Ic.listTree, title: "双语阅读，顺着论证走", detail: "原文与译文逐段对照，逻辑链串起要点；正文与 PDF 可按段互跳。")
+            researchFeature(icon: Ic.messagesSquare, title: "每次追问，回到证据", detail: "选中段落或图表直接提问，点击回答引用定位原文；对话与笔记留在本机。")
+            researchFeature(icon: Ic.layers, title: "跨论文，归集方法", detail: "方法自动归入全库索引，合并同名条目，沿出现位置查看各篇论文如何使用。")
         }
-        .padding(cardPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .liquidPanel()
+        .padding(cardPadding).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).liquidPanel()
     }
 
-    private func workflowStep(number: String, title: String, detail: String) -> some View {
+    private func researchFeature(icon: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: compact ? 8 : 13) {
-            Text(number)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(palette.accent)
-                .frame(width: compact ? 26 : 32, height: compact ? 26 : 32)
-                .background(Circle().fill(palette.accentSoft))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 14, weight: .medium)).foregroundStyle(palette.gray800)
-                Text(detail).font(.system(size: 12)).foregroundStyle(palette.gray500)
+            Image.ic(icon).font(.system(size: 15)).foregroundStyle(palette.accent)
+                .frame(width: 34, height: 34).liquidInset(cornerRadius: CornerRadius.inset, tint: palette.accentFaint)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.gray800)
+                Text(detail).font(.system(size: 12)).foregroundStyle(palette.gray500).lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
+
 }
 
 /// Measure both cards at their final widths, then propose the same row height.
@@ -365,7 +297,7 @@ struct OrbitArt: View {
     var body: some View {
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
-                Text("P / 01")
+                Text("论文")
                     .font(.system(size: 9, weight: .bold))
                     .kerning(1.1)
                     .foregroundStyle(palette.accent)

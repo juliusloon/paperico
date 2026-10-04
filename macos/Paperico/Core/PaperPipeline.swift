@@ -334,8 +334,10 @@ final class PaperPipeline {
             "mode": "single_pass", "model": config.model, "created_at": PaperLibrary.now(),
             "block_count": blocks.count, "state": "starting"
         ])
+        let methodGroups = await library.listMethodGroups()
+        let existingMethods = try await library.methodIndex()
         let result = try await AnalysisEngine.analyzePaper(
-            llm: config, blocks: input, title: title,
+            llm: config, blocks: input, title: title, methodGroups: methodGroups, existingMethods: existingMethods,
             progress: { [weak self] completed, total in
                 await self?.updateProgress(paperId: paperId, completed: completed, total: total)
             },
@@ -350,8 +352,9 @@ final class PaperPipeline {
     private func saveAnalysis(_ result: AnalysisEngine.PaperAnalysis, paperId: String, blocks: inout [Block]) async throws {
         try Task.checkCancellation()
         progress[paperId] = "单次分析已返回，正在保存结果"
-        let entities = result.methods.map { item in
-            MethodEntity(id: PaperLibrary.newId(), canonicalKey: PaperLibrary.canonicalKey(AnalysisEngine.asString(item["name"])),
+        let methods = try AnalysisEngine.resolveMethods(result.methods, groups: await library.listMethodGroups(), existing: try await library.methodIndex())
+        let entities = methods.map { item in
+            MethodEntity(id: PaperLibrary.newId(), canonicalKey: AnalysisEngine.asString(item["canonical_key"]),
                          name: AnalysisEngine.asString(item["name"]), category: AnalysisEngine.asString(item["category"]),
                          definitionZh: AnalysisEngine.asString(item["definition_zh"]), blockRefs: item["refs"] as? [String] ?? [])
         }

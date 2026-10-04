@@ -194,9 +194,8 @@ private struct WorkspaceNavSurface: View {
             Button { request.toggle(.pages) } label: {
                 HStack(spacing: 7) {
                     brandIcon
-                    Text("Paperico").font(.reading(15, weight: .semibold))
-                        .lineLimit(1).minimumScaleFactor(0.85)
-                        .foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
+                    PapericoWordmark().frame(height: 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Image.ic(Ic.chevronDown).font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(request.section == .pages ? 180 : 0))

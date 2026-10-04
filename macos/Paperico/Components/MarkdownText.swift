@@ -35,7 +35,7 @@ struct MarkdownText: View {
         case .heading(let level, let text):
             // 标题原文直出,不套 `$…$` → 行内代码 的转换(与修改前一致)。
             inlineText(text, mathSplitter: false)
-                .font(.reading(fontSize * headingScale(level), weight: .semibold))
+                .font(.system(size: fontSize * headingScale(level), weight: .semibold))
                 .foregroundStyle(palette.gray900)
                 .padding(.top, 2)
         case .paragraph(let text):

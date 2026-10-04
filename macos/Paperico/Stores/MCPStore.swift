@@ -15,8 +15,11 @@ final class MCPStore {
     var running: Bool { !endpoint.isEmpty }
 
     private let server: PapericoMCPServer
+    private let credentials: CredentialStore
+    var onCredentialsRead: (() async -> Void)?
 
-    init(library: PaperLibrary) {
+    init(library: PaperLibrary, credentials: CredentialStore = .shared) {
+        self.credentials = credentials
         server = PapericoMCPServer { name, arguments in
             let result = try await library.automationQuery(name, arguments: arguments)
             return PapericoMCPPayload(json: result.json, image: result.image, mimeType: result.mimeType)
@@ -54,7 +57,7 @@ final class MCPStore {
         Task {
             do {
                 let value = try Self.newToken()
-                try KeychainStore.write(value, to: .mcpToken)
+                try await credentials.write(value, to: .mcpToken)
                 endpoint = ""
                 token = ""
                 await server.stop()
@@ -73,14 +76,16 @@ final class MCPStore {
         error = ""
         defer { busy = false }
         do {
-            let saved = KeychainStore.read(.mcpToken, allowInteraction: allowInteraction)
+            let snapshot = await credentials.readAll(allowInteraction: allowInteraction)
+            await onCredentialsRead?()
+            let saved = snapshot[.mcpToken]
             guard !saved.needsAuthorization else { throw AutomationError("MCP 凭据需要钥匙串授权，请点击重试。") }
             var value = saved.value
             if value.isEmpty {
                 // Automatic startup must not create an interactive keychain item.
                 guard allowInteraction else { throw AutomationError("MCP 凭据缺失，请点击重试以创建。") }
                 value = try Self.newToken()
-                try KeychainStore.write(value, to: .mcpToken)
+                try await credentials.write(value, to: .mcpToken)
             }
             let preferred = UInt16(exactly: UserDefaults.standard.integer(forKey: "paperico:mcp-port")) ?? 0
             let url: URL
@@ -101,18 +106,6 @@ final class MCPStore {
         let value: [String: Any] = ["mcpServers": ["paperico": ["url": endpoint, "headers": ["Authorization": "Bearer \(token)"]]]]
         guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else { return "" }
         return String(decoding: data, as: UTF8.self)
-    }
-
-    var vscodeConfiguration: String {
-        guard running else { return "" }
-        let value: [String: Any] = ["servers": ["paperico": ["type": "http", "url": endpoint, "headers": ["Authorization": "Bearer \(token)"]]]]
-        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else { return "" }
-        return String(decoding: data, as: UTF8.self)
-    }
-
-    var claudeCommand: String {
-        // Endpoint is generated locally; token is hex, so neither needs shell quoting beyond these literals.
-        "claude mcp add --transport http paperico '\(endpoint)' --header 'Authorization: Bearer \(token)'"
     }
 
     private static func newToken() throws -> String {

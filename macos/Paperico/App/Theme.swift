@@ -126,30 +126,12 @@ extension Color {
 
 // MARK: - Typography
 
-extension Font {
-    /// Charter / Iowan Old Style serif reading face → system serif (New York).
-    static func reading(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .serif)
-    }
-
-
-}
-
 // MARK: - Status vocabulary (single source of truth, mirrors LibraryPage STATUS_*)
 
 // MARK: - Method categories (mirrors MethodsPage CATEGORY_*)
 
 enum MethodCategory {
-    static let labels: [String: String] = [
-        "ML_MODEL": "机器学习模型",
-        "ALGORITHM": "算法/优化方法",
-        "INSTRUMENT_METHOD": "表征/检测方法",
-        "DATASET_BENCHMARK": "数据集/基准",
-        "METRIC": "评价指标",
-        "CHEMISTRY": "反应类型/试剂",
-        "SOFTWARE_TOOL": "软件/工具",
-        "OTHER": "其他",
-    ]
+    static let labels = Dictionary(uniqueKeysWithValues: MethodGroup.presets.map { ($0.id, $0.name) })
 
     static let colors: [String: Color] = [
         "ML_MODEL": Color(hex: "#2563eb")!,

@@ -14,6 +14,7 @@ final class AppModel {
     let readerStore: ReaderStore
     let chatStore: ChatStore
     let mcpStore: MCPStore
+    let updateStore = UpdateStore()
 
     /// 视图通过环境取用的本地服务句柄(actor 引用)。
     let services: AppServices
@@ -37,6 +38,10 @@ final class AppModel {
         self.chatStore = ChatStore(library: library, settings: settingsStore)
         self.mcpStore = MCPStore(library: library)
         self.services = AppServices(library: library, pipeline: pipeline)
+
+        mcpStore.onCredentialsRead = { [weak settingsStore] in
+            await settingsStore?.readSavedCredentials()
+        }
 
         // 启动即装载本地论文库(含中断对账);设置本地合成,无需网络。
         // 合成设置刷新时给本地外观补齐缺失项(一次性迁移),不覆盖本地选择。

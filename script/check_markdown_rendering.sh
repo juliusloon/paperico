@@ -11,6 +11,8 @@ cd "$PAPERICO_ROOT"
 xcrun swiftc -parse-as-library -o "$PAPERICO_PROBE_DIR/MarkdownRenderingSmoke" \
   macos/Tests/MarkdownRenderingSmoke.swift \
   macos/Paperico/Core/MarkdownTable.swift \
+  macos/Paperico/Core/MethodGroup.swift \
+  macos/Paperico/Core/ServiceErrors.swift \
   macos/Paperico/Components/MarkdownText.swift \
   macos/Paperico/Components/GlassKit.swift \
   macos/Paperico/App/Theme.swift \

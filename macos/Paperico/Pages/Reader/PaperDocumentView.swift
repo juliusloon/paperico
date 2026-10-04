@@ -19,6 +19,8 @@ struct PaperDocumentView: View {
     let onAttach: (AttachedContext) -> Void
     let onJump: (String) -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.glassOpacity) private var glassOpacity
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @State private var selectionState = DocumentSelectionState()
 
@@ -43,7 +45,7 @@ struct PaperDocumentView: View {
             ("gray-0",palette.gray0),("gray-50",palette.gray50),("gray-100",palette.gray100),
             ("gray-200",palette.gray200),("gray-300",palette.gray300),("gray-400",palette.gray400),
             ("gray-500",palette.gray500),("gray-600",palette.gray600),("gray-700",palette.gray700),("gray-800",palette.gray800),
-            ("gray-900",palette.gray900),("accent",palette.accent),("accent-soft",palette.accentSoft),
+            ("gray-900",palette.gray900),("accent",palette.accent),("accent-foreground",palette.accentForeground),("accent-soft",palette.accentSoft),
             ("accent-faint",palette.accentFaint),("inset-surface",palette.insetSurface)
         ]
         for (key, color) in tokens {
@@ -52,7 +54,9 @@ struct PaperDocumentView: View {
             }
         }
         return ["colors":colors,"fontSize":Double(fontSize),"mode":mode.rawValue,
-                "outlineWidth":Double(outlineWidth),"compact":false,"dark":palette.dark]
+                "outlineWidth":Double(outlineWidth),"compact":false,"dark":palette.dark,
+                "glassOpacity":reduceTransparency ? 1 : min(1, max(0, glassOpacity)),
+                "reduceTransparency":reduceTransparency]
     }
 
 }

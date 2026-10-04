@@ -2,6 +2,68 @@ import XCTest
 @testable import PapericoCore
 
 final class MethodIndexTests: XCTestCase {
+    func testEmptyLibraryIncludesEveryPresetAndEmptyCustomGroupsSurviveReload() async throws {
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let presets = await library.listMethodGroups()
+        XCTAssertEqual(presets, MethodGroup.presets)
+        let group = try await library.createMethodGroup(name: "  自定义分组  ")
+        let reopened = PaperLibrary(root: root)
+        try await reopened.load()
+        let groups = await reopened.listMethodGroups()
+        XCTAssertEqual(groups.last, MethodGroup(id: group.id, name: "自定义分组"))
+    }
+
+    func testGroupRenameAndMovePersistWithoutChangingEvidence() async throws {
+        let (library, first, _) = try await fixture()
+        let group = try await library.createMethodGroup(name: "常用方法")
+        try await library.moveMethods(keys: ["alpha", "beta"], groupId: group.id)
+        try await library.renameMethodGroup(id: group.id, name: "已整理")
+        let reopened = PaperLibrary(root: root)
+        try await reopened.load()
+        let moved = try await reopened.methodIndex(category: group.id)
+        let groups = await reopened.listMethodGroups()
+        let entities = try await reopened.readEntities(paperId: first)
+        XCTAssertEqual(Set(moved.map(\.id)), ["alpha", "beta"])
+        XCTAssertEqual(groups.first { $0.id == group.id }?.name, "已整理")
+        XCTAssertEqual(entities.first?.category, "model")
+    }
+
+    func testDeletingGroupRemovesAllContainedMethodsIncludingMergedAliases() async throws {
+        let (library, first, _) = try await fixture()
+        try await library.mergeMethods(keys: ["alpha", "beta"], keeping: "alpha", name: "组合", definitionZh: "")
+        try await library.moveMethods(keys: ["alpha"], groupId: "ML_MODEL")
+        try await library.deleteMethodGroup(id: "ML_MODEL")
+        let reopened = PaperLibrary(root: root)
+        try await reopened.load()
+        let groups = await reopened.listMethodGroups()
+        let visible = try await reopened.methodIndex()
+        XCTAssertFalse(groups.contains { $0.id == "ML_MODEL" })
+        XCTAssertTrue(visible.isEmpty)
+        let evidence = try await reopened.readEntities(paperId: first)
+        XCTAssertEqual(evidence.count, 2)
+        try await reopened.writeEntities(paperId: first, entities: evidence)
+        let remaining = try await reopened.methodIndex()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testGroupValidationRejectsDuplicateNamesAndMissingTargets() async throws {
+        let (library, _, _) = try await fixture()
+        _ = try await library.createMethodGroup(name: "Named")
+        for name in ["  named\n", "机器学习模型", " \n"] {
+            do { _ = try await library.createMethodGroup(name: name); XCTFail("Must reject invalid name") }
+            catch { XCTAssertTrue(error is PipelineError) }
+        }
+        do { try await library.renameMethodGroup(id: "OTHER", name: "Named"); XCTFail("Must reject duplicate rename") }
+        catch { XCTAssertTrue(error is PipelineError) }
+        do { try await library.moveMethods(keys: ["alpha"], groupId: "missing"); XCTFail("Must reject missing group") }
+        catch { XCTAssertTrue(error is PipelineError) }
+        do { try await library.moveMethods(keys: ["alpha", "missing"], groupId: "OTHER"); XCTFail("Must reject stale selection atomically") }
+        catch { XCTAssertTrue(error is PipelineError) }
+        let items = try await library.methodIndex()
+        XCTAssertEqual(items.first { $0.id == "alpha" }?.category, "model")
+    }
+
     private var root: URL!
     override func setUpWithError() throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Mirrors projects/MethodsPage.tsx — category sidebar, search, expandable method cards.
 /// 窄窗口沿用桌面侧栏轨道，展开后点击空白收回。
@@ -21,6 +22,14 @@ struct MethodsPage: View {
     @State private var deletingItem: MethodIndexItem?
     @State private var mergeItems: [MethodIndexItem]?
     @State private var saving = false
+    @State private var groups: [MethodGroup] = MethodGroup.presets
+    @State private var showNewGroup = false
+    @State private var groupName = ""
+    @State private var renamingGroup: String?
+    @State private var deletingGroup: MethodGroup?
+    @State private var groupBusy = false
+    @State private var dropTarget: String?
+
 
     private var isCompact: Bool { containerWidth < LayoutBreakpoint.workspace }
     private var effectiveSidebarCollapsed: Bool { isCompact ? !temporarilyExpanded : sidebarCollapsed }
@@ -29,13 +38,6 @@ struct MethodsPage: View {
         var counts: [String: Int] = [:]
         for item in items { counts[item.category, default: 0] += 1 }
         return counts
-    }
-
-    private var categories: [(key: String, label: String, count: Int)] {
-        MethodCategory.labels.compactMap { key, label in
-            guard let count = categoryCounts[key], count > 0 else { return nil }
-            return (key, label, count)
-        }
     }
 
     private var filteredItems: [MethodIndexItem] {
@@ -79,6 +81,12 @@ struct MethodsPage: View {
                 }.transition(.opacity)
             }
         }
+        .alert("删除方法分组", isPresented: .init(get: { deletingGroup != nil }, set: { if !$0 { deletingGroup = nil } })) {
+            Button("取消", role: .cancel) { deletingGroup = nil }
+            Button("删除", role: .destructive) { Task { await deleteGroup() } }
+        } message: {
+            Text("删除「\(deletingGroup?.name ?? "")」会同时删除里面的所有方法条目。论文原文和解析结果会保留。此操作无法撤销。")
+        }
         .alert("方法索引", isPresented: .init(get: { !error.isEmpty }, set: { if !$0 { error = "" } })) {
             Button("好") { error = "" }
         } message: { Text(error) }
@@ -95,6 +103,8 @@ struct MethodsPage: View {
         defer { loading = false }
         do {
             items = try await services.library.methodIndex()
+            groups = await services.library.listMethodGroups()
+            if !categoryFilter.isEmpty && !groups.contains(where: { $0.id == categoryFilter }) { categoryFilter = "" }
             selectedIds.removeAll { id in !items.contains { $0.id == id } }
         } catch {
             self.error = ApiFailure.wrap(error).errorDescription ?? "方法索引读取失败"
@@ -141,75 +151,95 @@ struct MethodsPage: View {
         } catch { self.error = ApiFailure.wrap(error).localizedDescription }
     }
 
+    private func saveGroup() async {
+        guard !groupBusy else { return }
+        groupBusy = true
+        defer { groupBusy = false }
+        do {
+            if let id = renamingGroup { try await services.library.renameMethodGroup(id: id, name: groupName) }
+            else { _ = try await services.library.createMethodGroup(name: groupName) }
+            cancelGroupEdit()
+            await load()
+        } catch { self.error = ApiFailure.wrap(error).localizedDescription }
+    }
+
+    private func cancelGroupEdit() { renamingGroup = nil; showNewGroup = false; groupName = "" }
+
+    private func deleteGroup() async {
+        guard let group = deletingGroup, !groupBusy else { return }
+        groupBusy = true
+        defer { groupBusy = false }
+        do {
+            try await services.library.deleteMethodGroup(id: group.id)
+            deletingGroup = nil
+            await load()
+        } catch { self.error = ApiFailure.wrap(error).localizedDescription }
+    }
+
+    private func move(_ ids: [String], to group: String) async {
+        guard !groupBusy else { return }
+        groupBusy = true
+        defer { groupBusy = false }
+        do {
+            try await services.library.moveMethods(keys: ids, groupId: group)
+            selectedIds = []; selectionMode = false
+            await load()
+        } catch { self.error = ApiFailure.wrap(error).localizedDescription }
+    }
+
     // MARK: sidebar
 
     private var sidebar: some View {
         VStack(spacing: 0) {
             HStack {
                 if !effectiveSidebarCollapsed {
-                    Text("实体类别")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.gray800)
-                        .transition(.identity)
+                    Text("方法分组").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.gray800)
                 }
                 Spacer(minLength: 0)
-                RoundIconButton(
-                    systemName: Ic.panelLeft,
-                    size: 30,
-                    title: effectiveSidebarCollapsed ? "展开类别" : "收起类别",
-                    animatesSymbolChange: false
-                ) {
-                    if isCompact {
-                        temporarilyExpanded.toggle()
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.18)) { sidebarCollapsed.toggle() }
-                    }
-                }
-            }
-            .padding(.horizontal, effectiveSidebarCollapsed ? 11 : 15)
-            .frame(minHeight: 50)
-
-            if !effectiveSidebarCollapsed {
-                ScrollView {
-                    VStack(spacing: 2) {
-                        categoryRow(key: "", label: "全部方法", count: items.count, color: nil)
-                        ForEach(categories, id: \.key) { category in
-                            categoryRow(key: category.key, label: category.label, count: category.count, color: MethodCategory.color(category.key, dark: palette.dark))
+                HStack(spacing: 2) {
+                    if !effectiveSidebarCollapsed {
+                        RoundIconButton(systemName: Ic.plus, size: 30, title: "新建方法分组") {
+                            cancelGroupEdit(); showNewGroup = true
                         }
                     }
-                    .padding(8)
+                    RoundIconButton(systemName: Ic.panelLeft, size: 30,
+                        title: effectiveSidebarCollapsed ? "展开方法分组" : "收起方法分组", animatesSymbolChange: false) {
+                        if isCompact { temporarilyExpanded.toggle() }
+                        else { withAnimation(.easeInOut(duration: 0.18)) { sidebarCollapsed.toggle() } }
+                    }
                 }
-                .transition(.identity)
-            } else {
-                Spacer(minLength: 0)
-            }
-        }
-        .clipped()
-        .liquidPanel()
-    }
-
-    private func categoryRow(key: String, label: String, count: Int, color: Color?) -> some View {
-        let active = categoryFilter == key
-        return Button {
-            selectCategory(key)
-        } label: {
-            HStack(spacing: 8) {
-                if let color {
-                    Circle().fill(color).frame(width: 8, height: 8)
+            }.padding(.horizontal, effectiveSidebarCollapsed ? 11 : 15).frame(minHeight: 50)
+            if !effectiveSidebarCollapsed {
+                if showNewGroup {
+                    WorkspaceGroupEditor(name: $groupName, creating: true, busy: groupBusy,
+                        onSave: { Task { await saveGroup() } }, onCancel: cancelGroupEdit)
+                        .padding(.horizontal, 8).padding(.bottom, 6)
                 }
-                Text(label)
-                    .font(.system(size: 14))
-                    .foregroundStyle(active ? palette.accent : palette.gray700)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text("\(count)").font(.system(size: 10)).foregroundStyle(palette.gray500.opacity(0.6))
-            }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 42)
-            .background(RoundedRectangle(cornerRadius: CornerRadius.inset, style: .continuous).fill(active ? palette.accentSoft : Color.clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+                ScrollView {
+                    VStack(spacing: 2) {
+                        WorkspaceGroupRow(name: "全部方法", count: items.count, active: categoryFilter.isEmpty,
+                            onSelect: { selectCategory("") })
+                        ForEach(groups) { group in
+                            if renamingGroup == group.id {
+                                WorkspaceGroupEditor(name: $groupName, busy: groupBusy,
+                                    onSave: { Task { await saveGroup() } }, onCancel: cancelGroupEdit)
+                            } else {
+                                WorkspaceGroupRow(name: group.name, count: categoryCounts[group.id] ?? 0,
+                                    active: categoryFilter == group.id, color: MethodCategory.color(group.id, dark: palette.dark),
+                                    targeted: dropTarget == group.id, onSelect: { selectCategory(group.id) },
+                                    onRename: { cancelGroupEdit(); renamingGroup = group.id; groupName = group.name },
+                                    onDelete: { deletingGroup = group })
+                                #if os(macOS)
+                                .onDrop(of: [WorkspaceDragKind.methods.type], delegate: WorkspaceGroupDropDelegate(kind: .methods, target: $dropTarget, groupId: group.id) { ids in
+                                    Task { await move(ids, to: group.id) }
+                                })
+                                #endif
+                            }
+                        }
+                    }.padding(8)
+                }
+            } else { Spacer(minLength: 0) }
+        }.clipped().liquidPanel(elevated: true)
     }
 
     // MARK: main
@@ -237,8 +267,7 @@ struct MethodsPage: View {
     private var toolbar: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("METHOD INDEX").font(.system(size: 8, weight: .bold)).kerning(1.2).foregroundStyle(palette.accent)
-                Text("方法索引").font(.reading(22, weight: .medium)).foregroundStyle(palette.gray900)
+                Text("方法索引").font(.system(size: 22, weight: .medium)).foregroundStyle(palette.gray900)
             }
             .frame(width: 118, alignment: .leading)
             PillIconMenu(title: "排序方法", icon: "arrow.up.arrow.down", selection: $sortMode,
@@ -267,19 +296,20 @@ struct MethodsPage: View {
                 VStack(spacing: 12) {
                     Image.ic(Ic.layers).font(.system(size: 42)).foregroundStyle(palette.gray400.opacity(0.3))
                     Text(query.isEmpty && categoryFilter.isEmpty ? "暂无方法索引" : "没有符合条件的方法").font(.system(size: 16.5)).foregroundStyle(palette.gray600)
-                    Text(query.isEmpty && categoryFilter.isEmpty ? "上传并分析论文后，方法实体将自动归集于此" : "调整关键词或实体类别后重新搜索").font(.system(size: 13)).foregroundStyle(palette.gray500)
+                    Text(query.isEmpty && categoryFilter.isEmpty ? "上传并分析论文后，方法实体将自动归集于此" : "调整关键词或方法分组后重新搜索").font(.system(size: 13)).foregroundStyle(palette.gray500)
                 }
                 .frame(maxWidth: .infinity, minHeight: 380)
                 .padding(.top, 40)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
                     ForEach(filteredItems) { item in
-                        MethodCard(item: item, selected: selectedIds.contains(item.id), selectionMode: selectionMode,
+                        MethodCard(item: item, groupName: groups.first { $0.id == item.category }?.name ?? MethodCategory.label(item.category), selected: selectedIds.contains(item.id), selectionMode: selectionMode,
                             editing: editingId == item.id, saving: saving,
                             onToggle: { toggleSelection(item.id) }, onEdit: { editingId = item.id },
                             onDelete: { deletingItem = item },
                             onSave: { name, definition in Task { await save(item, name: name, definition: definition) } },
-                            onCancel: { editingId = nil })
+                            onCancel: { editingId = nil },
+                            dragIds: selectedIds.contains(item.id) ? selectedIds : [item.id])
                     }
                 }
                 .padding(.horizontal, 10)
@@ -297,6 +327,7 @@ struct MethodCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let item: MethodIndexItem
+    let groupName: String
     let selected: Bool
     let selectionMode: Bool
     let editing: Bool
@@ -306,36 +337,23 @@ struct MethodCard: View {
     let onDelete: () -> Void
     let onSave: (String, String) -> Void
     let onCancel: () -> Void
+    var dragIds: [String] = []
 
     @State private var expanded = false
-    @State private var cornerHovered = false
     @State private var draftName = ""
     @State private var draftDefinition = ""
-    @FocusState private var nameFocused: Bool
 
     private var categoryColor: Color { MethodCategory.color(item.category, dark: palette.dark) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if editing {
-                TextField("方法名称", text: $draftName, axis: .vertical)
-                    .font(.reading(16.5, weight: .semibold)).textFieldStyle(.plain)
-                    .lineLimit(1...5).focused($nameFocused)
-                    .padding(9).liquidInset(cornerRadius: 10)
-                    .onSubmit { save() }
-                TextField("方法说明", text: $draftDefinition, axis: .vertical)
-                    .font(.system(size: 14)).textFieldStyle(.plain).lineLimit(3...10)
-                    .padding(9).liquidInset(cornerRadius: 10)
-                    .onSubmit { save() }
-                HStack(spacing: 8) {
-                    ToolbarButton(title: "保存", icon: Ic.check, kind: .primary, busy: saving,
-                                  disabled: draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) { save() }
-                    ToolbarButton(title: "取消", icon: Ic.close, disabled: saving, action: onCancel)
-                }
+                WorkspaceItemEditor(name: $draftName, namePrompt: "方法名称", detail: $draftDefinition,
+                                    detailPrompt: "方法说明", busy: saving, onSave: save, onCancel: onCancel)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Circle().fill(categoryColor).frame(width: 8, height: 8)
-                    Text(item.name).font(.reading(16.5, weight: .semibold))
+                    Text(item.name).font(.system(size: 16.5, weight: .semibold))
                         .foregroundStyle(palette.gray800)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -347,9 +365,9 @@ struct MethodCard: View {
                 }
             }
             HStack(spacing: 8) {
-                Text(MethodCategory.label(item.category)).font(.system(size: 11))
+                Text(groupName).font(.system(size: 11))
                     .foregroundStyle(categoryColor).padding(.horizontal, 7).padding(.vertical, 4)
-                    .background(categoryColor.chipBackground(), in: RoundedRectangle(cornerRadius: CornerRadius.chip))
+                    .liquidInset(cornerRadius: CornerRadius.chip, tint: categoryColor.opacity(0.08))
                 Spacer(minLength: 0)
                 Text("\(item.papers.count) 篇论文").font(.system(size: 11)).foregroundStyle(palette.gray500)
             }
@@ -371,39 +389,33 @@ struct MethodCard: View {
         }
         .padding(17).frame(minHeight: 142, alignment: .topLeading)
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .mask(CardCornerContentMask(active: cornerHovered && !editing))
         .liquidPanel(tint: selected || editing ? palette.accentFaint : nil)
         .overlay {
             RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
                 .stroke(selected || editing ? palette.accent.opacity(0.6) : .clear)
         }
-        .overlay(alignment: .topTrailing) {
-            if !editing {
-                CardCornerActions(hovered: $cornerHovered) {
-                    RoundIconButton(systemName: selected ? Ic.checkSquare : Ic.square, size: 30,
-                                    title: selected ? "取消选择方法" : "选择方法", action: onToggle)
-                    RoundIconButton(systemName: Ic.pencil, size: 30, title: "编辑方法", action: onEdit)
-                    RoundIconButton(systemName: Ic.trash, size: 30, title: "删除方法", action: onDelete)
-                }
-            }
-        }
         .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
-        .onHover { if !$0 { cornerHovered = false } }
         .onTapGesture {
             guard !editing else { return }
             if selectionMode { onToggle() }
             else { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { expanded.toggle() } }
         }
+        #if os(macOS)
+        .workspaceDraggable(kind: .methods, ids: dragIds, title: item.name, subtitle: groupName, enabled: !editing, palette: palette, dragHeight: expanded ? 80 : nil) {
+            if selectionMode { onToggle() }
+            else { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) { expanded.toggle() } }
+        }
+        #endif
         .contextMenu {
-            Button(selected ? "取消选择" : "选择", action: onToggle)
-            Button("编辑名称与说明", action: onEdit)
-            Button("删除方法", role: .destructive, action: onDelete)
+            Button(selected ? "取消选择" : "多选", systemImage: selected ? Ic.checkSquare : Ic.square, action: onToggle)
+                .disabled(editing)
+            Button("编辑条目", systemImage: Ic.pencil, action: onEdit).disabled(editing)
+            Button("删除条目", systemImage: Ic.trash, role: .destructive, action: onDelete).disabled(editing)
         }
         .onChange(of: editing) { _, active in
-            if active { draftName = item.name; draftDefinition = item.definitionZh; nameFocused = true }
+            if active { draftName = item.name; draftDefinition = item.definitionZh }
         }
-        .onExitCommand { if editing && !saving { onCancel() } }
     }
 
     private func save() {
@@ -426,7 +438,7 @@ private struct MethodMergePanel: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("合并方法").font(.reading(22, weight: .medium)).foregroundStyle(palette.gray900)
+                Text("合并方法").font(.system(size: 22, weight: .medium)).foregroundStyle(palette.gray900)
                 Spacer(minLength: 0)
                 RoundIconButton(systemName: Ic.close, size: 30, title: "取消合并", action: onCancel)
                     .disabled(saving)
@@ -444,7 +456,7 @@ private struct MethodMergePanel: View {
                     }
                     SlidingChoice(selection: $choice, options: [("first", "保留第一个"), ("second", "保留第二个"), ("custom", "重新编写")])
                     TextField("合并后的名称", text: $name, axis: .vertical)
-                        .textFieldStyle(.plain).font(.reading(17, weight: .medium)).lineLimit(1...4)
+                        .textFieldStyle(.plain).font(.system(size: 17, weight: .medium)).lineLimit(1...4)
                         .padding(11).liquidInset(cornerRadius: 12)
                         .accessibilityLabel("合并后的名称")
                     TextField("合并后的说明", text: $definition, axis: .vertical)

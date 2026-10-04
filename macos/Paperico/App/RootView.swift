@@ -10,6 +10,9 @@ struct RootView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(AppModel.self) private var appModel
     @Environment(Router.self) private var router
+    @Environment(UpdateStore.self) private var updateStore
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         GeometryReader { geo in
@@ -59,7 +62,19 @@ struct RootView: View {
         // accent 捕捉换色;树内其他 .animation(value:) 各有 value 门控,不会冲突。
         .animation(.easeInOut(duration: 0.2), value: palette.appBase)
         .animation(.easeInOut(duration: 0.2), value: palette.accent)
-        .task { await appModel.bootstrap() }
+        .task { await appModel.bootstrap(); await updateStore.check() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await updateStore.check() } }
+        }
+        .alert("发现 Paperico 新版本", isPresented: Binding(get: { updateStore.showPrompt }, set: { if !$0 { updateStore.dismissPrompt() } })) {
+            Button("前往更新") {
+                if let url = updateStore.available?.pageURL { openURL(url) }
+                updateStore.dismissPrompt()
+            }
+            Button("稍后", role: .cancel) { updateStore.dismissPrompt() }
+        } message: {
+            Text("\(updateStore.currentVersion) → \(updateStore.available?.versionLabel ?? "")。下载并安装新版本后即可完成更新。")
+        }
         .onAppear {
             appModel.systemIsDark = colorScheme == .dark
             AppBootstrap.install()

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="hero-title hero-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="416" viewBox="0 0 1200 416" role="img" aria-labelledby="hero-title hero-desc">
   <title id="hero-title">Paperico</title>
-  <desc id="hero-desc">Paperico is a local-first, bring-your-own-key native macOS paper reading workbench: import a paper, read it bilingually, question it with evidence, and turn the discussion into notes. The Paperico app icon — a blue P and a gray O — sits on the right.</desc>
+  <desc id="hero-desc">Paperico is a local-first, bring-your-own-key native macOS paper reading workbench: import a paper, read it bilingually, question it with evidence, and turn the discussion into notes. The designed Paperico wordmark sits on the left; the app icon — a blue P over a gray O — sits on the right.</desc>
 
   <defs>
     <linearGradient id="p-grad" x1="0" y1="0" x2="0" y2="1">
@@ -9,25 +9,37 @@
     </linearGradient>
   </defs>
 
-  <rect x="0.75" y="0.75" width="1198.5" height="398.5" rx="24" fill="#FBFCFD" stroke="#E4E8EE" stroke-width="1.5"/>
+  <rect x="0.75" y="0.75" width="1198.5" height="414.5" rx="24" fill="#FBFCFD" stroke="#E4E8EE" stroke-width="1.5"/>
 
   <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
-    <text x="72" y="108" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', monospace" font-size="19" letter-spacing="2.5" fill="#0A72DC">LOCAL-FIRST · BYOK · NATIVE MACOS</text>
-    <text x="70" y="192" font-size="86" font-weight="700" fill="#15181E">Paperico</text>
-    <text x="72" y="240" font-size="25" fill="#3E4450">Import a paper, read it bilingually,</text>
-    <text x="72" y="274" font-size="25" fill="#3E4450">question it with evidence,</text>
-    <text x="72" y="308" font-size="25" fill="#3E4450">turn the discussion into notes.</text>
+    <text x="72" y="104" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', monospace" font-size="19" letter-spacing="2.5" fill="#3260CF">LOGIC CHAIN · ONE-PASS ANALYSIS · EVIDENCE</text>
+    <text x="72" y="270" font-size="25" fill="#3E4450">Import a paper, read it bilingually,</text>
+    <text x="72" y="304" font-size="25" fill="#3E4450">question it with evidence,</text>
+    <text x="72" y="338" font-size="25" fill="#3E4450">turn the discussion into notes.</text>
     <g font-family="ui-monospace, 'SFMono-Regular', 'Menlo', monospace" font-size="17.5" fill="#3E4450">
-      <rect x="72" y="336" width="132" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="84" y="358">macOS 26+</text>
-      <rect x="216" y="336" width="84" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="228" y="358">BYOK</text>
-      <rect x="312" y="336" width="68" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="324" y="358">MIT</text>
+      <rect x="72" y="358" width="132" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="84" y="380">macOS 26+</text>
+      <rect x="216" y="358" width="84" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="228" y="380">BYOK</text>
+      <rect x="312" y="358" width="68" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="324" y="380">MIT</text>
     </g>
   </g>
 
-  <g id="app-icon-mark">
+  <!-- Designed Paperico wordmark, from Paperico/Assets.xcassets/PapericoWordmark.imageset (2715 × 596, brand #3260CF) -->
+  <g id="wordmark" transform="translate(70 128) scale(0.17) translate(-171 -686)" fill="#3260CF" fill-rule="evenodd">
+    <path d="M276.056,1059.185l0,136.194l-95.056,0l0,-491.126l177.466,0c97.946,0 177.466,79.52 177.466,177.466c0,97.946 -79.52,177.466 -177.466,177.466l-82.41,0Zm0,-268.262l0,181.593l82.41,0c50.112,0 90.796,-40.684 90.796,-90.796c0,-50.112 -40.684,-90.796 -90.796,-90.796l-82.41,0Z"/>
+    <path d="M824.828,1153.885c-26.57,15.867 -57.627,24.986 -90.796,24.986c-97.946,0 -177.466,-79.52 -177.466,-177.466c0,-97.946 79.52,-177.466 177.466,-177.466c33.17,0 64.226,9.12 90.796,24.986l0,-12.605l94.923,0l0,330.168l-94.923,0l0,-12.605Zm0,-152.479c0,-50.112 -40.684,-90.796 -90.796,-90.796c-50.112,0 -90.796,40.684 -90.796,90.796c0,50.112 40.684,90.796 90.796,90.796c50.112,0 90.796,-40.684 90.796,-90.796Z"/>
+    <path d="M1068.328,1153.885l-0,118.139l-94.923,0l0,-435.702l94.923,0l0,12.605c26.57,-15.867 57.627,-24.986 90.796,-24.986c97.946,0 177.466,79.52 177.466,177.466c0,97.946 -79.52,177.466 -177.466,177.466c-33.17,0 -64.226,-9.12 -90.796,-24.986Zm-0,-152.479c0,50.112 40.684,90.796 90.796,90.796c50.112,0 90.796,-40.684 90.796,-90.796c0,-50.112 -40.684,-90.796 -90.796,-90.796c-50.112,0 -90.796,40.684 -90.796,90.796Z"/>
+    <path d="M1696.133,1091.004c-30.825,52.551 -87.915,87.867 -153.188,87.867c-97.946,0 -177.466,-79.52 -177.466,-177.466c0,-97.946 79.52,-177.466 177.466,-177.466c97.946,0 177.466,79.52 177.466,177.466c0,14.207 -1.673,28.026 -4.833,41.271l-253.515,-0c15.039,29.389 45.628,49.525 80.882,49.525c22.669,0 43.41,-8.326 59.327,-22.084l93.861,20.886Zm-72.306,-130.87c-15.039,-29.389 -45.628,-49.525 -80.882,-49.525c-35.255,0 -65.843,20.136 -80.882,49.525l161.765,0Z"/>
+    <path d="M1761.681,1164.504l93.09,0c0,0 -0,0 -0,-130.048c0,-101.415 51.542,-111.237 85.068,-111.237c13.39,0 17.888,1.837 25.539,4.899l0,-91.066c-7.014,-1.837 -16.578,-3.368 -26.779,-3.368c-39.85,0 -73.626,11.194 -83.828,51.608l0,-48.999l-93.09,0l0,328.212Z"/>
+    <rect x="2009.308" y="836.322" width="94.923" height="330.168"/>
+    <circle cx="2056.77" cy="749.652" r="53.652"/>
+    <path d="M2487.347,1042.677c-18.623,78.07 -88.894,136.194 -172.633,136.194c-97.946,0 -177.466,-79.52 -177.466,-177.466c0,-97.946 79.52,-177.466 177.466,-177.466c83.739,0 154.01,58.124 172.633,136.194l-91.751,0c-15.039,-29.389 -45.628,-49.525 -80.882,-49.525c-50.112,0 -90.796,40.684 -90.796,90.796c0,50.112 40.684,90.796 90.796,90.796c35.255,0 65.843,-20.136 80.882,-49.525l91.751,0Z"/>
+    <path d="M2698.534,823.94c97.946,0 177.466,79.52 177.466,177.466c0,97.946 -79.52,177.466 -177.466,177.466c-97.946,0 -177.466,-79.52 -177.466,-177.466c0,-97.946 79.52,-177.466 177.466,-177.466Zm0,86.669c-50.112,0 -90.796,40.684 -90.796,90.796c0,50.112 40.684,90.796 90.796,90.796c50.112,0 90.796,-40.684 90.796,-90.796c0,-50.112 -40.684,-90.796 -90.796,-90.796Z"/>
+  </g>
+
+  <g id="app-icon-mark" transform="translate(0 9)">
     <circle cx="949.7" cy="199.1" r="128.2" fill="#E3E3E3" fill-opacity="0.9"/>
     <path d="M868.7,346.1L830.7,346.1C809.8,346.1 792.9,329.1 792.9,308.3L792.9,46.2C792.9,46.2 896.0,46.3 941.6,46.3L948.2,46.3C949.0,46.3 949.8,46.3 950.6,46.3C950.6,46.3 950.7,46.3 950.7,46.3C1001.0,48.8 1041.0,90.4 1041.0,141.3C1041.0,193.8 998.5,236.3 946.1,236.5L945.9,236.5L868.7,236.5L868.7,346.1Z" fill="url(#p-grad)" fill-opacity="0.9"/>
   </g>

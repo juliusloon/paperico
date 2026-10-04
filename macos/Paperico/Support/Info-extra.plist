@@ -32,5 +32,18 @@
 			</dict>
 		</dict>
 	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.paperico.papers</string>
+			<key>UTTypeDescription</key><string>Paperico Papers</string>
+			<key>UTTypeConformsTo</key><array><string>public.data</string></array>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.paperico.methods</string>
+			<key>UTTypeDescription</key><string>Paperico Methods</string>
+			<key>UTTypeConformsTo</key><array><string>public.data</string></array>
+		</dict>
+	</array>
 </dict>
 </plist>

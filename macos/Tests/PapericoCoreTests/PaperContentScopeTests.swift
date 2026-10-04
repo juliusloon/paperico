@@ -46,4 +46,28 @@ final class PaperContentScopeTests: XCTestCase {
             item("文献条目", section: "参考文献")
         ]), [.frontMatter, .body, .body, .backMatter])
     }
+
+    func testFormattedSpacedBoundariesAndAuthorLabelsAreExcluded() {
+        let regions = PaperContentScope.regions([
+            item("Authors: Jane Doe"), item("Affiliations: Example University"),
+            item("**A B S T R A C T**", heading: true), item("Scientific summary"),
+            item("**6. References and Notes**", heading: true), item("Citation")
+        ])
+        XCTAssertEqual(regions, [.frontMatter, .frontMatter, .body, .body, .backMatter, .backMatter])
+    }
+
+    func testMissingReferenceHeadingRequiresConsecutiveBibliography() {
+        let regions = PaperContentScope.regions([
+            item("Abstract", heading: true), item("Summary"), item("Methods", heading: true), item("Experiments"),
+            item("Results", heading: true), item("Measured outcomes"),
+            item("1. Smith, J. Molecular design. Journal 10, 1–9 (2024)."),
+            item("2. Doe, A. Model training. Journal 20, 10–19 (2025)."),
+            item("3. Brown, B. Prediction. Journal 30, 20–29 (2026).")
+        ])
+        XCTAssertEqual(regions, Array(repeating: .body, count: 6) + Array(repeating: .backMatter, count: 3))
+        XCTAssertEqual(PaperContentScope.regions([
+            item("Introduction", heading: true), item("References to earlier studies motivate the model."),
+            item("1. Samples collected in 2024"), item("2. Data processed in 2025"), item("3. Results validated in 2026")
+        ]), Array(repeating: .body, count: 5))
+    }
 }

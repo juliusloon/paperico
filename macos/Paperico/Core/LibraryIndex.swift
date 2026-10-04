@@ -24,12 +24,13 @@ struct LibraryIndex: Codable {
     var methodAliases: [String: String] = [:]
     var hiddenMethods: [String] = []
     var methodAddedAt: [String: String] = [:]
+    var methodGroups: [MethodGroup] = MethodGroup.presets
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, projects, papers, shaByPaperId, sourceUrlByPaperId, trash
-        case methodContent, methodAliases, hiddenMethods, methodAddedAt
+        case methodContent, methodAliases, hiddenMethods, methodAddedAt, methodGroups
     }
 
     init(from decoder: Decoder) throws {
@@ -48,5 +49,6 @@ struct LibraryIndex: Codable {
         methodAliases = try values.decodeIfPresent([String: String].self, forKey: .methodAliases) ?? [:]
         hiddenMethods = try values.decodeIfPresent([String].self, forKey: .hiddenMethods) ?? []
         methodAddedAt = try values.decodeIfPresent([String: String].self, forKey: .methodAddedAt) ?? [:]
+        methodGroups = try values.decodeIfPresent([MethodGroup].self, forKey: .methodGroups) ?? MethodGroup.presets
     }
 }
