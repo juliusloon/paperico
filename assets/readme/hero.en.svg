@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="416" viewBox="0 0 1200 416" role="img" aria-labelledby="hero-title hero-desc">
   <title id="hero-title">Paperico</title>
-  <desc id="hero-desc">Paperico：本地优先、自带 Key 的 macOS 原生论文精读工作台。</desc>
+  <desc id="hero-desc">Paperico is a local-first, bring-your-own-key native macOS paper reading workbench: import a paper, read it bilingually, question it with evidence, and turn the discussion into notes. The designed Paperico wordmark sits on the left; the app icon — a blue P over a gray O — sits on the right.</desc>
 
   <defs>
     <linearGradient id="p-grad" x1="0" y1="0" x2="0" y2="1">
@@ -12,16 +12,16 @@
   <rect x="0.75" y="0.75" width="1198.5" height="414.5" rx="24" fill="#FBFCFD" stroke="#E4E8EE" stroke-width="1.5"/>
 
   <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
-    <text x="72" y="104" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="19" font-weight="600" letter-spacing="2.5px" fill="#3260CF">逻辑链 · 全文分析 · 证据闭环</text>
-    <text x="72" y="270" font-size="25" fill="#3E4450">导入论文自动生成对照翻译、逻辑链与论文总结。</text>
-    <text x="72" y="304" font-size="25" fill="#3E4450">提问可追溯定位段落，讨论支持沉淀导出。</text>
-    <g font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="17.5" fill="#3E4450">
+    <text x="72" y="104" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', monospace" font-size="19" font-weight="600" letter-spacing="2.5px" fill="#3260CF">LOGIC CHAIN · FULL-PAPER ANALYSIS · EVIDENCE</text>
+    <text x="72" y="270" font-size="25" fill="#3E4450">Import a paper, get parallel translation, logic chain and summary.</text> 
+    <text x="72" y="304" font-size="25" fill="#3E4450">Trace discussion back to paragraphs and export to save.</text>
+    <g font-family="ui-monospace, 'SFMono-Regular', 'Menlo', monospace" font-size="17.5" fill="#3E4450">
       <rect x="72" y="338" width="132" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
       <text x="90" y="360">macOS 26+</text>
-      <rect x="216" y="338" width="112" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="236" y="360">自带 KEY</text>
-      <rect x="340" y="338" width="68" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="360" y="360">MIT</text>
+      <rect x="216" y="338" width="84" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="238" y="360">BYOK</text>
+      <rect x="312" y="338" width="68" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
+      <text x="330" y="360">MIT</text>
     </g>
   </g>
 
