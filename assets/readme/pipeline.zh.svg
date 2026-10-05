@@ -73,7 +73,7 @@
     <rect x="55" y="296" width="1090" height="60" rx="14" fill="#3260CF" fill-opacity="0.06" stroke="#3260CF" stroke-opacity="0.28" stroke-width="1.5"/>
     <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="18">
       <text x="79" y="333" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">本地论文库</text>
-      <text x="216" y="333" fill="#3E4450">沙盒 JSON · 可选只读 MCP 供 Claude Code / Cursor / VS Code 读取</text>
+      <text x="216" y="333" fill="#3E4450">沙盒 JSON · 可选只读 MCP 供 Agent 读取</text>
     </g>
   </g>
 </svg>

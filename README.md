@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Paperico — a local-first, bring-your-own-key native macOS paper reading workbench. Import a paper, read it bilingually, question it with evidence, and turn the discussion into notes. The Paperico app icon, a blue P over a gray O, sits on the right.">
+  <img src="assets/readme/Paperico_Visuals_Tilted.jpg" width="100%" alt="Paperico's visual design — a continuously adjustable native macOS interface with fluid interactions.">
+</p>
+
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Paperico — a local-first, bring-your-own-key native macOS paper reading workbench.">
 </p>
 
 <div align="center">
@@ -20,7 +24,11 @@ methods or figures attached; valid block citations jump straight back to their e
 
 Your library lives in your own sandbox, API keys stay in the macOS Keychain, and the app
 connects directly to the services you configure. **Local-first, bring-your-own-key, no relay
-server, no Python backend needed to run the app.**
+server.**
+
+<p align="center">
+  <img src="assets/readme/Paperico_Homepage.jpg" width="100%" alt="Paperico's home page.">
+</p>
 
 ## Why it's different
 
@@ -49,7 +57,7 @@ the translation, chat citations, method cards and annotations.
   imports by content hash and keeps a restorable trash — while library files stay in the sandbox and API credentials are stored in Keychain.
   Parsing and AI requests send content directly to your configured services.
 - **Your library speaks MCP.** An opt-in localhost server in Settings → MCP gives any
-  Streamable-HTTP client — Claude Code, Cursor, VS Code — 10 read-only tools plus
+  Streamable-HTTP client 10 read-only tools plus
   per-paper resources: metadata, bilingual blocks, figures, the method index and notes.
   The bearer token lives in the Keychain, reads never trigger paid calls, and trash
   stays sealed off.
@@ -70,13 +78,17 @@ the translation, chat citations, method cards and annotations.
 - **Tasks** — a pending/failed queue with stop, reparse and retranslate; later imports start automatically once services are configured.
 - **Bilingual reader** — original and translation, logic-chain outline, method cards, PDFKit reading, saved progress.
 - **Evidence chat** — attach selections, methods or figures; citations locate their source paragraph or PDF position.
-- **Method groups** — persistent groups for the cross-paper method index (all eight presets visible, drag between groups, duplicate-name checks); your curated identities steer how new papers are analyzed.
+- **Method groups** — persistent groups for the cross-paper method index (eight presets, drag between groups, duplicate-name checks); your curated identities steer how new papers are analyzed.
 - **Notes** — synthesize selected messages into Markdown notes and export them.
 - **Trash** — deleting preserves PDFs, extracted content, conversations and notes until you restore or permanently delete them.
 - **MCP** — opt-in localhost access with 10 read-only tools, evidence blocks and figures; copy client configuration from settings. See the [connection guide](docs/mcp.md).
-- **Native desktop** — Liquid Glass, light/dark appearance, accent colors, offline math rendering, an About page with opt-in update checks, ⌘1–⌘3 navigation and ⌘, settings.
+- **Native desktop** — Liquid Glass, light/dark appearance, accent colors, offline math rendering, an About page with opt-in update checks.
 
 See the [release notes](docs/releases/v1.0.1.md) and the [architecture review](docs/architecture.md).
+
+<p align="center">
+  <img src="assets/readme/Paperico_Reading.jpg" width="100%" alt="Paperico's reading view.">
+</p>
 
 ## Run
 
@@ -105,8 +117,7 @@ First session:
 3. Configure a MinerU cloud token or your self-hosted MinerU Gradio endpoint.
 4. Start pending papers from the processing tasks page.
 5. While reading, click evidence citations to locate their blocks or PDF positions.
-6. Optionally enable Settings → MCP to let external assistants such as Claude Code,
-   Cursor or VS Code read the library read-only.
+6. Optionally enable Settings → MCP to let external assistants read the library read-only.
 
 **Local-first does not mean offline AI.** Cloud MinerU receives your PDF; the model endpoint
 receives the text and conversation context needed for each task. The app connects directly
@@ -115,7 +126,7 @@ to your configured services. Paperico does not operate a relay.
 ## How it works
 
 <p align="center">
-  <img src="./assets/readme/pipeline.svg" width="100%" alt="The Paperico pipeline in five stages — import a PDF with SHA-256 deduplication, parse it with MinerU into typed blocks with positions, run streaming LLM analysis that produces translation, roles, methods and a TL;DR, translating long papers in bounded batches before a full-paper summary, read and ask with evidence citations that jump back to the exact block or PDF region, and turn selected answers into Markdown notes — all feeding one local sandboxed library that an opt-in read-only MCP server exposes to Claude Code, Cursor and VS Code.">
+  <img src="./assets/readme/pipeline.svg" width="100%" alt="The Paperico pipeline in five stages — import a PDF with SHA-256 deduplication, parse it with MinerU into typed blocks with positions, run streaming LLM analysis that produces translation, roles, methods and a TL;DR, translating long papers in bounded batches before a full-paper summary, read and ask with evidence citations that jump back to the exact block or PDF region, and turn selected answers into Markdown notes — all feeding one local sandboxed library with an opt-in read-only MCP server.">
 </p>
 
 | Directory | Responsibility |

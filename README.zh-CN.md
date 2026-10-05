@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="./assets/readme/hero.zh.svg" width="100%" alt="Paperico——本地优先、自带 Key 的 macOS 原生论文精读工作台。导入论文 PDF，双语精读、按证据提问，把讨论沉淀为 Markdown 笔记。右侧为 Paperico 应用图标：蓝色 P 与灰色 O。">
+  <img src="assets/readme/Paperico_Visuals_Tilted.jpg" width="100%" alt="Paperico 的视觉设计——无级调节的 macOS 原生视觉界面，流畅的交互体验。">
+</p>
+
+<p align="center">
+  <img src="./assets/readme/hero.zh.svg" width="100%" alt="Paperico——本地优先、自带 Key 的 macOS 原生论文精读工作台。">
 </p>
 
 <div align="center">
@@ -18,7 +22,11 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 回答中的有效 block 引用会直接定位到对应证据。
 
 论文库保存在你自己的沙盒中，API Key 存于 macOS 钥匙串，App 直连你配置的服务。
-**本地优先、自带 Key、无中转服务器，运行 App 也无需启动 Python 后端。**
+**本地优先、自带 Key、无中转服务器。**
+
+<p align="center">
+  <img src="assets/readme/Paperico_Homepage.jpg" width="100%" alt="Paperico 的主页。">
+</p>
 
 ## 核心差异
 
@@ -39,8 +47,8 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 - **本地优先、自带 Key、为存续而设计。** 管线支持云端任务断点续跑、排队任务不重新
   上传、应用重启后的中断对账、按内容哈希去重与可恢复的回收站；本地文件保存在沙盒，
   密钥保存在钥匙串；解析与 AI 请求会把内容直接发送给你配置的服务。
-- **论文库会说 MCP。** 在「设置 → MCP 连接」打开默认关闭的 localhost 服务，任何支持
-  Streamable HTTP 的客户端——Claude Code、Cursor、VS Code——即可获得 10 个只读工具
+- **论文库会说 MCP。** 在「设置 → MCP 连接」打开默认关闭的 localhost 服务，为任何支持
+  Streamable HTTP 的客户端提供 10 个只读工具
   和每篇论文的资源：元数据、双语正文块、图像、方法索引与笔记。Bearer Token 存于
   钥匙串，读取不触发任何付费调用，回收站内容对外部客户端封闭。
 
@@ -60,15 +68,18 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 - **任务管理**：待处理与失败队列，支持停止、重新解析、复用段落重新翻译；配置就绪后新导入自动处理。
 - **双语精读**：原文与译文、逻辑链大纲、方法卡片、PDFKit 原文阅读与进度记忆。
 - **证据问答**：可附带选段、方法或图表；引用可定位到来源段落或 PDF 位置。
-- **方法分组**：跨论文方法索引驻留在持久分组中（8 个预设分组始终可见，支持跨组拖动、
+- **方法分组**：跨论文方法索引驻留在持久分组中（8 个预设分组，支持跨组拖动、
   重名校验）；你整理过的方法身份会指导新论文的分析。
 - **笔记**：选择对话生成 Markdown 笔记，支持导出。
 - **回收站**：删除后保留 PDF、解析结果、对话和笔记，可随时恢复，也可逐篇确认后永久删除。
 - **MCP**：默认关闭的 localhost 只读服务，提供 10 个工具、证据块与图像；在设置中复制客户端配置。详见 [连接说明](docs/mcp.md)。
-- **原生桌面**：Liquid Glass、深浅色外观、自定义强调色、离线公式渲染、带可选更新检查的关于页、⌘1–⌘3 导航与 ⌘, 设置。
+- **原生桌面**：Liquid Glass、深浅色外观、自定义强调色、离线公式渲染、带可选更新检查的关于页。
 
 详见[更新说明](docs/releases/v1.0.1.md)与[仓库分析与架构说明](docs/architecture.md)。
 
+<p align="center">
+  <img src="assets/readme/Paperico_Reading.jpg" width="100%" alt="Paperico 的阅读页面。">
+</p>
 ## 运行
 
 **安装**：从 [最新 Release](https://github.com/juliusloon/paperico/releases) 下载 dmg 安装即可。本 app 未使用 Developer ID
@@ -93,15 +104,14 @@ My Mac → Run。Codex 的 Run 按钮使用同一脚本。
 3. 配置 MinerU 云端 Token，或选择自己部署的本地 Gradio 服务。
 4. 配置完成后，从处理任务页开始解析。
 5. 阅读过程中点击回答的证据引用，可跳转到对应段落或 PDF 位置。
-6. 可选：在「设置 → MCP 连接」开启只读服务，让 Claude Code、Cursor 或 VS Code 等
-   外部助手读取论文库。
+6. 可选：在「设置 → MCP 连接」开启只读服务，让外部助手读取论文库。
 
 **本地优先不等于离线 AI**：使用云端 MinerU 会上传 PDF；模型端点会接收任务所需的论文文本和对话上下文。App 直连你配置的服务，Paperico 不提供中转服务器。
 
 ## 工作原理
 
 <p align="center">
-  <img src="./assets/readme/pipeline.zh.svg" width="100%" alt="Paperico 的五阶段流程——导入 PDF 并做 SHA-256 去重；用 MinerU（云端或自托管）解析为类型化分块；流式 LLM 分析生成译文、角色与方法索引，长论文分段翻译后汇总；在逻辑链中精读并按证据引用提问，引用可跳回原文；把选中的回答沉淀为 Markdown 笔记——全部汇入本地沙盒论文库，可选开启的只读 MCP 服务让 Claude Code、Cursor 和 VS Code 读取。">
+  <img src="./assets/readme/pipeline.zh.svg" width="100%" alt="Paperico 的五阶段流程——导入 PDF 并做 SHA-256 去重；用 MinerU（云端或自托管）解析为类型化分块；流式 LLM 分析生成译文、角色与方法索引，长论文分段翻译后汇总；在逻辑链中精读并按证据引用提问，引用可跳回原文；把选中的回答沉淀为 Markdown 笔记——全部汇入本地沙盒论文库，可选开启的只读 MCP 服务。">
 </p>
 
 | 目录 | 职责 |
