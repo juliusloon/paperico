@@ -80,6 +80,7 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 <p align="center">
   <img src="assets/readme/Paperico_Reading.jpg" width="100%" alt="Paperico 的阅读页面。">
 </p>
+
 ## 运行
 
 **安装**：从 [最新 Release](https://github.com/juliusloon/paperico/releases) 下载 dmg 安装即可。本 app 未使用 Developer ID
