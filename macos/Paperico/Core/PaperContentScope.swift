@@ -12,7 +12,10 @@ enum PaperContentScope {
     }
 
     static func regions(_ blocks: [Block]) -> [Region] {
-        regions(blocks.map { Item(kind: $0.kind, text: $0.textOriginal, section: $0.sectionTitle) })
+        regions(blocks.map {
+            let visual = $0.kind == "figure" || $0.kind == "table"
+            return Item(kind: $0.kind, text: visual && !$0.captionOriginal.isEmpty ? $0.captionOriginal : $0.textOriginal, section: $0.sectionTitle)
+        })
     }
 
     static func regions(_ items: [Item]) -> [Region] {
@@ -34,22 +37,41 @@ enum PaperContentScope {
            }) {
             start = summary
         }
-        let labelledEnd = items.indices.first { index in
-            index >= start && isBackMatter(items[index])
-        }
         // Missing reference headings: require a late, consecutive bibliography
         // with author initials and publication years, not ordinary numbered prose.
-        let referenceRun = items.indices.first { index in
+        func startsReferenceRun(_ index: Int) -> Bool {
             guard index >= start + (items.count - start) / 2 else { return false }
             let lines = items[index].text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             if lines.count >= 3 && lines.prefix(3).allSatisfy(isBibliographicEntry) { return true }
             return index + 2 < items.count && items[index...index + 2].allSatisfy { isBibliographicEntry($0.text) }
         }
-        let end = min(labelledEnd ?? items.count, referenceRun ?? items.count)
+        func startsScientificFigureRun(_ index: Int) -> Bool {
+            // MinerU may retain "Additional information" as the section of all
+            // Extended Data panels, with the real caption on the last panel.
+            for candidate in items[index...] {
+                guard candidate.kind == "figure" || candidate.kind == "table" else { return false }
+                if candidate.text.range(of: #"\b(?:extended\s+data\s+|supplementary\s+)?(?:fig(?:ure)?\.?|table)\s*[a-z]?\d+\b"#,
+                                        options: [.regularExpression, .caseInsensitive]) != nil { return true }
+            }
+            return false
+        }
+        // References are a section, not an irreversible end-of-document marker.
+        // Nature puts Methods after References; preprints often put appendices there.
+        var current: Region = .body
+        var previousSection = ""
         return items.indices.map { index in
-            if index >= end { return .backMatter }
-            if index < start || isMetadata(items[index].text) { return .frontMatter }
-            return .body
+            let item = items[index]
+            let section = normalized(item.section)
+            let sectionChanged = !section.isEmpty && section != previousSection
+            previousSection = section
+            guard index >= start else { return .frontMatter }
+            if isBodyHeading(item) || (sectionChanged && isBodyLabel(section)) || (current == .backMatter && startsScientificFigureRun(index)) {
+                current = .body
+            } else if isBackMatter(Item(kind: item.kind, text: item.text, section: sectionChanged ? item.section : "")) || startsReferenceRun(index) {
+                current = .backMatter
+            }
+            if current == .body && isMetadata(item.text) { return .frontMatter }
+            return current
         }
     }
 
@@ -64,6 +86,23 @@ enum PaperContentScope {
         "publisher’s note", "publisher's note", "reporting summary"
     ]
 
+    private static let bodyLabels: Set<String> = [
+        "methods", "method", "materials and methods", "materials & methods", "online methods",
+        "experimental procedures", "experimental section", "experimental methods", "experiments",
+        "results", "results and discussion", "discussion", "conclusion", "conclusions",
+        "appendix", "appendices", "supplementary methods", "supplementary results", "supplementary discussion",
+        "extended data", "方法", "材料与方法", "实验方法", "实验", "结果", "讨论", "结论", "附录"
+    ]
+
+    private static func isBodyLabel(_ text: String) -> Bool {
+        bodyLabels.contains(text) || text.range(of: #"^(?:appendix|appendices|附录)(?:\s+[a-z0-9]+)?(?:\s*[:：.]\s*.+)?$"#,
+                                               options: .regularExpression) != nil
+    }
+
+    private static func isBodyHeading(_ item: Item) -> Bool {
+        item.kind == "section_heading" && isBodyLabel(normalized(item.text))
+    }
+
     private static func normalized(_ source: String) -> String {
         let text = source.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"[*_`]+"#, with: "", options: .regularExpression)
@@ -71,7 +110,7 @@ enum PaperContentScope {
             .replacingOccurrences(of: #"^(?:#+\s*|\d+(?:\.\d+)*[.、:]?\s+)"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: " .:："))
         let compact = text.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
-        return ["abstract", "summary", "introduction", "references", "bibliography", "acknowledgements", "acknowledgments"].contains(compact) ? compact : text
+        return bodyLabels.contains(compact) || ["abstract", "summary", "introduction", "references", "bibliography", "acknowledgements", "acknowledgments"].contains(compact) ? compact : text
     }
 
     private static func isStart(_ item: Item, labels: Set<String>) -> Bool {

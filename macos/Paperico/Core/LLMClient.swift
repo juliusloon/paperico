@@ -50,7 +50,7 @@ enum LLMClient {
         ]
         if let temperature { payload["temperature"] = temperature }
         if responseFormatJSON { payload["response_format"] = ["type": "json_object"] }
-        if let reasoningEffort, reasoningEffort != "off" { payload["reasoning_effort"] = reasoningEffort }
+        payload.merge(reasoningFields(reasoningEffort, model: model, baseURL: baseURL)) { _, new in new }
 
         let data = try await postCompletions(
             payload: payload, baseURL: baseURL, apiKey: apiKey, timeout: timeout, session: session, compatibilityRetries: compatibilityRetries
@@ -76,7 +76,7 @@ enum LLMClient {
             "max_tokens": maxTokens,
             "stream": true,
         ]
-        if let reasoningEffort, reasoningEffort != "off" { payload["reasoning_effort"] = reasoningEffort }
+        payload.merge(reasoningFields(reasoningEffort, model: model, baseURL: baseURL)) { _, new in new }
         if let temperature { payload["temperature"] = temperature }
         if responseFormatJSON { payload["response_format"] = ["type": "json_object"] }
 
@@ -152,6 +152,18 @@ enum LLMClient {
     }
 
     // MARK: - 底层
+
+    static func reasoningFields(_ effort: String?, model: String, baseURL: String) -> [String: Any] {
+        if model.lowercased().contains("qwen3.5"), effort == "none" || effort == "off" {
+            // Qwen's serving template needs this switch; reasoning_effort alone
+            // does not select its non-thinking template. DashScope uses a flat flag.
+            let host = URL(string: baseURL)?.host?.lowercased() ?? ""
+            if host.contains("dashscope.aliyuncs.com") { return ["enable_thinking": false] }
+            return ["chat_template_kwargs": ["enable_thinking": false]]
+        }
+        guard let effort, effort != "off" else { return [:] }
+        return ["reasoning_effort": effort]
+    }
 
     private static func makeRequest(baseURL: String, apiKey: String, timeout: TimeInterval) throws -> URLRequest {
         guard let url = URL(string: normalizeBaseURL(baseURL) + "/chat/completions"),

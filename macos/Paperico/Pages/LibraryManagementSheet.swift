@@ -123,12 +123,22 @@ struct LibraryManagementSheet: View {
                 Button("停止") { perform(id: paper.id) { await services.pipeline.cancel(paperId: paper.id) } }
                     .buttonStyle(LiquidActionButtonStyle()).disabled(busy.contains(paper.id))
             } else {
-                Menu(paper.status == "uploaded" ? "开始处理" : "重试") {
+                Menu {
                     Button("继续处理（复用已有结果）") { services.pipeline.startProcessing(paperId: paper.id) }
                     Button("重新解析 PDF") { services.pipeline.reparse(paperId: paper.id) }
                     Button("重新翻译已有段落") { services.pipeline.retranslate(paperId: paper.id) }
                     Button("恢复上次返回结果（不调用模型）") { services.pipeline.recoverAnalysis(paperId: paper.id) }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(paper.status == "uploaded" ? "开始处理" : "重试")
+                        Image(systemName: "chevron.down").font(.caption2)
+                    }
                 }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                .tint(palette.gray800).foregroundStyle(palette.gray800)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .fixedSize().noFocusRing()
+                .liquidTool().disabled(busy.contains(paper.id))
             }
         }.padding(.vertical, 6)
     }

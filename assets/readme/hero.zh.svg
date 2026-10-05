@@ -12,7 +12,7 @@
   <rect x="0.75" y="0.75" width="1198.5" height="414.5" rx="24" fill="#FBFCFD" stroke="#E4E8EE" stroke-width="1.5"/>
 
   <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
-    <text x="72" y="104" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="19" font-weight="600" letter-spacing="2.5px" fill="#3260CF">逻辑链 · 单次分析 · 证据闭环</text>
+    <text x="72" y="104" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="19" font-weight="600" letter-spacing="2.5px" fill="#3260CF">逻辑链 · 全文分析 · 证据闭环</text>
     <text x="72" y="270" font-size="25" fill="#3E4450">导入论文 PDF，双语精读、按证据提问，</text>
     <text x="72" y="304" font-size="25" fill="#3E4450">把讨论沉淀为 Markdown 笔记。</text>
     <g font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="17.5" fill="#3E4450">

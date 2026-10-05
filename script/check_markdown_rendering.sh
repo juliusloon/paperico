@@ -13,7 +13,11 @@ xcrun swiftc -parse-as-library -o "$PAPERICO_PROBE_DIR/MarkdownRenderingSmoke" \
   macos/Paperico/Core/MarkdownTable.swift \
   macos/Paperico/Core/MethodGroup.swift \
   macos/Paperico/Core/ServiceErrors.swift \
+  macos/Paperico/Core/ChatContextBuilder.swift \
+  macos/Paperico/Models/Models.swift \
+  macos/Paperico/Models/PaperStatus.swift \
   macos/Paperico/Components/MarkdownText.swift \
+  macos/Paperico/Components/CitationInlineText.swift \
   macos/Paperico/Components/GlassKit.swift \
   macos/Paperico/App/Theme.swift \
   macos/Paperico/App/WindowChrome.swift \

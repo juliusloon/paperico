@@ -127,6 +127,8 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
     private var observers: [NSObjectProtocol] = []
     #if os(macOS)
     private var selectionMonitor: Any?
+    private weak var selectionWindow: NSWindow?
+    private var savedBackgroundDragging = false
     #endif
     private var shared: SharedPdfState?
     private var onProgressChange: ((Double) -> Void)?
@@ -352,11 +354,24 @@ final class PdfCoordinatorBase: NSObject, PDFViewDelegate {
 
     /// Mouse-down hides the action immediately. Keyboard selections can publish normally.
     func selectionGestureChanged(active: Bool) {
+        #if os(macOS)
+        // PDFKit hits private page/scroll views. Disable background dragging
+        // before AppKit dispatches mouseDown to them, then restore it on release.
+        if active, selectionWindow == nil, let window = pdfView?.window {
+            selectionWindow = window
+            savedBackgroundDragging = window.isMovableByWindowBackground
+            window.isMovableByWindowBackground = false
+        } else if !active, let window = selectionWindow {
+            window.isMovableByWindowBackground = savedBackgroundDragging
+            selectionWindow = nil
+        }
+        #endif
         shared?.isSelecting = active
         if active { shared?.selectionRect = nil }
     }
 
     func detach() {
+        selectionGestureChanged(active: false)
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers.removeAll()
         #if os(macOS)
@@ -496,6 +511,7 @@ struct PlatformPdfView: NSViewRepresentable {
 }
 
 private final class TrackingPdfView: PDFView {
+    override var mouseDownCanMoveWindow: Bool { false }
     var onViewportChange: (() -> Void)?
     private var lastViewportSize: CGSize = .zero
     override func layout() {

@@ -267,9 +267,10 @@ struct MethodsPage: View {
     private var toolbar: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("方法索引").font(.system(size: 22, weight: .medium)).foregroundStyle(palette.gray900)
+                Text("方法索引").font(PageTitleSpec.font).foregroundStyle(palette.gray900)
             }
-            .frame(width: 118, alignment: .leading)
+            .padding(.leading, PageTitleSpec.listInset)
+            .frame(width: 128, alignment: .leading)
             PillIconMenu(title: "排序方法", icon: "arrow.up.arrow.down", selection: $sortMode,
                 options: [("name", "首字母（A–Z）"), ("recent", "最近添加（新到旧）")], active: sortMode == "name")
             Spacer(minLength: 0)
@@ -279,7 +280,7 @@ struct MethodsPage: View {
 
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.top, PageTitleSpec.toolbarTopInset).padding(.bottom, 8)
         .frame(minHeight: 56)
     }
 

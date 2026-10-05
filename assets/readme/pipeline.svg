@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="pipeline-title pipeline-desc">
   <title id="pipeline-title">Paperico pipeline</title>
-  <desc id="pipeline-desc">Five stages feed one local library: import a PDF with SHA-256 dedup, parse it with MinerU into typed blocks, run one streaming LLM analysis that produces translation, roles and methods, read and ask with evidence citations that jump back to the source, then turn selected answers into Markdown notes. Everything lands in the sandboxed local library, which an opt-in read-only MCP server exposes to Claude Code, Cursor and VS Code.</desc>
+  <desc id="pipeline-desc">Five stages feed one local library: import a PDF with SHA-256 dedup, parse it with MinerU into typed blocks, run streaming LLM analysis that produces translation, roles and methods, translating long papers in bounded batches before a full-paper summary, read and ask with evidence citations that jump back to the source, then turn selected answers into Markdown notes. Everything lands in the sandboxed local library, which an opt-in read-only MCP server exposes to Claude Code, Cursor and VS Code.</desc>
 
   <rect x="0.75" y="0.75" width="1198.5" height="398.5" rx="26" fill="#FBFCFD" stroke="#E4E8EE" stroke-width="1.5"/>
 
@@ -29,8 +29,8 @@
       <rect width="190" height="196" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
       <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', monospace" font-size="18" font-weight="600" fill="#3260CF">STEP 03</text>
       <text x="16" y="62" font-size="21" font-weight="600" fill="#15181E">Analyze</text>
-      <text x="16" y="94" font-size="18" fill="#3E4450">one streaming</text>
-      <text x="16" y="118" font-size="18" fill="#3E4450">LLM request:</text>
+      <text x="16" y="94" font-size="18" fill="#3E4450">streaming LLM</text>
+      <text x="16" y="118" font-size="18" fill="#3E4450">bounded batches</text>
       <text x="16" y="142" font-size="18" fill="#3E4450">translation·roles</text>
       <text x="16" y="166" font-size="18" fill="#3E4450">methods·TL;DR</text>
     </g>

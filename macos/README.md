@@ -1,6 +1,6 @@
 # Paperico Mac App
 
-v1.0.0 是独立 SwiftUI 应用。PDF、解析结构、对话和笔记由原生代码持久化；解析与模型请求
+v1.0.1 是独立 SwiftUI 应用。PDF、解析结构、对话和笔记由原生代码持久化；解析与模型请求
 直连用户配置的服务。运行 App 不需要 Python。当前 target 为 macOS 26+，构建需要 Xcode 26+。
 
 ## 构建、运行和验证
@@ -80,7 +80,7 @@ papers、mineru_output、analyses 与 logs。普通服务设置和阅读偏好�
 ```
 
 Release bundle 位于 `macos/build/DerivedData-Release/Build/Products/Release/`，DMG 位于
-`macos/build/Paperico-1.0.0.dmg`。本地临时签名不等同于 Developer ID 签名和公证。
+`macos/build/Paperico-1.0.1.dmg`。本地临时签名不等同于 Developer ID 签名和公证。
 正式分发可设置 `PAPERICO_SIGN_IDENTITY`，并自行完成所需的公证流程。
 
 ## MCP 连接
@@ -115,4 +115,10 @@ AI API Key、MinerU Token 和 MCP Token 存在一个受保护的钥匙串记录�
 新论文分析收到全部当前方法分组和已有方法清单；模型建议只可使用有效分组，
 已有条目沿用其稳定 ID 和用户编辑后的名称、分组，类别相同不会自动合并。
 论文作者/出版信息和参考文献不进入翻译与逻辑链请求，原始块仍保留；
-正文缺块、乱序或缺译文会使分析失败。无标准标题的文献使用保守规则，分类无法保证零误判。
+References 后的 Methods、Appendix 和扩展图表仍会进入正文翻译。分析先生成正文，以原始 ID 为键返回各节点，
+缺块、重复编号、原文片段与编号错位或缺译文会使分析失败；新请求逐项回传原文开头用于核对。
+长文按原始节点和文本量分段完整翻译，完成后再生成全局总结与方法索引；每个请求只生成一次。
+失败时保留所有分段原始响应和已完成译文，完整性检查通过后才能标为就绪。
+默认输出预算为 65,536 tokens，全文请求还会按原文量
+估算需要的容量，并受服务端输出上限限制；连续空白或方法条目循环异常会中止并保留原始响应。
+无标准标题的文献使用保守规则，分类无法保证零误判。

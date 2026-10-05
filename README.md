@@ -5,7 +5,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v1.0.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v1.0.1-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 English · [简体中文](README.zh-CN.md)
 
@@ -32,11 +32,12 @@ the translation, chat citations, method cards and annotations.
   equations with their positions; front matter, references and publisher boilerplate are
   separated out. You read a re-typeset bilingual surface — serif body, offline KaTeX —
   next to a logic-chain outline, and every jump lands on the exact block or PDF region.
-- **One pass, whole paper.** A single streaming LLM request produces the block-aligned
-  translation, per-paragraph takeaways and narrative roles, the paper-level TL;DR /
-  contributions / difficulty estimate, and a method & entity index. Output is strictly
-  validated, and an interrupted run recovers locally from the saved raw response — no
-  second paid call.
+- **Complete translation, aligned to the source.** Short papers use one streaming LLM
+  request; long papers are translated in bounded batches before a full-paper request
+  produces the TL;DR, contributions, difficulty estimate and method index. Block ids,
+  source anchors and completeness are strictly validated. Saved complete responses
+  recover locally without a model call; continuing an interrupted long-paper task
+  reuses validated batches and generates only the unfinished parts.
 - **Answers pinned to evidence.** Attach a selection, figure or method card to the
   question; replies cite block ids that jump straight back to their source paragraph or
   flash the region in the original PDF. Method entities merge across the whole library
@@ -75,11 +76,11 @@ the translation, chat citations, method cards and annotations.
 - **MCP** — opt-in localhost access with 10 read-only tools, evidence blocks and figures; copy client configuration from settings. See the [connection guide](docs/mcp.md).
 - **Native desktop** — Liquid Glass, light/dark appearance, accent colors, offline math rendering, an About page with opt-in update checks, ⌘1–⌘3 navigation and ⌘, settings.
 
-See the [release notes](docs/releases/v1.0.0.md) and the [architecture review](docs/architecture.md).
+See the [release notes](docs/releases/v1.0.1.md) and the [architecture review](docs/architecture.md).
 
 ## Run
 
-**Install:** download `Paperico-1.0.0.dmg` from the
+**Install:** download `Paperico-1.0.1.dmg` from the
 [latest release](https://github.com/juliusloon/paperico/releases), drag Paperico into
 Applications and replace any older copy. The DMG is not Developer ID signed or notarized;
 distribution signing options are described in the [macOS development guide](macos/README.md).
@@ -114,7 +115,7 @@ to your configured services. Paperico does not operate a relay.
 ## How it works
 
 <p align="center">
-  <img src="./assets/readme/pipeline.svg" width="100%" alt="The Paperico pipeline in five stages — import a PDF with SHA-256 deduplication, parse it with MinerU into typed blocks with positions, run one streaming LLM analysis that produces translation, roles, methods and a TL;DR, read and ask with evidence citations that jump back to the exact block or PDF region, and turn selected answers into Markdown notes — all feeding one local sandboxed library that an opt-in read-only MCP server exposes to Claude Code, Cursor and VS Code.">
+  <img src="./assets/readme/pipeline.svg" width="100%" alt="The Paperico pipeline in five stages — import a PDF with SHA-256 deduplication, parse it with MinerU into typed blocks with positions, run streaming LLM analysis that produces translation, roles, methods and a TL;DR, translating long papers in bounded batches before a full-paper summary, read and ask with evidence citations that jump back to the exact block or PDF region, and turn selected answers into Markdown notes — all feeding one local sandboxed library that an opt-in read-only MCP server exposes to Claude Code, Cursor and VS Code.">
 </p>
 
 | Directory | Responsibility |

@@ -10,6 +10,15 @@ enum ControlSpec {
     static let radius: CGFloat = height / 2
 }
 
+/// Shared title size; list pages leave a little space before the title.
+enum PageTitleSpec {
+    static let font = Font.system(size: 24, weight: .medium)
+    static let listInset: CGFloat = 10
+    static let contentInset: CGFloat = 20
+    // List titles sit beside 38pt controls, about 5pt taller than the text.
+    static let toolbarTopInset: CGFloat = 15
+}
+
 /// 下拉选择框(可带前导图标)。width 为 nil 时横向撑满(可再以 maxWidth 封顶)。
 struct PillPicker: View {
     @Environment(\.palette) private var palette

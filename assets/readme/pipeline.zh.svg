@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="pipeline-title pipeline-desc">
   <title id="pipeline-title">Paperico 处理流程</title>
-  <desc id="pipeline-desc">五个阶段汇入同一个本地论文库：导入 PDF 并做 SHA-256 去重；用 MinerU（云端或自托管）解析为类型化分块；单次流式 LLM 分析生成译文、角色与方法索引；在逻辑链中精读并按证据引用提问，引用可跳回原文；把选中的回答沉淀为 Markdown 笔记。全部结果落在沙盒本地论文库中，可选开启的只读 MCP 服务让 Claude Code、Cursor 和 VS Code 读取它。</desc>
+  <desc id="pipeline-desc">五个阶段汇入同一个本地论文库：导入 PDF 并做 SHA-256 去重；用 MinerU（云端或自托管）解析为类型化分块；流式 LLM 分析生成译文、角色与方法索引，长论文分段翻译后汇总；在逻辑链中精读并按证据引用提问，引用可跳回原文；把选中的回答沉淀为 Markdown 笔记。全部结果落在沙盒本地论文库中，可选开启的只读 MCP 服务让 Claude Code、Cursor 和 VS Code 读取它。</desc>
 
   <rect x="0.75" y="0.75" width="1198.5" height="398.5" rx="26" fill="#FBFCFD" stroke="#E4E8EE" stroke-width="1.5"/>
 
@@ -29,7 +29,7 @@
       <rect width="190" height="196" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
       <text x="16" y="32" font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="18" font-weight="600" fill="#3260CF">STEP 03</text>
       <text x="16" y="62" font-size="21" font-weight="600" fill="#15181E">分析</text>
-      <text x="16" y="94" font-size="18" fill="#3E4450">单次流式请求</text>
+      <text x="16" y="94" font-size="18" fill="#3E4450">长文分段翻译</text>
       <text x="16" y="118" font-size="18" fill="#3E4450">译文 · 要点</text>
       <text x="16" y="142" font-size="18" fill="#3E4450">角色 · 方法</text>
       <text x="16" y="166" font-size="18" fill="#3E4450">TL;DR · 实体</text>

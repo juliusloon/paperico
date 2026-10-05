@@ -29,7 +29,7 @@ struct SettingsPage: View {
     @State private var llmBaseUrl = ""
     @State private var llmApiKey = ""
     @State private var llmModel = ""
-    @State private var llmMaxTokens = 8192
+    @State private var llmMaxTokens = AnalysisEngine.defaultMaxTokens
     @State private var llmReasoning = "medium"
     @State private var llmCaps: LLMCaps?
     @State private var llmTestedKey: String?
@@ -110,7 +110,7 @@ struct SettingsPage: View {
     }
 
     private var maxOutputRange: ClosedRange<Int> {
-        guard let limit = llmCaps?.maxOutputDefault, limit > 256 else { return 256...32768 }
+        guard let limit = llmCaps?.maxOutputDefault, limit > 256 else { return 256...AnalysisEngine.fallbackOutputLimit }
         return 256...limit
     }
 
@@ -251,8 +251,8 @@ struct SettingsPage: View {
                         }
                     }
                 }
-                .padding(.horizontal, containerWidth < 650 ? 16 : 30)
-                .padding(.top, containerWidth < 650 ? 16 : 30)
+                .padding(.horizontal, PageTitleSpec.contentInset)
+                .padding(.top, PageTitleSpec.contentInset)
                 .padding(.bottom, 66)
                 .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
             }
@@ -286,7 +286,7 @@ struct SettingsPage: View {
         let awaitingAuthorization = tab == .model ? settingsStore.credentialNeedsAuthorization(.llmApiKey) : tab == .parser && mineruMode != "local" ? settingsStore.credentialNeedsAuthorization(.mineruToken) : false
         let status = tab == .automation ? (mcpStore.running ? "运行中" : "未运行") : (configured ? "已配置" : awaitingAuthorization ? "待解锁" : "需要配置")
         return HStack(alignment: .center, spacing: 18) {
-            Text(title).font(.system(size: containerWidth < 650 ? 24 : 30, weight: .medium)).foregroundStyle(palette.gray900)
+            Text(title).font(PageTitleSpec.font).foregroundStyle(palette.gray900)
             Spacer(minLength: 0)
             if tab != .about {
                 Label(status, systemImage: configured ? Ic.check : "exclamationmark.circle")
@@ -306,7 +306,7 @@ struct SettingsPage: View {
         case .model:
             return ["兼容 OpenAI Chat Completions 接口，配置用于全文翻译、逻辑归纳、论文问答与笔记生成。API Key 保存在本机钥匙串。",
                 llmGateOpen ? "已获取模型能力，确认思考强度与对话输出上限后保存配置。" : "填好配置后点击「测试连通性」，即可选择思考强度与对话输出上限。",
-                "全文翻译与分析合并为一次请求，输出容量按论文长度估算并受模型上限限制。"]
+                "长论文分段完整翻译后汇总全文分析；每段只生成一次，失败响应保留，供手动重试。"]
         case .parser:
             return [mineruMode == "local" ? "连接本机 MinerU Gradio 服务，无需 Token；MinerU.Chem 化学解析目前仅云端提供。" : "MinerU Token 保存在本机钥匙串。PDF 上传到解析服务后，Paperico 自动等待解析结果。",
                 "可检索文字型 PDF 建议关闭强制 OCR，并开启公式与表格识别；扫描版或图片型 PDF 建议开启强制 OCR。"]
@@ -518,6 +518,8 @@ struct SettingsPage: View {
                         .opacity(llmGateOpen ? 1 : 0.55)
                 }
             }
+            Text("全文分析会按原文长度提高输出预算，并受服务端实际输出容量限制；默认预算为 65,536 tokens。对话使用上面的输出上限。")
+                .font(.system(size: 12)).foregroundStyle(palette.gray500)
         }
     }
 
@@ -728,7 +730,7 @@ struct SettingsPage: View {
             llmName = profile.name
             llmBaseUrl = profile.baseUrl
             llmModel = profile.model
-            llmMaxTokens = profile.maxTokens ?? 8192
+            llmMaxTokens = profile.maxTokens ?? AnalysisEngine.defaultMaxTokens
             llmReasoning = profile.reasoningEffort ?? "medium"
         }
     }

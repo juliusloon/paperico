@@ -17,7 +17,7 @@ struct LLMProfileConfig: Codable, Hashable, Sendable {
     var baseUrl: String = ""
     var model: String = ""
     var temperature: Double = 0.3
-    var maxTokens: Int = 8192
+    var maxTokens: Int = AnalysisEngine.defaultMaxTokens
     var reasoningEffort: String = "medium"
     var streaming: Bool = true
 }
@@ -186,7 +186,7 @@ final class SettingsStore {
             baseUrl: profile.baseUrl,
             model: profile.model,
             temperature: profile.temperature ?? 0.3,
-            maxTokens: profile.maxTokens ?? 8192,
+            maxTokens: profile.maxTokens ?? AnalysisEngine.defaultMaxTokens,
             reasoningEffort: profile.reasoningEffort ?? "medium",
             streaming: profile.streaming
         )

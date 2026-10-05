@@ -40,6 +40,66 @@ final class PaperContentScopeTests: XCTestCase {
         ]), [.body, .body, .body, .body])
     }
 
+    func testNatureMethodsResumeAfterReferencesAndEndAtPublicationSections() {
+        XCTAssertEqual(PaperContentScope.regions([
+            item("Abstract", heading: true), item("Summary"),
+            item("References", heading: true), item("1. Smith, J. Journal (2026).", section: "References"),
+            item("Methods", heading: true, section: "Methods"), item("Dataset curation and processing", heading: true),
+            item("Scientific protocol"), item("Data availability", heading: true), item("Repository"),
+            item("References", heading: true), item("Methods are discussed in this cited paper."),
+            item("Reporting Summary", heading: true), item("Statistics", heading: true), item("Checklist")
+        ]), [.body, .body, .backMatter, .backMatter, .body, .body, .body,
+              .backMatter, .backMatter, .backMatter, .backMatter, .backMatter, .backMatter, .backMatter])
+    }
+
+    func testAppendixResumesAfterAcknowledgmentsAndReferences() {
+        XCTAssertEqual(PaperContentScope.regions([
+            item("1 Introduction", heading: true), item("Research"),
+            item("7 Acknowledgments", heading: true), item("Funding statement"),
+            item("References", heading: true), item("Citation"),
+            item("Appendix", heading: true), item("A Related Work", heading: true), item("Related studies"),
+            item("B Details of method", heading: true), item("Supplementary protocol"),
+            item("References", heading: true), item("Second bibliography")
+        ]), [.body, .body, .backMatter, .backMatter, .backMatter, .backMatter,
+              .body, .body, .body, .body, .body, .backMatter, .backMatter])
+    }
+
+    func testSectionOnlyMethodsAndSpacedHeadingResumeBody() {
+        XCTAssertEqual(PaperContentScope.regions([
+            item("Scientific body"), item("References", heading: true), item("Citation"),
+            item("Protocol", section: "Materials and Methods"), item("Another step", section: "Materials and Methods"),
+            item("Data availability", heading: true), item("Repository"),
+            item("**M E T H O D S**", heading: true), item("Rest of protocol")
+        ]), [.body, .backMatter, .backMatter, .body, .body, .backMatter, .backMatter, .body, .body])
+    }
+
+    func testExtendedDataPanelsResumeDespiteStalePublicationSection() {
+        XCTAssertEqual(PaperContentScope.regions([
+            item("Research"), item("References", heading: true), item("Citation"),
+            item("Additional information", heading: true, section: "Additional information"), item("Publication links", section: "Additional information"),
+            .init(kind: "figure", text: "a", section: "Additional information"),
+            .init(kind: "figure", text: "b Extended Data Fig. 1 | Scientific evidence.", section: "Additional information"),
+            .init(kind: "table", text: "Extended Data Table 1 | Cohorts", section: "Additional information"),
+            item("Reporting Summary", heading: true),
+            .init(kind: "table", text: "Methods", section: "Reporting Summary")
+        ]), [.body, .backMatter, .backMatter, .backMatter, .backMatter, .body, .body, .body, .backMatter, .backMatter])
+    }
+
+    func testReaderUsesFigureCaptionForTheSameScopeAsAnalysis() {
+        func block(_ id: String, kind: String, text: String = "", caption: String = "") -> Block {
+            Block(id: id, order: 0, kind: kind, pageIdx: 0, bbox: nil,
+                  sectionTitle: "Additional information", textOriginal: text, textZh: "", oneLiner: "",
+                  keywords: [], roleInNarrative: "", imagePath: "", captionOriginal: caption, captionZh: "",
+                  figureType: "", coreTakeaways: [], dataReadingNotes: "", tableHtml: "", latex: "",
+                  plainExplanation: "", entityRefs: [])
+        }
+        XCTAssertEqual(PaperContentScope.regions([
+            block("links", kind: "section_heading", text: "Additional information"),
+            block("panel", kind: "figure", caption: "a"),
+            block("caption", kind: "figure", caption: "b Extended Data Fig. 1 | Experimental results")
+        ]), [.backMatter, .body, .body])
+    }
+
     func testInlineAbstractAndSectionOnlyBoundaries() {
         XCTAssertEqual(PaperContentScope.regions([
             item("Paper.pdf"), item("摘要：本文提出一种方法。"), item("正文内容"),

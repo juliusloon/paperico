@@ -246,9 +246,10 @@ struct LibraryPage: View {
 
     private var toolbarTitle: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("论文库").font(.system(size: 22, weight: .medium)).foregroundStyle(palette.gray900)
+            Text("论文库").font(PageTitleSpec.font).foregroundStyle(palette.gray900)
         }
-        .frame(width: 90, alignment: .leading)
+        .padding(.leading, PageTitleSpec.listInset)
+        .frame(width: 100, alignment: .leading)
     }
 
     private var libraryPickers: some View {
@@ -282,7 +283,7 @@ struct LibraryPage: View {
             PillSearchField(text: $searchQuery, prompt: "搜索论文标题...", onSubmit: handleSearch)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.top, PageTitleSpec.toolbarTopInset).padding(.bottom, 8)
         .frame(minHeight: 56)
     }
 

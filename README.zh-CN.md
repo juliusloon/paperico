@@ -5,7 +5,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v1.0.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v1.0.1-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 [English](README.md) · 简体中文
 
@@ -28,9 +28,10 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 - **读的是结构，不是页面。** MinerU 恢复标题、段落、图表、公式及其版面位置，出版元信息
   与参考文献被分离出正文链。你在重排版的双语精读面上阅读（衬线正文、离线 KaTeX），
   旁边是逻辑链大纲，每次跳转都精确落到原文段落或 PDF 区域。
-- **一次请求，整篇论文。** 单次流式 LLM 请求同时产出逐块对齐的译文、各段要点与论证
-  角色、论文级 TL;DR / 核心贡献 / 难度估计，以及方法与实体索引。输出经过严格校验；
-  中断的任务从已保存的原始响应本地恢复，不产生第二次付费调用。
+- **全文翻译，与原文对齐。** 短论文使用一次流式 LLM 请求；长论文分段翻译，完成后再
+  结合全文生成 TL;DR、核心贡献、难度估计与方法索引。严格校验节点编号、原文开头与完整性；
+  已完整保存的响应可本地恢复，无需调用模型。手动继续中断的长文任务时复用已校验分段，
+  只生成尚未完成的部分。
 - **回答钉在证据上。** 选中文本、图表或方法卡作为上下文提问；回答中的 block 引用可以
   直接跳回来源段落，或在原始 PDF 中闪烁定位。方法实体跨整个论文库归并为你可持续整理的
   持久分组——可改名、可跨组拖动、可删除——而且每篇新论文都会参照你整理过的方法索引
@@ -66,7 +67,7 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 - **MCP**：默认关闭的 localhost 只读服务，提供 10 个工具、证据块与图像；在设置中复制客户端配置。详见 [连接说明](docs/mcp.md)。
 - **原生桌面**：Liquid Glass、深浅色外观、自定义强调色、离线公式渲染、带可选更新检查的关于页、⌘1–⌘3 导航与 ⌘, 设置。
 
-详见[更新说明](docs/releases/v1.0.0.md)与[仓库分析与架构说明](docs/architecture.md)。
+详见[更新说明](docs/releases/v1.0.1.md)与[仓库分析与架构说明](docs/architecture.md)。
 
 ## 运行
 
@@ -100,7 +101,7 @@ My Mac → Run。Codex 的 Run 按钮使用同一脚本。
 ## 工作原理
 
 <p align="center">
-  <img src="./assets/readme/pipeline.zh.svg" width="100%" alt="Paperico 的五阶段流程——导入 PDF 并做 SHA-256 去重；用 MinerU（云端或自托管）解析为类型化分块；单次流式 LLM 分析生成译文、角色与方法索引；在逻辑链中精读并按证据引用提问，引用可跳回原文；把选中的回答沉淀为 Markdown 笔记——全部汇入本地沙盒论文库，可选开启的只读 MCP 服务让 Claude Code、Cursor 和 VS Code 读取。">
+  <img src="./assets/readme/pipeline.zh.svg" width="100%" alt="Paperico 的五阶段流程——导入 PDF 并做 SHA-256 去重；用 MinerU（云端或自托管）解析为类型化分块；流式 LLM 分析生成译文、角色与方法索引，长论文分段翻译后汇总；在逻辑链中精读并按证据引用提问，引用可跳回原文；把选中的回答沉淀为 Markdown 笔记——全部汇入本地沙盒论文库，可选开启的只读 MCP 服务让 Claude Code、Cursor 和 VS Code 读取。">
 </p>
 
 | 目录 | 职责 |

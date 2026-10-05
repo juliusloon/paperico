@@ -231,11 +231,12 @@ final class PaperPipeline {
             }
             try await library.writeBlocks(paperId: paperId, blocks: blockRecords)
 
-            // Step 3: 单次请求完成翻译、段落分析和全文总结。
+            // Step 3: 完整翻译、段落分析和全文总结。
             try await runAnalysis(
                 paperId: paperId,
                 title: paper.title,
-                blocks: &blockRecords
+                blocks: &blockRecords,
+                resumePrevious: !forceReparse
             )
         } catch {
             await recordFailure(error, paperId: paperId)
@@ -272,8 +273,8 @@ final class PaperPipeline {
             let url = await library.analysesDir(paperId).appendingPathComponent("single_pass.json")
             let data = try Data(contentsOf: url)
             guard var log = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  log["mode"] as? String == "single_pass", let raw = log["raw_response"] as? String, !raw.isEmpty else {
-                throw PipelineError("没有已返回的全文分析可供恢复，请先完成一次全文请求。", .jsonParseFailed)
+                  ["single_pass", "bounded_batches"].contains(log["mode"] as? String ?? ""), let raw = log["raw_response"] as? String, !raw.isEmpty else {
+                throw PipelineError("没有已返回的全文分析可供恢复，请先完成全文处理。", .jsonParseFailed)
             }
             var blocks = try await library.readBlocks(paperId: paperId)
             let input = analysisBlocks(blocks)
@@ -318,9 +319,9 @@ final class PaperPipeline {
         cloudStates[paperId] = state
     }
 
-    // MARK: - 单次全文分析
+    // MARK: - 全文分析
 
-    private func runAnalysis(paperId: String, title: String, blocks: inout [Block]) async throws {
+    private func runAnalysis(paperId: String, title: String, blocks: inout [Block], resumePrevious: Bool = false) async throws {
         let config = settings.llmConfig(for: .translation)
         try await library.setStatus(paperId: paperId, status: "analyzing")
         let input = analysisBlocks(blocks)
@@ -329,7 +330,12 @@ final class PaperPipeline {
         defer { Task { await llmGate.release() } }
         try Task.checkCancellation()
         let library = self.library
-        // 覆盖上次日志前记录请求起点，便于确认只有一次生成请求。
+        // Manual Continue may reuse validated translation chunks. Retranslate
+        // and Reparse intentionally start fresh.
+        let resume: [String: Any]?
+        if resumePrevious, let data = try? Data(contentsOf: await library.analysesDir(paperId).appendingPathComponent("single_pass.json")) {
+            resume = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        } else { resume = nil }
         try await library.writeAnalysisRaw(paperId: paperId, name: "single_pass.json", data: [
             "mode": "single_pass", "model": config.model, "created_at": PaperLibrary.now(),
             "block_count": blocks.count, "state": "starting"
@@ -338,6 +344,7 @@ final class PaperPipeline {
         let existingMethods = try await library.methodIndex()
         let result = try await AnalysisEngine.analyzePaper(
             llm: config, blocks: input, title: title, methodGroups: methodGroups, existingMethods: existingMethods,
+            resumeLog: resume,
             progress: { [weak self] completed, total in
                 await self?.updateProgress(paperId: paperId, completed: completed, total: total)
             },
@@ -351,7 +358,7 @@ final class PaperPipeline {
 
     private func saveAnalysis(_ result: AnalysisEngine.PaperAnalysis, paperId: String, blocks: inout [Block]) async throws {
         try Task.checkCancellation()
-        progress[paperId] = "单次分析已返回，正在保存结果"
+        progress[paperId] = "全文分析已返回，正在保存结果"
         let methods = try AnalysisEngine.resolveMethods(result.methods, groups: await library.listMethodGroups(), existing: try await library.methodIndex())
         let entities = methods.map { item in
             MethodEntity(id: PaperLibrary.newId(), canonicalKey: AnalysisEngine.asString(item["canonical_key"]),
@@ -395,7 +402,7 @@ final class PaperPipeline {
         guard !Task.isCancelled else { return }
         nodeProgress[paperId] = NodeProgress(completed: min(completed, total), total: total)
         progress[paperId] = completed == 0
-            ? "正在单次分析全文，等待模型返回"
+            ? "正在翻译与分析全文，等待模型返回"
             : "全文翻译与分析：\(completed) / \(total) 个节点"
     }
 }
