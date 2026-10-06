@@ -58,6 +58,8 @@ docs/ui-archives/
 docs/verification/
 
 # ===== 内部规划/工程文档:本地保留,不入库(docs/architecture.md 与 docs/releases/ 仍入库) =====
+# architecture-FULL.md 为含 gitignore 材料的完整版架构文档,仅本地维护
+/docs/architecture-FULL.md
 /docs/Workbench.md
 /docs/README.md
 /docs/agentero-execution-plan.md
