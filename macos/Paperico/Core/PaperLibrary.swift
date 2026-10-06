@@ -242,6 +242,9 @@ actor PaperLibrary {
 
     /// 与已有论文相同的 DOI / arXiv ID —— 去重键的第二维度（第一维度是 SHA-256）。
     ///
+    /// 调用时机：解析完成、标识符从原文提取并落盘之后，联网查询与模型分析之前
+    /// （`PaperPipeline` 把本方法注入 `MetadataRecognition` 的 `findDuplicate`）。
+    ///
     /// 同一篇论文的两个版本（预印本 + 正式发表）内容不同、SHA 不同，
     /// 但 DOI 相同，应当视为重复。
     func existingPaper(doi: String?, arxivId: String?, excluding id: String? = nil) -> PaperListItem? {
@@ -401,13 +404,6 @@ actor PaperLibrary {
         index.papers[i].metaSource = MetaSource.manual
         try persistIndex()
         return index.papers[i]
-    }
-
-    /// 导入前按 DOI / arXiv 去重。命中时抛出与 SHA 去重相同的错误码，
-    /// 提示指向已有论文——预印本与正式版内容不同但 DOI 相同，属于同一篇。
-    func rejectDuplicateMetadata(doi: String?, arxivId: String?) throws {
-        guard let duplicate = existingPaper(doi: doi, arxivId: arxivId) else { return }
-        throw PipelineError("与已有论文《\(duplicate.displayTitle)》重复（同一 DOI / arXiv，id \(duplicate.id)）", .duplicatePaper)
     }
 
     func movePapers(paperIds: [String], projectId: String?) throws -> Int {

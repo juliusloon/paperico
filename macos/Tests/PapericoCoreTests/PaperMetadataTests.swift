@@ -251,8 +251,12 @@ final class PaperMetadataTests: XCTestCase {
     }
 
     // MARK: - 5) DOI / arXiv deduplication
+    //
+    // 生产路径：PaperPipeline 把 existingPaper(doi:arxivId:excluding:) 注入
+    // MetadataRecognition.findDuplicate，在解析后、模型分析前完成去重。
+    // 这里直接针对该入口断言匹配语义。
 
-    func testDuplicateDoiIsRejectedLikeAShaDuplicate() async throws {
+    func testDuplicateDoiResolvesToTheExistingPaper() async throws {
         let library = PaperLibrary(root: root)
         try await library.load()
         let first = try await library.importPDF(fileData: pdf("v1"), fileName: "preprint.pdf", projectId: nil)
@@ -260,16 +264,10 @@ final class PaperMetadataTests: XCTestCase {
             guard record.id == first.id else { return }
             record.doi = "10.5555/3295222.3295349"
         }
-        // A different file (different SHA) with the same DOI must still be rejected.
+        // A different file (different SHA) with the same DOI must resolve to the first paper.
         let second = try await library.importPDF(fileData: pdf("v2"), fileName: "published.pdf", projectId: nil)
-        do {
-            try await library.rejectDuplicateMetadata(doi: "10.5555/3295222.3295349", arxivId: nil)
-            XCTFail("Same DOI must be treated as the same paper")
-        } catch {
-            XCTAssertEqual((error as? PipelineError)?.errorCode, .duplicatePaper)
-            XCTAssertTrue("\(error)".contains(second.id) == false, "Error should point at the existing paper, not the new one")
-            XCTAssertTrue("\(error)".contains(first.id))
-        }
+        let duplicate = await library.existingPaper(doi: "10.5555/3295222.3295349", arxivId: nil, excluding: second.id)
+        XCTAssertEqual(duplicate?.id, first.id, "Same DOI must be treated as the same paper")
     }
 
     func testDoiDeduplicationIgnoresResolverPrefixAndCase() async throws {
@@ -280,15 +278,11 @@ final class PaperMetadataTests: XCTestCase {
             guard record.id == first.id else { return }
             record.doi = "10.5555/ABC.def"
         }
-        do {
-            try await library.rejectDuplicateMetadata(doi: "https://doi.org/10.5555/abc.DEF.", arxivId: nil)
-            XCTFail("DOI comparison must be normalized")
-        } catch {
-            XCTAssertEqual((error as? PipelineError)?.errorCode, .duplicatePaper)
-        }
+        let duplicate = await library.existingPaper(doi: "https://doi.org/10.5555/abc.DEF.", arxivId: nil)
+        XCTAssertEqual(duplicate?.id, first.id, "DOI comparison must be normalized")
     }
 
-    func testDuplicateArxivIdIsRejectedAcrossVersions() async throws {
+    func testDuplicateArxivIdMatchesAcrossVersions() async throws {
         let library = PaperLibrary(root: root)
         try await library.load()
         let first = try await library.importPDF(fileData: pdf("v1"), fileName: "a.pdf", projectId: nil)
@@ -296,12 +290,8 @@ final class PaperMetadataTests: XCTestCase {
             guard record.id == first.id else { return }
             record.arxivId = "2501.01234"
         }
-        do {
-            try await library.rejectDuplicateMetadata(doi: nil, arxivId: "arXiv:2501.01234v3")
-            XCTFail("arXiv v3 of the same paper is not a new paper")
-        } catch {
-            XCTAssertEqual((error as? PipelineError)?.errorCode, .duplicatePaper)
-        }
+        let duplicate = await library.existingPaper(doi: nil, arxivId: "arXiv:2501.01234v3")
+        XCTAssertEqual(duplicate?.id, first.id, "arXiv v3 of the same paper is not a new paper")
     }
 
     func testUnrelatedDoiIsAccepted() async throws {
@@ -309,10 +299,8 @@ final class PaperMetadataTests: XCTestCase {
         try await library.load()
         _ = try await library.importPDF(fileData: pdf("v1"), fileName: "a.pdf", projectId: nil)
         try await library.updatePaper { record in record.doi = "10.5555/one" }
-        var unrelatedRejected = false
-        do { try await library.rejectDuplicateMetadata(doi: "10.5555/two", arxivId: nil) }
-        catch { unrelatedRejected = true }
-        XCTAssertFalse(unrelatedRejected, "A different DOI is a different paper")
+        let unrelated = await library.existingPaper(doi: "10.5555/two", arxivId: nil)
+        XCTAssertNil(unrelated, "A different DOI is a different paper")
         let noIdentifier = await library.existingPaper(doi: nil, arxivId: nil)
         XCTAssertNil(noIdentifier)
     }

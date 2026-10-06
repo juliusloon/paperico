@@ -98,10 +98,12 @@ Application Support/Paperico/
 `meta_source` 记录来源：`local`（本地文件）/ `auto`（自动识别）/ `manual`（用户手改）。
 **`manual` 永不被自动覆盖**；重命名论文即视为手改。自动填充只填空字段，不改已有值。
 
-去重键有两条：SHA-256（内容）与 DOI / arXiv ID（同一篇论文）。预印本与正式版内容不同、
-SHA 不同但 DOI 相同，用 SHA 去重会漏掉，因此增加第二键，命中时复用 `duplicatePaper`
-错误码并指向已有论文。DOI 比较做归一化（去掉 resolver 前缀、大小写、尾随标点），
-arXiv 去掉版本后缀。
+去重键有两条：SHA-256（内容）与 DOI / arXiv ID（同一篇论文）。第二键在解析完成、
+标识符落盘之后、联网查询与模型分析之前执行：`MetadataRecognition` 调用 `PaperPipeline`
+注入的 `findDuplicate`，落到 `PaperLibrary.existingPaper(doi:arxivId:excluding:)`。
+预印本与正式版内容不同、SHA 不同但 DOI 相同，用 SHA 去重会漏掉，因此增加第二键，
+命中时复用 `duplicatePaper` 错误码并指向已有论文。DOI 比较做归一化（去掉 resolver
+前缀、大小写、尾随标点），arXiv 去掉版本后缀。
 
 ### 4.1.2 索引版本与迁移
 
