@@ -80,15 +80,35 @@ VS Code 使用用户配置或 `.vscode/mcp.json`，顶层字段与 Cursor 不同
 `status`（论文）或 `category`（方法）。工具返回 JSON text 和相同的 structuredContent；
 图像同时返回 image content，保留 block ID 与图注供引用。
 
-每篇活动论文提供四个 `application/json` 资源：
+每篇活动论文提供五个 `application/json` 资源：
 
 - `paperico://paper/{paper_id}/metadata`
+- `paperico://paper/{paper_id}/brief`
 - `paperico://paper/{paper_id}/blocks`
 - `paperico://paper/{paper_id}/chat`
 - `paperico://paper/{paper_id}/notes`
 
 支持 `resources/list`、`resources/templates/list` 和 `resources/read`。资源列表按 50 篇
 论文分页，使用 MCP `nextCursor`；整份资源过大时请改用分页工具。
+
+### 推荐读取顺序
+
+**先读 `brief`，需要原文再读 `blocks`。** `brief` 与 App 内对话拿到的是**同一套**压缩
+上下文（复用 `ChatContextBuilder`，不是另写一份），返回：
+
+| 字段 | 内容 |
+|---|---|
+| `logic_chain` | 按角色分组的压缩逻辑链，预算 6000 字符；`§` 章节标题恒留 |
+| `method_index` | 按提及次数排序的方法实体，Top-40 × 12 refs |
+| `block_count` | 该论文的总块数 |
+| `budget` | 实际使用的预算，便于判断链条是否被裁剪 |
+
+`budget` 的存在是为了让调用方能区分"逻辑链本来就这么短"和"被预算裁掉了"——只看字符串
+长度无法判断。`blocks` 仍是全量原文（含 `text_original` 与 `text_zh`），仅在需要逐段原文
+或图表时读取。
+
+新增 `brief` 属于资源**只增不改**：现有 10 个工具的入参与语义不变。契约由
+`MCPSchemaSnapshotTests` 快照守护，改动必须同 commit 更新快照并说明原因。
 
 ## 架构与协议
 
@@ -135,9 +155,10 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-pa
 ```
 
 MCP 集成测试使用临时论文库和真实 loopback HTTP，覆盖初始化、10 个工具、资源、图像、
-读取不写索引、相同 ID 的并发请求、token / Origin / Host 验证、越界与回收站访问，以及
-停服断连、官方 Swift SDK 客户端互通与 Token 撤销。测试不读取用户论文库，也不调用付费
-API。
+`brief → blocks` 两步读取、读取不写索引、相同 ID 的并发请求、token / Origin / Host 验证、
+越界与回收站访问，以及停服断连、官方 Swift SDK 客户端互通与 Token 撤销。契约快照
+（`MCPSchemaSnapshotTests`）另行固定工具名、入参 schema、资源类型与 URI 模板。测试不读取
+用户论文库，也不调用付费 API。
 
 P1 计划实现：导入与处理任务、付费动作的 App 确认、状态/进度与取消、`ask_paper`、笔记
 生成与 deep link。其中本地文件导入需要处理 App Sandbox 的文件授权——外部客户端传入

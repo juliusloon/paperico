@@ -74,7 +74,7 @@ flowchart TD
 
 ```
 Application Support/Paperico/
-  library.json              项目 + 论文索引（schema version 1）
+  library.json              项目 + 论文索引（schema version 2）
   papers/<id>/blocks.json   解析块            papers/<id>/entities.json  方法实体
   papers/<id>/chat.json     对话会话          papers/<id>/notes.json     笔记
   papers/<id>/reader-annotations.json  阅读器注释草稿
@@ -87,6 +87,41 @@ Application Support/Paperico/
 无法读取文件是两种情况，后者不能退化为空数据。
 
 论文文件 SHA-256 是内容去重键，失败论文也参与去重；回收站存在相同 PDF 时提示恢复。
+
+### 4.1.1 元数据与去重键
+
+`PaperListItem` 的 `authors` / `year` / `venue` / `doi` / `arxiv_id` 由 `PaperMetadata`
+在解析后填充：从「出版信息」区（`PaperContentScope` 判定的 front matter）优先取
+`text_original`，回退到前 12 个块，命中 DOI 走 Crossref、命中 arXiv 走其 Atom 接口，
+**各 8 秒硬超时，任何一步失败静默返回 nil**——识别失败保持现状，绝不阻塞管线。
+
+`meta_source` 记录来源：`local`（本地文件）/ `auto`（自动识别）/ `manual`（用户手改）。
+**`manual` 永不被自动覆盖**；重命名论文即视为手改。自动填充只填空字段，不改已有值。
+
+去重键有两条：SHA-256（内容）与 DOI / arXiv ID（同一篇论文）。预印本与正式版内容不同、
+SHA 不同但 DOI 相同，用 SHA 去重会漏掉，因此增加第二键，命中时复用 `duplicatePaper`
+错误码并指向已有论文。DOI 比较做归一化（去掉 resolver 前缀、大小写、尾随标点），
+arXiv 去掉版本后缀。
+
+### 4.1.2 索引版本与迁移
+
+索引 schema 当前为 **v2**（1.1.0 引入元数据三列）。迁移**只有一个入口**：
+`LibraryIndexMigrations.migrate(_:from:)`，每个版本一个 case，逐级升到 `current`。
+新增字段或回填只允许写在这里，不允许在任何其他位置就地补默认值。
+
+高于 `current` 的版本直接拒绝并提示升级；低于 `current` 的版本先备份
+`library.json.bak-v<old>-<时间戳>`（成功后保留，不自动删除），迁移失败则保留原文件、
+不进入半迁移状态。
+
+**升版本是单向的**：1.1.0 写过的库 1.0.x 打不开，会收到明确的"请升级"提示。原因是
+Swift 合成 Codable 会忽略未知键，1.0.x **能读** v2 库，但写回时会静默丢掉新增字段——
+降级即丢数据，因此选择显式拒绝而不是静默损坏。
+
+### 4.3.1 未引用文件
+
+启动时扫描 `papers/`、`mineru_output/`、`analyses/` 与 `pdfs/`，索引（含 `trash`）中无
+对应 ID 的条目收集为孤儿报告。**默认只统计不动作**：报告本身可重复执行且无副作用，
+删除需要用户勾选 + 二次确认，并逐项执行以保证任一步失败可重试。不新增定时自动清理。
 
 ### 4.2 actor 内事务写入
 
@@ -226,6 +261,13 @@ Materials and Methods、Appendix 与扩展图表重新计入正文。缺少摘�
   projects / method index / notes 等）与 `paperico://paper/{id}/{kind}` 资源；读取复用
   `PaperLibrary`，不改变 last-opened、不暴露凭据、不触发付费调用。详见
   [mcp.md](mcp.md)。
+- **MCP 上下文一致性**：资源类型含 `brief`，返回与 App 内对话**同一套**压缩上下文
+  （直接复用 `ChatContextBuilder.compactLogicChain` / `compactMethodIndex`，不复制实现），
+  并附 `budget` 说明裁剪。推荐顺序为 `brief` → 需要原文再读 `blocks`；`instructions`
+  已写明该顺序。资源只增不改，契约由快照测试守护。
+- **契约快照**：磁盘 schema 由 `LibraryIndexMigrationTests` 的 v1 fixture 守护，MCP 工具
+  与资源由 `MCPSchemaSnapshotTests` 守护（`UPDATE_SNAPSHOT=1` 刷新）。已下线的 FastAPI
+  后端契约脚本只作历史参考，不在原生 CI 中运行。
 - **更新检查**：`UpdateStore` + `AppRelease` 通过 GitHub Releases API（带页面回退）做
   语义化版本比较；默认每日最多自动检查一次，可在设置或 About 页手动检查、按 tag
   忽略提示。
@@ -233,10 +275,16 @@ Materials and Methods、Appendix 与扩展图表重新计入正文。缺少摘�
 ## 9. 测试与交付
 
 - SwiftPM 目标：`PapericoCore`（排除 GUI 层与管线主类的可测核心）+ `PapericoMCP`；
-  测试目标 `PapericoCoreTests` 与 `PapericoMCPTests`，共 23 个文件、约 138 个测试函数，
-  覆盖索引一致性、并发导入/保存、管线恢复（分段断点、指纹校验）、MinerU 轮询、
-  凭据迁移、正文范围、方法索引、对话引用与会话管理、MCP 真实 HTTP 互操作等。
-  核心测试不调用外部 AI。
+  测试目标 `PapericoCoreTests` 与 `PapericoMCPTests`，共 27 个文件、172 个测试函数，
+  覆盖索引一致性与迁移、并发导入/保存、管线恢复（分段断点、指纹校验）、MinerU 轮询、
+  凭据迁移、正文范围、元数据识别与去重、孤儿文件、方法索引、对话引用与会话管理、
+  MCP 真实 HTTP 互操作与契约快照等。核心测试不调用外部 AI。
+- **真实论文回归（opt-in）**：`RealPipelineTests` 用 `PAPERICO_E2E_PDF_DIR` 读取本地
+  真实 PDF，跑通导入 → MinerU 解析 → 规范化 → 落盘，断言块覆盖率、章节标题、图像路径
+  可解析与 sidecar 指纹一致。env 缺失、MinerU 未配置或单篇解析失败时 **skip 而非 fail**，
+  不进默认路径。真实 PDF 与其解析产物不入库（`.gitignore` 已排除）。
+- **统一时间戳**：所有落盘时间戳来自 `PaperLibrary.now()`（RFC3339 毫秒、定宽 24 字符），
+  保证字符串排序稳定；`ReaderPerf` 的日志时间戳除外。
 - `script/check.sh` 一键运行 Python 工具测试、`swift test` 与（存在时的）历史后端
   检查；`script/build_and_run.sh` 构建运行；`macos/scripts/make_dmg.sh` 打包。
 - CI 与 Release runner 使用 macos-26，与当前 Liquid Glass / Icon Composer 工程要求一致。
