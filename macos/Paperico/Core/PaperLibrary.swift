@@ -240,6 +240,72 @@ actor PaperLibrary {
         index.sourceUrlByPaperId[paperId]
     }
 
+    /// 与已有论文相同的 DOI / arXiv ID —— 去重键的第二维度（第一维度是 SHA-256）。
+    ///
+    /// 同一篇论文的两个版本（预印本 + 正式发表）内容不同、SHA 不同，
+    /// 但 DOI 相同，应当视为重复。
+    func existingPaper(doi: String?, arxivId: String?, excluding id: String? = nil) -> PaperListItem? {
+        let normalizedDOI = Self.normalizeDOI(doi)
+        let normalizedArxiv = Self.normalizeArxivId(arxivId)
+        guard normalizedDOI != nil || normalizedArxiv != nil else { return nil }
+        return index.papers.first { record in
+            guard record.id != id else { return false }
+            if let normalizedDOI, Self.normalizeDOI(record.doi) == normalizedDOI { return true }
+            if let normalizedArxiv, Self.normalizeArxivId(record.arxivId) == normalizedArxiv { return true }
+            return false
+        }
+    }
+
+    static func normalizeDOI(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"^(?:https?://(?:dx\.)?doi\.org/)"#, with: "",
+                                  options: [.regularExpression, .caseInsensitive])
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".,;: "))
+            .lowercased()
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// `arXiv:2501.01234v2` → `2501.01234`（版本后缀不参与去重）。
+    static func normalizeArxivId(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.lowercased()
+            .replacingOccurrences(of: #"^arxiv[:\s]*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"v\d+$"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// 写入识别出的元数据。返回是否真的改了内容（`manual` 记录永远返回 false）。
+    @discardableResult
+    func applyMetadata(paperId: String, _ metadata: PaperMetadata.Metadata) throws -> Bool {
+        guard let i = paperRecord(paperId) else { return false }
+        var changed = index.papers[i].apply(metadata: metadata)
+        if changed { try persistIndex() }
+        return changed
+    }
+
+    /// 标记为用户手改：此后自动识别不再覆盖。
+    func markMetadataManual(paperId: String, fields: Set<String>) throws {
+        guard let i = paperRecord(paperId), !fields.isEmpty else { return }
+        // 有实际值的字段才置manual，避免"什么都没改"也锁死自动填充。
+        let record = index.papers[i]
+        let touched = fields.contains { field in
+            switch field {
+            case "title": return !record.title.isEmpty
+            case "authors": return !record.authors.isEmpty
+            case "year": return record.year != nil
+            case "venue": return !record.venue.isEmpty
+            case "doi": return record.doi != nil
+            case "arxivId": return record.arxivId != nil
+            default: return false
+            }
+        }
+        guard touched, index.papers[i].metaSource != MetaSource.manual else { return }
+        index.papers[i].metaSource = MetaSource.manual
+        try persistIndex()
+    }
+
     // MARK: - 论文列表/详情
 
     func listPapers(projectId: String? = nil, status: String? = nil, q: String? = nil) -> [PaperListItem] {
@@ -331,8 +397,17 @@ actor PaperLibrary {
             throw PipelineError("Paper not found", .internalError)
         }
         index.papers[i].title = title
+        // 用户改过标题即视为手改元数据，自动识别不再覆盖。
+        index.papers[i].metaSource = MetaSource.manual
         try persistIndex()
         return index.papers[i]
+    }
+
+    /// 导入前按 DOI / arXiv 去重。命中时抛出与 SHA 去重相同的错误码，
+    /// 提示指向已有论文——预印本与正式版内容不同但 DOI 相同，属于同一篇。
+    func rejectDuplicateMetadata(doi: String?, arxivId: String?) throws {
+        guard let duplicate = existingPaper(doi: doi, arxivId: arxivId) else { return }
+        throw PipelineError("与已有论文《\(duplicate.displayTitle)》重复（同一 DOI / arXiv，id \(duplicate.id)）", .duplicatePaper)
     }
 
     func movePapers(paperIds: [String], projectId: String?) throws -> Int {

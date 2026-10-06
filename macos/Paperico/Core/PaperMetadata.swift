@@ -19,6 +19,16 @@ enum PaperMetadata {
         var venue: String = ""
         var doi: String? = nil
         var arxivId: String? = nil
+
+        init(title: String = "", authors: [String] = [], year: Int? = nil,
+             venue: String = "", doi: String? = nil, arxivId: String? = nil) {
+            self.title = title
+            self.authors = authors
+            self.year = year
+            self.venue = venue
+            self.doi = doi
+            self.arxivId = arxivId
+        }
     }
 
     /// 外部查询各自的硬超时。对齐 `MinerUClient` 的"总时长预算"纪律：
@@ -73,7 +83,7 @@ enum PaperMetadata {
 
     /// 命中 DOI 走 Crossref，命中 arXiv 走 Atom。**各 8 秒硬超时，失败静默返回 nil。**
     static func lookup(
-        doi: String?, arxivId: String?,
+        doi: String? = nil, arxivId: String? = nil,
         session: URLSession = .shared
     ) async -> Metadata? {
         guard let doi, !doi.isEmpty else {
@@ -123,8 +133,9 @@ enum PaperMetadata {
         metadata.year = firstXMLTag("published", in: entry)
             .flatMap { Int($0.prefix(4)) }
         // arXiv 没有真正的期刊名，用 primary category 表达更有信息量。
-        metadata.venue = firstXMLTag("arxiv:primary_category", in: entry)
-            .flatMap { Self.capture(#"term="([^"]+)""#, in: $0) }
+        // 该元素是自闭合标签（<arxiv:primary_category term="cs.LG"/>），
+        // 因此不能靠成对标签的正则去取内容。
+        metadata.venue = firstAttribute("term", ofTag: "arxiv:primary_category", in: entry)
             .map { "arXiv \($0)" } ?? "arXiv"
         return metadata
     }
@@ -141,6 +152,16 @@ enum PaperMetadata {
     private static func firstString(_ value: Any?) -> String {
         if let list = value as? [String] { return list.first ?? "" }
         return (value as? String) ?? ""
+    }
+
+    /// Value of `attribute` on the first `tag` element, for self-closing tags.
+    private static func firstAttribute(_ attribute: String, ofTag tag: String, in xml: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "<\(tag)([^>]*)/?>") else { return nil }
+        let ns = xml as NSString
+        guard let match = regex.firstMatch(in: xml, range: NSRange(location: 0, length: ns.length)) else { return nil }
+        let attributes = match.range(at: 1)
+        guard attributes.location != NSNotFound else { return nil }
+        return capture("\(attribute)=\"([^\"]+)\"", in: ns.substring(with: attributes))
     }
 
     /// First capture group of `pattern` in `source`, if the pattern matches.
