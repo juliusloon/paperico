@@ -143,7 +143,7 @@ enum PaperMetadata {
     private static func fetch(_ url: URL, session: URLSession) async -> Data? {
         var request = URLRequest(url: url)
         request.timeoutInterval = requestTimeout
-        request.setValue("Paperico/1.1 (metadata lookup; mailto:noreply@example.test)",
+        request.setValue("Paperico/1.1 (metadata lookup)",
                          forHTTPHeaderField: "User-Agent")
         do { return try await session.data(for: request).0 }
         catch { return nil }

@@ -1,5 +1,10 @@
 # Paperico macOS 架构
 
+> ⚠️ **历史文档，非当前架构真相**：本逐文件指南停留在 v0.2.5（build 7，第 19 节扩展到
+> v0.3.0），不反映 1.x 现状（索引 schema v2、元数据识别与去重、MCP `brief` 资源、孤儿文件
+> 报告等均未覆盖）。**当前权威架构文档是 [`../docs/architecture.md`](../docs/architecture.md)**，
+> 本文仅供历史参考，不要据此定位代码。
+
 > 适用版本：0.2.5（build 7），`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` 见 `Paperico.xcodeproj/project.pbxproj`。
 > v0.3.0（build 8）的 MCP 与发布扩展见第 19 节；此前逐文件解读以 v0.2.5 为基线。
 > 本文是 `macos/` 目录的**逐文件解读**：每个文件负责什么、实现什么功能、出现在哪个页面/哪条链路。

@@ -20,6 +20,7 @@ let package = Package(
                       "Core/JobGate.swift", "Core/ChatContextBuilder.swift", "Core/AnalysisEngine.swift", "Core/LLMClient.swift", "Core/MinerUClient.swift", "Core/ServiceErrors.swift", "Core/ServiceURL.swift", "Core/ZipArchive.swift"]
         ),
         .testTarget(name: "PapericoCoreTests", dependencies: ["PapericoCore"], path: "Tests/PapericoCoreTests"),
-        .testTarget(name: "PapericoMCPTests", dependencies: ["PapericoCore", .product(name: "PapericoMCP", package: "MCP")], path: "Tests/PapericoMCPTests")
+        .testTarget(name: "PapericoMCPTests", dependencies: ["PapericoCore", .product(name: "PapericoMCP", package: "MCP")],
+                    path: "Tests/PapericoMCPTests", exclude: ["__Snapshots__"])
     ]
 )
