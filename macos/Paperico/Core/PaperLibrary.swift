@@ -431,6 +431,61 @@ actor PaperLibrary {
 
     func listTrash() -> [TrashedPaper] { index.trash }
 
+    // MARK: - 孤儿文件（只报告，不动作）
+
+    /// 启动时扫描一次：`papers/`、`mineru_output/`、`analyses/` 与 `pdfs/` 下
+    /// 存在、但索引（含回收站）里没有对应 ID 的条目。
+    ///
+    /// 只列两层、不递归统计体积——库很大时递归 stat 会拖慢启动，而用户需要的
+    /// 只是"这里有东西、占多大"。
+    func orphanFiles() -> [OrphanEntry] {
+        let known = Set(index.papers.map(\.id)).union(index.trash.map(\.id))
+        var found: [OrphanEntry] = []
+        let directories: [(String, OrphanEntry.Kind)] = [
+            ("papers", .paperDirectory), ("mineru_output", .mineruOutput), ("analyses", .analyses)
+        ]
+        for (folder, kind) in directories {
+            let base = root.appendingPathComponent(folder, isDirectory: true)
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: base.path)) ?? []
+            for name in names.sorted() where !known.contains(name) {
+                let url = base.appendingPathComponent(name, isDirectory: true)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else { continue }
+                found.append(OrphanEntry(path: "\(folder)/\(name)", kind: kind,
+                                         sizeBytes: Self.directorySize(url)))
+            }
+        }
+        // pdfs/<id>.pdf 没有 id 之外的文件名，单独处理。
+        let pdfBase = root.appendingPathComponent("pdfs", isDirectory: true)
+        let pdfNames = (try? FileManager.default.contentsOfDirectory(atPath: pdfBase.path)) ?? []
+        for name in pdfNames.sorted() where name.hasSuffix(".pdf") {
+            let id = String(name.dropLast(4))
+            guard !known.contains(id) else { continue }
+            let url = pdfBase.appendingPathComponent(name)
+            found.append(OrphanEntry(path: "pdfs/\(name)", kind: .pdf, sizeBytes: Self.directorySize(url)))
+        }
+        return found.sorted { $0.path < $1.path }
+    }
+
+    /// 删除一条孤儿记录。**调用方必须先拿到用户显式确认**——这里只负责执行，
+    /// 且失败时保留记录以便重试（对齐永久删除的逐步逻辑）。
+    func deleteOrphan(_ entry: OrphanEntry) throws {
+        guard orphanFiles().contains(entry) else {
+            throw PipelineError("这条未引用文件已经不存在了，请刷新后重试。", .storageFailed)
+        }
+        let url = root.appendingPathComponent(entry.path)
+        do { try FileManager.default.removeItem(at: url) }
+        catch { throw PipelineError("无法删除 \(entry.path)：\(error.localizedDescription)。请重试。", .storageFailed) }
+    }
+
+    /// 目录属性里的粗略体积，不递归遍历。
+    private static func directorySize(_ url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+        if values?.isDirectory == true { return 0 }
+        return Int64(values?.fileSize ?? 0)
+    }
+
     /// Only an explicitly selected trash entry may be purged. Keep the entry on
     /// failure so cleanup can be retried, including when some files are missing.
     func permanentlyDeletePaper(id: String) throws {
@@ -716,6 +771,19 @@ actor PaperLibrary {
         }
         return output.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
     }
+}
+
+/// 目录里存在、索引（含回收站）中却没有对应记录的文件。
+///
+/// 常见来源：永久删除中途失败或崩溃、1.0.x 之前的残留、用户手工拷入。
+/// **默认只报告不动手** —— 误删不可逆。
+struct OrphanEntry: Identifiable, Sendable, Equatable {
+    enum Kind: String, Sendable { case paperDirectory, mineruOutput, analyses, pdf }
+    let path: String
+    let kind: Kind
+    /// 目录属性的粗略体积（不递归统计），仅供用户判断值不值得清理。
+    let sizeBytes: Int64
+    var id: String { path }
 }
 
 // MARK: - DTO 辅助

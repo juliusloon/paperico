@@ -226,12 +226,16 @@ struct LibraryPage: View {
                 if containerWidth < 620 {
                     PillIconButton(title: "处理任务", icon: "list.bullet.rectangle") { router.libraryManagement = .tasks }
                     PillIconButton(title: "回收站", icon: Ic.trash) { router.libraryManagement = .trash }
+                    PillIconButton(title: "未引用文件", icon: "folder.badge.questionmark") { router.libraryManagement = .files }
                 } else {
                 ToolbarButton(title: "处理任务", icon: "list.bullet.rectangle") {
                     router.libraryManagement = .tasks
                 }
                 ToolbarButton(title: "回收站", icon: Ic.trash) {
                     router.libraryManagement = .trash
+                }
+                ToolbarButton(title: "未引用文件", icon: "folder.badge.questionmark") {
+                    router.libraryManagement = .files
                 }
                 }
             }
