@@ -50,4 +50,44 @@ final class JobGateTests: XCTestCase {
         let result = try await gate.withPermit { "next" }
         XCTAssertEqual(result, "next")
     }
+
+    /// T3: local MinerU is one service on one machine, so it must be serialized;
+    /// cloud parsing and model calls are remote and stay concurrent.
+    func testLocalParseIsSerializedWhileCloudAndLLMStayConcurrent() async throws {
+        XCTAssertEqual(JobGateLimit.localParse, 1)
+        XCTAssertEqual(JobGateLimit.cloudParse, 2)
+        XCTAssertEqual(JobGateLimit.llm, 2)
+
+        let localGate = JobGate(limit: JobGateLimit.localParse)
+        let cloudGate = JobGate(limit: JobGateLimit.cloudParse)
+        let localCounter = WorkCounter()
+        let cloudCounter = WorkCounter()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<6 {
+                group.addTask {
+                    try await localGate.withPermit {
+                        await localCounter.enter()
+                        try await Task.sleep(for: .milliseconds(5))
+                        await localCounter.leave()
+                    }
+                }
+                group.addTask {
+                    try await cloudGate.withPermit {
+                        await cloudCounter.enter()
+                        try await Task.sleep(for: .milliseconds(5))
+                        await cloudCounter.leave()
+                    }
+                }
+            }
+            try await group.waitForAll()
+        }
+        let localPeak = await localCounter.peak
+        let cloudPeak = await cloudCounter.peak
+        XCTAssertEqual(localPeak, 1, "Local MinerU must parse one paper at a time")
+        XCTAssertEqual(cloudPeak, 2)
+        let localCapacity = await localGate.capacity
+        let cloudCapacity = await cloudGate.capacity
+        XCTAssertEqual(localCapacity, 1)
+        XCTAssertEqual(cloudCapacity, 2)
+    }
 }

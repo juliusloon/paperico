@@ -75,7 +75,25 @@ installing the backend dev dependencies.
 
 When changing a backend response schema, update `backend/tests/openapi_snapshot.json`
 and run `macos/scripts/check_api_contract.py`. Retained Swift DTOs and the script's
-snapshot must agree. This is a compatibility-data contract, not a native runtime dependency.
+snapshot must agree. This is a compatibility-data contract, not a native runtime
+dependency: the script guards a service that is no longer published, runs only when a
+local `backend/` copy exists, and is not part of native CI.
+
+## Contract snapshots
+
+The contract surfaces that actually ship are guarded in-repo by snapshot tests:
+
+- `LibraryFixtureTests` — on-disk `library.json` schema; holds a v1 library fixture
+  (plus an unversioned variant) and asserts decoding, field defaults and migration
+  idempotence.
+- `MCPSchemaSnapshotTests` — the 10 MCP tool names with their `inputSchema.properties`
+  and `required` arrays, plus `resourceKinds` and URI templates.
+
+Refresh a snapshot with `UPDATE_SNAPSHOT=1 swift test --package-path macos`. Changing
+`LibraryIndex`, `Block` or `ChatMessage` fields, or changing an MCP tool's arguments,
+must update the matching snapshot **in the same commit** — and the commit message must
+state *why* the contract changed. Refreshing a snapshot without that reason turns the
+guard into paperwork; code review should reject it.
 
 ## Releases and documentation
 

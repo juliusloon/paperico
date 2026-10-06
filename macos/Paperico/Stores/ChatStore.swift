@@ -129,7 +129,11 @@ final class ChatStore {
             content: content,
             attachedContext: attachedContext,
             citedBlockIds: nil,
-            createdAt: ISO8601DateFormatter().string(from: Date())
+            // Single timestamp source: PaperLibrary.now() is the only fixed-width
+            // (24-char, RFC3339 ms) formatter. This optimistic message is replaced by
+            // the authoritative on-disk session after the stream ends, but any future
+            // path that persists it directly must not reintroduce a 20-char value.
+            createdAt: PaperLibrary.now()
         )
         if let session {
             var updated = session

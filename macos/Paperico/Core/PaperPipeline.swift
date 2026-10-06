@@ -19,8 +19,12 @@ final class PaperPipeline {
     private(set) var nodeProgress: [String: NodeProgress] = [:]
 
     /// 上传/本地解析和模型调用的并发闸门；云端排队不占用上传许可。
-    private let mineruGate = JobGate(limit: 2)
-    private let llmGate = JobGate(limit: 2)
+    ///
+    /// 本地 MinerU 是同一台机器上的同一个服务实例,并发提交两份只会互相拖慢,
+    /// 因此本地解析串行化(limit 1);云端是远端服务,保持 2 并发。
+    private let localParseGate = JobGate(limit: JobGateLimit.localParse)
+    private let cloudGate = JobGate(limit: JobGateLimit.cloudParse)
+    private let llmGate = JobGate(limit: JobGateLimit.llm)
 
     init(library: PaperLibrary, settings: SettingsStore) {
         self.library = library
@@ -169,7 +173,7 @@ final class PaperPipeline {
                         throw PipelineError("本地 MinerU 模式仅支持直接上传的 PDF 文件", .pdfMissing)
                     }
                     progress[paperId] = "正在等待解析任务空位"
-                    contentListURL = try await mineruGate.withPermit {
+                    contentListURL = try await localParseGate.withPermit {
                         self.updateMinerUProgress(paperId: paperId, message: "本地 MinerU 正在解析 PDF")
                         return try await MinerUClient.runLocalPipeline(
                         fileData: fileData, fileName: fileName,
@@ -182,7 +186,7 @@ final class PaperPipeline {
                         fileData: fileData, fileName: fileName,
                         pdfURL: sourceURL,
                         config: mineruConfig, outputDir: outputDir, forceNewTask: forceReparse,
-                        submissionGate: mineruGate, waitForQueuedTask: true,
+                        submissionGate: cloudGate, waitForQueuedTask: true,
                         stateChanged: { [weak self] state in
                             await self?.updateCloudState(paperId: paperId, state: state)
                         },

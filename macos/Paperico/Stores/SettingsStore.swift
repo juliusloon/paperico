@@ -218,6 +218,9 @@ final class SettingsStore {
 
     // MARK: - 管线取用
 
+    /// 遗留签名：`role` 目前被忽略，任何 role 都返回同一个 `llmProfile`。
+    /// 保留参数是为了调用点能表达意图（翻译 / 对话 / 笔记合成），
+    /// 将来支持按 role 分模型时在此实现回退链，而不是让 role 悄悄失效。
     func llmConfig(for role: LLMRole) -> AnalysisEngine.LLMConfig {
         AnalysisEngine.LLMConfig(
             baseURL: LLMClient.normalizeBaseURL(llmProfile.baseUrl),

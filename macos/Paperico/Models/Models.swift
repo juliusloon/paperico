@@ -271,6 +271,8 @@ struct ChatDefaults: Codable, Hashable, Sendable {
     var enableWikilinks: Bool
 }
 
+/// 遗留字段：单profile 模式下 5 个 role 恒为 primary，全仓只写不读，暂无消费端。
+/// 将来支持按 role 分模型时，在此实现回退链（role → profile → 唯一 profile）。
 struct ProfileAssignment: Codable, Hashable, Sendable {
     var translationAndExtraction: String
     var logicChainAndSummary: String

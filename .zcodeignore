@@ -63,8 +63,6 @@ docs/verification/
 /docs/README.md
 /docs/agentero-execution-plan.md
 /docs/agentero-lessons-for-paperico.md
-/docs/agentero-lessons-recheck-2026-10.md
-/docs/v1.1.0-engineering-plan.md
 /docs/bbox-coordinate-system.md
 /docs/ios-app-plan.md
 /docs/macos-window-and-reader-perf.md
@@ -87,3 +85,31 @@ Thumbs.db
 # ===== SwiftPM 测试 =====
 .build/
 .swiftpm/
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+bower_components/
+jspm_packages/
+site-packages/
+coverage/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）

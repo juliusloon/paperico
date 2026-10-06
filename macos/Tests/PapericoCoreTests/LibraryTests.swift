@@ -230,4 +230,28 @@ final class LibraryTests: XCTestCase {
         XCTAssertNil(layout.fileURL(forRelativePath: outside.path))
         XCTAssertNil(layout.fileURL(forRelativePath: "link"))
     }
+
+    /// T1: every persisted timestamp comes from one fixed-width source, so string
+    /// ordering of papers, chat sessions and notes stays stable across writes.
+    func testEveryPersistedTimestampIsFixedWidth() async throws {
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let paper = try await library.importPDF(fileData: pdf(), fileName: "test.pdf", projectId: nil)
+        let session = ChatSession(id: "s1", paperId: paper.id, title: "Q", messages: [], createdAt: PaperLibrary.now())
+        try await library.saveChatSession(paperId: paper.id, session: session)
+        let note = Note(id: "n1", paperId: paper.id, title: "N", markdownContent: "# x",
+                        createdAt: PaperLibrary.now(), updatedAt: PaperLibrary.now())
+        try await library.addNote(paperId: paper.id, note: note)
+
+        let reopened = PaperLibrary(root: root)
+        try await reopened.load()
+        let stored = await reopened.paper(id: paper.id)
+        let timestamps = [try XCTUnwrap(stored).createdAt, session.createdAt, note.createdAt, note.updatedAt]
+        for value in timestamps {
+            XCTAssertEqual(value.count, 24, "Non-fixed-width timestamp: \(value)")
+            XCTAssertTrue(value.hasSuffix("Z"), "Timestamp must be UTC: \(value)")
+        }
+        // The unversioned ISO8601 default (20 chars, no milliseconds) must not reappear.
+        XCTAssertEqual(PaperLibrary.now().count, 24)
+    }
 }

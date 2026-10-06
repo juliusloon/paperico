@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Anti-drift contract check between the paperico backend and the native app.
 
+HISTORICAL. The FastAPI backend is no longer published and the native app does not
+depend on it at runtime — everything here guards a *compatibility data contract*
+only. It runs solely when a local `backend/` copy exists; `./script/check.sh` gates
+it behind `--with-backend` and skips it otherwise. Native CI never calls it.
+
+The contract surface that actually ships is covered by the in-repo snapshot tests
+(`LibraryFixtureTests` for the on-disk library schema and `MCPSchemaSnapshotTests`
+for the MCP tool/resource schemas) — prefer extending those.
+
 Implements the agentero-lessons §5 recommendation ("OpenAPI 快照测试") on the
 client side: pull the backend's /openapi.json (or read a saved copy) and compare
 the fields of every schema the Swift `Models.swift` mirror against an embedded
