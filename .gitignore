@@ -1,4 +1,4 @@
-# ===== Secrets / BYOK 凭证(绝不入库) =====
+# ===== Secrets / BYOK 凭证 =====
 .env
 .env.*
 !.env.example
@@ -8,7 +8,7 @@
 *.pfx
 *.mobileprovision
 
-# ===== 本地数据:数据库 / 论文 PDF / MinerU 抽取结果(绝不入库) =====
+# ===== 本地数据:数据库 / 论文 PDF / MinerU 抽取结果 =====
 *.db
 *.db-journal
 *.db-wal
@@ -21,14 +21,14 @@
 **/storage/mineru_chem_spike/
 **/storage/images/
 
-# ===== Web 端 / 兼容后端已下线:本地保留,不入库 =====
+# ===== Web 端 / 兼容后端已下线 =====
 frontend/
 backend/
 
-# ===== 品牌设计稿:本地保留,不入库(app 图标源文件在 macos/Paperico/paperico.icon) =====
+# ===== 品牌设计稿 =====
 design/
 
-# ===== 更新日志:本地维护,不入库 =====
+# ===== 更新日志 =====
 /CHANGELOG.md
 
 # ===== Python =====
@@ -51,14 +51,13 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 
-# ===== UI 历史归档(整仓构建快照,体积大;截图可能含论文标题) =====
-docs/ui-archives/
+# ===== UI 设计稿 =====
+assets/Visuals/
 
-# 验证日志/截图含论文标题/摘要/正文片段,只保留在本地
+# ===== 验证日志 =====
 docs/verification/
 
-# ===== 内部规划/工程文档:本地保留,不入库(docs/architecture.md 与 docs/releases/ 仍入库) =====
-# architecture-FULL.md 为含 gitignore 材料的完整版架构文档,仅本地维护
+# ===== 内部规划 / 工程文档 =====
 /docs/architecture-FULL.md
 /docs/Workbench.md
 /docs/README.md
@@ -83,6 +82,6 @@ Thumbs.db
 .codex/
 .github/
 
-# SwiftPM core tests
+# ===== SwiftPM 测试 =====
 .build/
 .swiftpm/
