@@ -1,0 +1,352 @@
+[
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "List library papers, filtered by project/status/title/filename, with pagination.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "project_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "query" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "status" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+
+      ],
+      "type" : "object"
+    },
+    "name" : "list_papers"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Search original title, Chinese title and filename (not full text).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "project_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "query" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "status" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "query"
+      ],
+      "type" : "object"
+    },
+    "name" : "search_library"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Read metadata, TL;DR, contributions, method entities and logical outline without marking the paper as opened.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "paper_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "paper_id"
+      ],
+      "type" : "object"
+    },
+    "name" : "get_paper"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Read a page of original/translated blocks with block IDs and evidence links.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "paper_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "paper_id"
+      ],
+      "type" : "object"
+    },
+    "name" : "get_blocks"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Read one evidence block from an active paper.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "block_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "paper_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "paper_id",
+        "block_id"
+      ],
+      "type" : "object"
+    },
+    "name" : "get_block"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Read a block and its local figure as image content (maximum 4 MiB).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "block_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "paper_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "paper_id",
+        "block_id"
+      ],
+      "type" : "object"
+    },
+    "name" : "get_figure"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "List project groups with paper counts.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        }
+      },
+      "required" : [
+
+      ],
+      "type" : "object"
+    },
+    "name" : "list_projects"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Read cross-paper method index and cited block IDs.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "category" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "limit" : {
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "project_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "query" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+
+      ],
+      "type" : "object"
+    },
+    "name" : "get_method_index"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Search method names with optional project/category filters.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "category" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "limit" : {
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "project_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "query" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "query"
+      ],
+      "type" : "object"
+    },
+    "name" : "search_methods"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Read existing notes without generating or changing them.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "paper_id" : {
+          "maxLength" : 512,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "paper_id"
+      ],
+      "type" : "object"
+    },
+    "name" : "get_notes"
+  }
+]

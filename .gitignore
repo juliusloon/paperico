@@ -87,3 +87,11 @@ Thumbs.db
 # ===== SwiftPM 测试 =====
 .build/
 .swiftpm/
+
+# ===== E2E 回归素材(绝不入库:真实论文 PDF 与其解析产物) =====
+# T8 的 opt-in 回归从 PAPERICO_E2E_PDF_DIR 读取真实 PDF,该目录只在本地存在。
+tests/e2e/
+e2e/
+**/e2e-papers/
+macos/Tests/**/Fixtures/Papers/
+macos/Tests/**/__Fixtures__/

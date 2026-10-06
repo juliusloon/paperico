@@ -53,6 +53,7 @@ final class MCPIntegrationTests: XCTestCase {
     }
 
     private func object(_ data: Data) throws -> [String: Any] { try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any]) }
+    private func array(_ data: Data) throws -> [[String: Any]] { try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]]) }
     private func call(_ name: String, arguments: [String: Any] = [:], id: Int = 1) -> [String: Any] {
         ["jsonrpc": "2.0", "id": id, "method": "tools/call", "params": ["name": name, "arguments": arguments]]
     }
@@ -94,8 +95,8 @@ final class MCPIntegrationTests: XCTestCase {
             }
             let (_, resources) = try await send(endpoint, ["jsonrpc": "2.0", "id": 3, "method": "resources/list"])
             let resourceResult = try XCTUnwrap(object(resources)["result"] as? [String: Any])
-            XCTAssertEqual((resourceResult["resources"] as? [Any])?.count, 4)
-            for kind in ["metadata", "blocks", "chat", "notes"] {
+            XCTAssertEqual((resourceResult["resources"] as? [Any])?.count, 5)
+            for kind in ["metadata", "brief", "blocks", "chat", "notes"] {
                 let (_, data) = try await send(endpoint, ["jsonrpc": "2.0", "id": 4, "method": "resources/read", "params": ["uri": "paperico://paper/\(paperId)/\(kind)"]])
                 XCTAssertNotNil(try object(data)["result"], kind)
             }
@@ -188,7 +189,7 @@ final class MCPIntegrationTests: XCTestCase {
             XCTAssertEqual(error, false)
             XCTAssertFalse(content.isEmpty)
             let (resources, _) = try await client.listResources()
-            XCTAssertEqual(resources.count, 4)
+            XCTAssertEqual(resources.count, 5)
             let blocks = try await client.readResource(uri: "paperico://paper/\(paperId)/blocks")
             XCTAssertEqual(blocks.count, 1)
             await client.disconnect()
@@ -206,6 +207,56 @@ final class MCPIntegrationTests: XCTestCase {
             let (accepted, _) = try await send(replacement, call("list_papers"), authorization: "Bearer \(String(repeating: "b", count: 64))")
             XCTAssertEqual(accepted, 200)
         } catch { await client.disconnect(); await server.stop(); throw error }
+        await server.stop()
+    }
+
+    /// T5: the recommended two-step read. `brief` must be affordable enough to
+    /// always fetch, carry every section heading, and stay within the same budget
+    /// the in-app chat uses — otherwise external agents read full blocks by default.
+    func testBriefIsCompactThenBlocksAreReadOnDemand() async throws {
+        let (library, paperId, block) = try await fixture()
+        // A second, distinct section heading proves headings survive compression.
+        let second = Block(id: "block-2", order: 1, kind: "section_heading", pageIdx: 1, bbox: nil,
+                           sectionTitle: "Methods", textOriginal: "Methods", textZh: "方法", oneLiner: "",
+                           keywords: [], roleInNarrative: "", imagePath: "", captionOriginal: "",
+                           captionZh: "", figureType: "", coreTakeaways: [], dataReadingNotes: "",
+                           tableHtml: "", latex: "", plainExplanation: "", entityRefs: [])
+        try await library.writeBlocks(paperId: paperId, blocks: [block, second])
+        try await library.writeEntities(paperId: paperId, entities: [
+            .init(id: "method-1", canonicalKey: "graph", name: "Graph", category: "model",
+                  definitionZh: "图模型", blockRefs: [block.id, second.id])
+        ])
+
+        let server = server(library)
+        let endpoint = try await server.start(token: token)
+        do {
+            let (_, briefData) = try await send(endpoint,
+                ["jsonrpc": "2.0", "id": 1, "method": "resources/read", "params": ["uri": "paperico://paper/\(paperId)/brief"]])
+            let brief = try XCTUnwrap(object(briefData)["result"] as? [String: Any])
+            let contents = try XCTUnwrap(brief["contents"] as? [[String: Any]])
+            let payload = try XCTUnwrap(object(Data((contents[0]["text"] as? String ?? "").utf8)))
+            let logicChain = try XCTUnwrap(payload["logic_chain"] as? String)
+            let methodIndex = try XCTUnwrap(payload["method_index"] as? String)
+
+            XCTAssertEqual(payload["block_count"] as? Int, 2)
+            XCTAssertNotNil(payload["budget"])
+            XCTAssertLessThanOrEqual(logicChain.count, ChatContextBuilder.logicChainBudget)
+            // Section headings are structural anchors and must never be dropped.
+            XCTAssertTrue(logicChain.contains("§"), "Logic chain lost its section anchors: \(logicChain)")
+            XCTAssertTrue(logicChain.contains("Methods"), logicChain)
+            XCTAssertTrue(methodIndex.contains("Graph(model)"), methodIndex)
+            // The whole point: brief is far smaller than the raw blocks.
+            XCTAssertLessThan(logicChain.count + methodIndex.count, 500)
+
+            // Step two: only now read the original text.
+            let (_, blocksData) = try await send(endpoint,
+                ["jsonrpc": "2.0", "id": 2, "method": "resources/read", "params": ["uri": "paperico://paper/\(paperId)/blocks"]])
+            let blocksResult = try XCTUnwrap(object(blocksData)["result"] as? [String: Any])
+            let blocksContents = try XCTUnwrap(blocksResult["contents"] as? [[String: Any]])
+            let blocksPayload = try array(Data((blocksContents[0]["text"] as? String ?? "").utf8))
+            XCTAssertEqual(blocksPayload.count, 2)
+            XCTAssertEqual(blocksPayload.first?["text_original"] as? String, "Original evidence")
+        } catch { await server.stop(); throw error }
         await server.stop()
     }
 }

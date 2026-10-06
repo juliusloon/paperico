@@ -1,0 +1,16 @@
+{
+  "kinds" : [
+    "metadata",
+    "brief",
+    "blocks",
+    "chat",
+    "notes"
+  ],
+  "uri_templates" : [
+    "paperico://paper/{paper_id}/metadata",
+    "paperico://paper/{paper_id}/brief",
+    "paperico://paper/{paper_id}/blocks",
+    "paperico://paper/{paper_id}/chat",
+    "paperico://paper/{paper_id}/notes"
+  ]
+}

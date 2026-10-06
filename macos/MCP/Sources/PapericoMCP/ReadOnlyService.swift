@@ -48,14 +48,16 @@ public actor PapericoMCPServer {
     }
 }
 
-private struct ReadOnlyService: Sendable {
+/// Read-only MCP surface. Internal (not private) so `MCPSchemaSnapshotTests` can
+/// assert the contract external clients depend on — see CONTRIBUTING.md.
+struct ReadOnlyService: Sendable {
     let query: PapericoMCPServer.Query
 
     func handle(_ request: HTTPRequest) async -> HTTPResponse {
         // An independent server/transport per HTTP exchange avoids collisions in
         // request IDs and client capabilities across concurrent stateless clients.
         let server = Server(name: "Paperico", version: "0.3.0", instructions:
-            "Read-only access to the running Paperico app. Cite paper_id and block_id. Library search matches titles and filenames. No API keys or paid actions are exposed.",
+            "Read-only access to the running Paperico app. Cite paper_id and block_id. Start from the 'brief' resource for a compressed logic chain and method index, then read 'blocks' only when you need the original text. Library search matches titles and filenames. No API keys or paid actions are exposed.",
             capabilities: .init(resources: .init(subscribe: false, listChanged: false), tools: .init(listChanged: false)))
         let transport = StatelessHTTPServerTransport()
         await server.withMethodHandler(ListTools.self) { _ in .init(tools: Self.tools) }
@@ -142,7 +144,7 @@ private struct ReadOnlyService: Sendable {
         let next_offset: Int?
     }
 
-    private static let resourceKinds = ["metadata", "blocks", "chat", "notes"]
+    static let resourceKinds = ["metadata", "brief", "blocks", "chat", "notes"]
     private static let string: Value = ["type": "string", "minLength": 1, "maxLength": 512]
     private static let paging: [String: Value] = [
         "offset": ["type": "integer", "minimum": 0],

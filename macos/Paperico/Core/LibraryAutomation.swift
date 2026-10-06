@@ -50,6 +50,16 @@ private struct AutomationPaper: Encodable {
     let blockCount: Int
 }
 
+/// Compressed reading surface for external agents: enough to decide what to open,
+/// small enough to always afford. `budget` is stated so a caller can tell whether
+/// the chain was clipped rather than guessing from its length.
+private struct AutomationBrief: Encodable {
+    let logicChain: String
+    let methodIndex: String
+    let blockCount: Int
+    let budget: [String: Int]
+}
+
 struct AutomationError: LocalizedError {
     let errorDescription: String?
     init(_ message: String) { errorDescription = message }
@@ -75,7 +85,7 @@ extension PaperLibrary {
             }
             return try automationEncode(args.page(methodIndex(projectId: args.projectId, category: args.category, q: args.query)))
         case "get_paper", "get_blocks", "get_block", "get_figure", "get_notes",
-             "resource_blocks", "resource_chat", "resource_notes":
+             "resource_blocks", "resource_chat", "resource_notes", "resource_brief":
             let paperId = try args.identifier(args.paperId)
             // Never expose retained files for trashed/permanently deleted papers.
             guard paper(id: paperId) != nil else { throw AutomationError("论文不存在或已移入回收站。") }
@@ -116,6 +126,17 @@ extension PaperLibrary {
                 }
                 return result
             case "get_notes": return try automationEncode(args.page(notes(paperId: paperId)))
+            case "resource_brief":
+                // Same compressed context the in-app chat uses — one implementation,
+                // two consumers. Reading this before `blocks` is the recommended path.
+                let detail = try paperDetail(id: paperId, markOpened: false)
+                return try automationEncode(AutomationBrief(
+                    logicChain: ChatContextBuilder.compactLogicChain(detail.blocks),
+                    methodIndex: ChatContextBuilder.compactMethodIndex(detail.entities),
+                    blockCount: detail.blocks.count,
+                    budget: ["logic_chain": ChatContextBuilder.logicChainBudget,
+                             "method_index_top_k": ChatContextBuilder.methodIndexTopK]
+                ))
             case "resource_blocks": return try automationEncode(paperDetail(id: paperId, markOpened: false).blocks)
             case "resource_chat": return try automationEncode(chatSessions(paperId: paperId))
             default: return try automationEncode(notes(paperId: paperId))
