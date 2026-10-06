@@ -32,12 +32,98 @@ struct PaperListItem: Codable, Hashable, Identifiable, Sendable {
     var venue: String
     var errorMessage: String
     var errorCode: String?
+    // Schema v2 (1.1.0). Optional or defaulted so v1 files still decode; any
+    // new field must be registered here and in LibraryIndexMigrations, nowhere else.
+    var doi: String? = nil
+    var arxivId: String? = nil
+    /// Provenance of the metadata above: "local" = user's own file, "auto" = looked
+    /// up from DOI/arXiv, "manual" = user edited a field; auto never overwrites manual.
+    var metaSource: String = MetaSource.local
 
     var statusEnum: PaperStatus { PaperStatus(raw: status) }
     var displayTitle: String {
         let t = title.isEmpty ? originalFileName : title
         return t.isEmpty ? "未命名论文" : t
     }
+
+    /// Declared explicitly because `init(from:)` below suppresses the memberwise form.
+    init(
+        id: String, title: String, titleZh: String, authors: [String], year: Int?,
+        domainTags: [String], status: String, projectId: String?, sourceType: String,
+        originalFileName: String, createdAt: String, lastOpenedAt: String?, tldr: String,
+        narrativeSummary: String, contributions: [String], difficultyEstimate: String,
+        venue: String, errorMessage: String, errorCode: String?,
+        doi: String? = nil, arxivId: String? = nil, metaSource: String = MetaSource.local
+    ) {
+        self.id = id
+        self.title = title
+        self.titleZh = titleZh
+        self.authors = authors
+        self.year = year
+        self.domainTags = domainTags
+        self.status = status
+        self.projectId = projectId
+        self.sourceType = sourceType
+        self.originalFileName = originalFileName
+        self.createdAt = createdAt
+        self.lastOpenedAt = lastOpenedAt
+        self.tldr = tldr
+        self.narrativeSummary = narrativeSummary
+        self.contributions = contributions
+        self.difficultyEstimate = difficultyEstimate
+        self.venue = venue
+        self.errorMessage = errorMessage
+        self.errorCode = errorCode
+        self.doi = doi
+        self.arxivId = arxivId
+        self.metaSource = metaSource
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, titleZh, authors, year, domainTags, status, projectId
+        case sourceType, originalFileName, createdAt, lastOpenedAt, tldr
+        case narrativeSummary, contributions, difficultyEstimate, venue
+        case errorMessage, errorCode, doi, arxivId, metaSource
+    }
+
+    /// Lenient decoding: v1 records simply lack the v2 keys. `decodeIfPresent`
+    /// keeps an old library readable without letting a missing field fail the load.
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        title = try values.decode(String.self, forKey: .title)
+        titleZh = try values.decode(String.self, forKey: .titleZh)
+        authors = try values.decodeIfPresent([String].self, forKey: .authors) ?? []
+        year = try values.decodeIfPresent(Int.self, forKey: .year)
+        domainTags = try values.decodeIfPresent([String].self, forKey: .domainTags) ?? []
+        status = try values.decode(String.self, forKey: .status)
+        projectId = try values.decodeIfPresent(String.self, forKey: .projectId)
+        sourceType = try values.decode(String.self, forKey: .sourceType)
+        originalFileName = try values.decodeIfPresent(String.self, forKey: .originalFileName) ?? ""
+        createdAt = try values.decode(String.self, forKey: .createdAt)
+        lastOpenedAt = try values.decodeIfPresent(String.self, forKey: .lastOpenedAt)
+        tldr = try values.decodeIfPresent(String.self, forKey: .tldr) ?? ""
+        narrativeSummary = try values.decodeIfPresent(String.self, forKey: .narrativeSummary) ?? ""
+        contributions = try values.decodeIfPresent([String].self, forKey: .contributions) ?? []
+        difficultyEstimate = try values.decodeIfPresent(String.self, forKey: .difficultyEstimate) ?? ""
+        venue = try values.decodeIfPresent(String.self, forKey: .venue) ?? ""
+        errorMessage = try values.decodeIfPresent(String.self, forKey: .errorMessage) ?? ""
+        errorCode = try values.decodeIfPresent(String.self, forKey: .errorCode)
+        doi = try values.decodeIfPresent(String.self, forKey: .doi)
+        arxivId = try values.decodeIfPresent(String.self, forKey: .arxivId)
+        metaSource = try values.decodeIfPresent(String.self, forKey: .metaSource) ?? MetaSource.local
+    }
+}
+
+/// Allowed values of `PaperListItem.metaSource`. Anything user-edited becomes
+/// `manual` and is never overwritten by automatic recognition.
+enum MetaSource {
+    /// Imported from a local file; no recognized identifier was resolved.
+    static let local = "local"
+    /// Filled in from Crossref / arXiv by PaperMetadata.
+    static let auto = "auto"
+    /// At least one metadata field was edited by the user.
+    static let manual = "manual"
 }
 
 struct Block: Codable, Hashable, Identifiable, Sendable {

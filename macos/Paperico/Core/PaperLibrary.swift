@@ -80,11 +80,15 @@ actor PaperLibrary {
 
     func load() throws {
         guard !loaded else { return }
+        // 迁移前备份:成功迁移后保留(不自动删除),失败时原文件分毫未动。
+        let onDiskVersion = try backupIndexBeforeMigration()
         index = try LibraryFiles.readJSON(libraryFile, decoder: decoder) ?? LibraryIndex()
         committedIndex = index
         // 启动对账(对齐 reconcile_interrupted_papers):上次退出时仍在处理中的论文标记为中断。
         let interrupted = ["parsing", "parsed", "normalizing", "analyzing", "reducing"]
-        var changed = false
+        // 迁移本身也是一次改动：把新版本号落盘，下次启动不再重复迁移。
+        // 必须比对**磁盘上**的版本——解码后内存里已经是 current 了。
+        var changed = onDiskVersion < LibraryIndexMigrations.current
         for i in index.papers.indices where interrupted.contains(index.papers[i].status) {
             index.papers[i].status = "error"
             index.papers[i].errorMessage = "处理在应用退出时被中断，请重新解析或重新翻译。"
@@ -100,6 +104,24 @@ actor PaperLibrary {
         }
         if changed { try persistIndex() }
         loaded = true
+    }
+
+    /// 复制一份迁移前的 `library.json`，并返回磁盘上的 schema 版本
+    /// （无 `library.json` 时返回 current，表示无事可做）。只对 v1（含无版本）
+    /// 索引做一次备份：已是当前版本的库不产生副本，避免每次启动堆积文件。
+    private func backupIndexBeforeMigration() throws -> Int {
+        guard let data = try? Data(contentsOf: libraryFile) else { return LibraryIndexMigrations.current }
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        // A nil key means the unversioned index, i.e. v1.
+        let version = (object?["schema_version"] as? Int) ?? 1
+        guard version < LibraryIndexMigrations.current else { return version }
+        let stamp = Self.now().replacingOccurrences(of: ":", with: "-")
+        let backup = libraryFile.deletingLastPathComponent()
+            .appendingPathComponent("library.json.bak-v\(version)-\(stamp)")
+        guard !FileManager.default.fileExists(atPath: backup.path) else { return version }
+        do { try data.write(to: backup, options: .atomic) }
+        catch { throw PipelineError("无法备份论文库索引：\(error.localizedDescription)。原文件已保留。", .storageFailed) }
+        return version
     }
 
     private func persistIndex() throws {
@@ -631,7 +653,8 @@ extension PaperListItem {
             domainTags: [], status: "uploaded", projectId: nil,
             sourceType: "pdf_upload", originalFileName: "", createdAt: PaperLibrary.now(),
             lastOpenedAt: nil, tldr: "", narrativeSummary: "", contributions: [],
-            difficultyEstimate: "", venue: "", errorMessage: "", errorCode: nil
+            difficultyEstimate: "", venue: "", errorMessage: "", errorCode: nil,
+            doi: nil, arxivId: nil, metaSource: MetaSource.local
         )
     }
 }

@@ -13,8 +13,10 @@ struct TrashedPaper: Codable, Identifiable, Sendable {
 }
 
 /// Version 1 also accepts the unversioned index used during the native migration.
+/// Newer schema versions are migrated through `LibraryIndexMigrations` — the only
+/// place where a version boundary may add or backfill fields.
 struct LibraryIndex: Codable {
-    var schemaVersion = 1
+    var schemaVersion = LibraryIndexMigrations.current
     var projects: [ProjectGroup] = []
     var papers: [PaperListItem] = []
     var shaByPaperId: [String: String] = [:]
@@ -35,8 +37,9 @@ struct LibraryIndex: Codable {
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        guard schemaVersion == 1 else {
+        // The unversioned index written during the Web → native migration counts as v1.
+        let version = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard version <= LibraryIndexMigrations.current else {
             throw PipelineError("论文库由更新版本创建，请升级 Paperico 后再打开。", .storageFailed)
         }
         // These existed before versioning; missing required fields indicate corruption.
@@ -50,5 +53,7 @@ struct LibraryIndex: Codable {
         hiddenMethods = try values.decodeIfPresent([String].self, forKey: .hiddenMethods) ?? []
         methodAddedAt = try values.decodeIfPresent([String: String].self, forKey: .methodAddedAt) ?? [:]
         methodGroups = try values.decodeIfPresent([MethodGroup].self, forKey: .methodGroups) ?? MethodGroup.presets
+        schemaVersion = version
+        try LibraryIndexMigrations.migrate(&self, from: version)
     }
 }
