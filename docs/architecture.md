@@ -275,10 +275,17 @@ Materials and Methods、Appendix 与扩展图表重新计入正文。缺少摘�
 ## 9. 测试与交付
 
 - SwiftPM 目标：`PapericoCore`（排除 GUI 层与管线主类的可测核心）+ `PapericoMCP`；
-  测试目标 `PapericoCoreTests` 与 `PapericoMCPTests`，共 27 个文件、172 个测试函数，
+  测试目标 `PapericoCoreTests` 与 `PapericoMCPTests`，共 29 个文件、191 个测试函数，
   覆盖索引一致性与迁移、并发导入/保存、管线恢复（分段断点、指纹校验）、MinerU 轮询、
   凭据迁移、正文范围、元数据识别与去重、孤儿文件、方法索引、对话引用与会话管理、
   MCP 真实 HTTP 互操作与契约快照等。核心测试不调用外部 AI。
+- **app-only 逻辑下沉**：`Package.swift` 排除 `Stores/`、`Pages/`、`Core/PaperPipeline.swift`，
+  这些文件里的决策逻辑若直接内联写就**没有测试背书**。因此把其中的纯编排逻辑抽到 core：
+  - `MetadataRecognition` —— 元数据识别的调用顺序（标识符先于网络落库）、manual 记录
+    不写、仅 `duplicatePaper` 允许中断管线。`PaperPipeline` 只提供 IO 闭包。
+  - `OrphanSelection` —— 孤儿文件勾选与两步确认的状态机，包含误删防线（确认态跨勾选
+    变化失效、报告刷新后无条件重新确认）。
+  两条规则都是这次补测试时**实际发现的缺陷**，不是预防性抽象。
 - **真实论文回归（opt-in）**：`RealPipelineTests` 用 `PAPERICO_E2E_PDF_DIR` 读取本地
   真实 PDF，跑通导入 → MinerU 解析 → 规范化 → 落盘，断言块覆盖率、章节标题、图像路径
   可解析与 sidecar 指纹一致。env 缺失、MinerU 未配置或单篇解析失败时 **skip 而非 fail**，

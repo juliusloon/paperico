@@ -16,9 +16,8 @@ struct LibraryManagementSheet: View {
     @State private var error = ""
     @State private var busy: Set<String> = []
     @State private var pendingDeleteId: String?
-    /// 勾选 + 显式确认后才删除；孤儿文件默认一个都不选。
-    @State private var selectedOrphans: Set<String> = []
-    @State private var confirmOrphanDelete = false
+    /// 勾选 + 显式确认后才删除；状态机在 core 内（有测试背书）。
+    @State private var selection = OrphanSelection()
 
     private var tasks: [PaperListItem] {
         papers.filter { $0.status != "ready" || services.pipeline.isProcessing($0.id) }
@@ -69,6 +68,9 @@ struct LibraryManagementSheet: View {
         .environment(\.floatingSurface, true)
         .task {
             await refresh()
+            // 只有「处理任务」需要轮询：管线在后台推进，界面要跟着动。
+            // 回收站与未引用文件都是静态快照，轮询没有意义（见 refresh 的说明）。
+            guard section == .tasks else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 await refresh()
@@ -122,11 +124,8 @@ struct LibraryManagementSheet: View {
             ForEach(orphans) { entry in
                 HStack(spacing: 12) {
                     Toggle("", isOn: Binding(
-                        get: { selectedOrphans.contains(entry.id) },
-                        set: { on in
-                            if on { selectedOrphans.insert(entry.id) } else { selectedOrphans.remove(entry.id) }
-                            confirmOrphanDelete = false
-                        }
+                        get: { selection.selectedIds.contains(entry.id) },
+                        set: { selection.setSelected($0, for: entry) }
                     )).labelsHidden().toggleStyle(.checkbox)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(entry.path).font(.system(size: 12, weight: .medium)).lineLimit(2)
@@ -138,19 +137,19 @@ struct LibraryManagementSheet: View {
                 .padding(.vertical, 6)
                 .modifier(ManagementRowSurface())
             }
-            if !selectedOrphans.isEmpty {
+            if !selection.selectedIds.isEmpty {
                 HStack(spacing: 10) {
-                    Text("已选择 \(selectedOrphans.count) 项")
+                    Text("已选择 \(selection.selectedIds.count) 项")
                         .font(.callout).foregroundStyle(palette.danger)
                     Spacer()
-                    Button("取消选择") { selectedOrphans.removeAll(); confirmOrphanDelete = false }
+                    Button("取消选择") { selection.clear() }
                         .buttonStyle(LiquidActionButtonStyle())
-                    if confirmOrphanDelete {
-                        ToolbarButton(title: "确认删除", icon: Ic.trash, busy: false) {
-                            Task { await deleteSelectedOrphans() }
+                    if selection.isConfirming {
+                        ToolbarButton(title: "确认删除", icon: Ic.trash, busy: busy.contains("orphans")) {
+                            Task { await deleteConfirmedOrphans() }
                         }.foregroundStyle(palette.danger)
                     } else {
-                        Button("删除所选…") { confirmOrphanDelete = true }
+                        Button("删除所选…") { selection.requestConfirmation() }
                             .buttonStyle(LiquidActionButtonStyle()).foregroundStyle(palette.danger)
                     }
                 }
@@ -160,9 +159,14 @@ struct LibraryManagementSheet: View {
     }
 
     /// 逐步删除：任一项失败就停下并保留记录，用户可重试（对齐永久删除的语义）。
-    private func deleteSelectedOrphans() async {
-        let targets = orphans.filter { selectedOrphans.contains($0.id) }
-        guard !targets.isEmpty else { return }
+    ///
+    /// `confirmedTargets` 返回 nil 表示确认态已失效（例如报告刷新后目标变了），
+    /// 此时**拒绝执行**——宁可让用户重新点一次，也不能删掉一个他们没确认过的集合。
+    private func deleteConfirmedOrphans() async {
+        guard let targets = selection.confirmedTargets(in: orphans), !targets.isEmpty else {
+            selection.refresh(available: orphans)
+            return
+        }
         busy.insert("orphans")
         error = ""
         var failed: [String] = []
@@ -172,8 +176,7 @@ struct LibraryManagementSheet: View {
         }
         busy.remove("orphans")
         if failed.isEmpty {
-            selectedOrphans.removeAll()
-            confirmOrphanDelete = false
+            selection.clear()
         } else {
             error = "以下文件未能删除，可重试：\n" + failed.joined(separator: "\n")
         }
@@ -230,15 +233,20 @@ struct LibraryManagementSheet: View {
         }.padding(.vertical, 6)
     }
 
+    /// 「未引用文件」不参与轮询：报告只在打开时取一次。
+    ///
+    /// 任务与回收站必须每2 秒刷新（管线在跑），但孤儿报告是磁盘快照，
+    /// 轮询只会让用户刚点下的「确认删除」被下一次刷新撤销——既做不到，
+    /// 也违背"确认删掉我看到的那几项"。操作后由 `deleteConfirmedOrphans` 显式刷新。
     private func refresh() async {
         switch section {
         case .tasks: papers = await services.library.listPapers()
         case .trash: trash = await services.library.listTrash()
         case .files:
             orphans = await services.library.orphanFiles()
-            // 报告刷新后，勾选项必须仍然存在，否则"确认删除"会作用在错的条目上。
-            selectedOrphans.formIntersection(Set(orphans.map(\.id)))
-            if selectedOrphans.isEmpty { confirmOrphanDelete = false }
+            // 报告刷新后必须重新确认：目标集合可能已变，而"确认删除"承诺的是
+            // "删掉我看到的那几项"。状态机内部会无条件解除确认态。
+            selection.refresh(available: orphans)
         }
     }
 

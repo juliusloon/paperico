@@ -237,15 +237,11 @@ final class PaperPipeline {
 
             // Step 2.5: 元数据识别。此处已有原文，失败也不影响后续；
             // 整步静默失败，绝不让一次网络抖动把论文变成 error。
+            // 分类规则见 MetadataRecognition.shouldInterrupt（有测试背书）。
             do {
                 try await recognizeMetadata(paperId: paperId, blocks: blockRecords)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch let error as PipelineError {
-                // 只有"确系同一篇论文"这种确定性判断才上报，其余一律放过。
-                if error.errorCode == .duplicatePaper { throw error }
             } catch {
-                // 识别本身不该产生用户可见的失败。
+                if MetadataRecognition.shouldInterrupt(error) { throw error }
             }
 
             // Step 3: 完整翻译、段落分析和全文总结。
@@ -262,30 +258,35 @@ final class PaperPipeline {
 
     // MARK: - 重新翻译（复用 MinerU blocks）
 
-    /// 识别 DOI / arXiv 并回填作者、年份、期刊。**任何一步失败都静默返回**，
-    /// 与 `PaperContentScope` 的取舍一致：识别失败保持现状，绝不阻塞管线。
+    /// 识别 DOI / arXiv 并回填作者、年份、期刊。
     ///
-    /// 唯一的例外是重复识别：同一篇论文的预印本与正式版内容不同、SHA 不同，
-    /// 但 DOI 相同——这种情况必须让用户看到，否则库里会有两篇同一篇论文。
+    /// 这里只提供 IO 动作；**编排决策在 `MetadataRecognition`（core target 内，可测）**，
+    /// 包括"标识符先于网络落库"、"manual 记录不写"、"仅 duplicatePaper 可中断"。
     private func recognizeMetadata(paperId: String, blocks: [Block]) async throws {
-        guard !Task.isCancelled else { return }
-        let ids = PaperMetadata.extractIdentifiers(from: blocks)
-        guard ids.doi != nil || ids.arxivId != nil else { return }
-
-        // 标识符是从原文读到的，不依赖网络——先落库，查询失败也留有痕迹。
-        try await library.updatePaper { record in
-            guard record.id == paperId, record.metaSource != MetaSource.manual else { return }
-            if record.doi == nil { record.doi = PaperLibrary.normalizeDOI(ids.doi) }
-            if record.arxivId == nil { record.arxivId = PaperLibrary.normalizeArxivId(ids.arxivId) }
-        }
-
-        if let duplicate = await library.existingPaper(doi: ids.doi, arxivId: ids.arxivId, excluding: paperId) {
-            throw PipelineError("与已有论文《\(duplicate.displayTitle)》是同一篇（DOI / arXiv 相同，id \(duplicate.id)）",
+        let library = self.library
+        let outcome = try await MetadataRecognition.run(blocks, actions: .init(
+            paperId: paperId,
+            writeIdentifiers: { ids in
+                try await library.updatePaper { record in
+                    guard record.id == paperId, record.metaSource != MetaSource.manual else { return }
+                    if record.doi == nil { record.doi = PaperLibrary.normalizeDOI(ids.doi) }
+                    if record.arxivId == nil { record.arxivId = PaperLibrary.normalizeArxivId(ids.arxivId) }
+                }
+                return true
+            },
+            findDuplicate: { ids, id in
+                await library.existingPaper(doi: ids.doi, arxivId: ids.arxivId, excluding: id)
+            },
+            lookup: { ids in
+                await PaperMetadata.lookup(doi: ids.doi, arxivId: ids.arxivId)
+            },
+            applyMetadata: { metadata in try await library.applyMetadata(paperId: paperId, metadata) },
+            metaSource: { await library.paper(id: paperId)?.metaSource ?? MetaSource.local }
+        ))
+        if case .duplicate(let existing) = outcome {
+            throw PipelineError("与已有论文《\(existing.displayTitle)》是同一篇（DOI / arXiv 相同，id \(existing.id)）",
                                 .duplicatePaper)
         }
-
-        guard let metadata = await PaperMetadata.lookup(doi: ids.doi, arxivId: ids.arxivId) else { return }
-        try await library.applyMetadata(paperId: paperId, metadata)
     }
 
     private func runRetranslate(paperId: String) async {
