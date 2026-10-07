@@ -100,7 +100,10 @@ Application Support/Paperico/
 
 去重键有两条：SHA-256（内容）与 DOI / arXiv ID（同一篇论文）。第二键在解析完成、
 标识符落盘之后、联网查询与模型分析之前执行：`MetadataRecognition` 调用 `PaperPipeline`
-注入的 `findDuplicate`，落到 `PaperLibrary.existingPaper(doi:arxivId:excluding:)`。
+注入的 `registerIdentifiers`，落到 `PaperLibrary.registerIdentifiers(_:paperId:)`，在同一次
+actor 操作内完成登记与 `existingPaper(doi:arxivId:excluding:)` 查询，避免并发论文互相判重。
+已被判为重复的记录不占用标识符归属；`metadata_duplicate_by_paper_id` 单独持久化归属，
+不依赖会被解析失败、取消或启动对账覆盖的临时错误码，已有论文可继续处理。
 预印本与正式版内容不同、SHA 不同但 DOI 相同，用 SHA 去重会漏掉，因此增加第二键，
 命中时复用 `duplicatePaper` 错误码并指向已有论文。DOI 比较做归一化（去掉 resolver
 前缀、大小写、尾随标点），arXiv 去掉版本后缀。

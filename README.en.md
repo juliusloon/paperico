@@ -9,7 +9,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v1.0.1-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v1.1.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 English · [简体中文](README.md)
 
@@ -84,7 +84,7 @@ the translation, chat citations, method cards and annotations.
 - **MCP** — opt-in localhost access with 10 read-only tools, evidence blocks and figures; copy client configuration from settings. See the [connection guide](docs/mcp.md).
 - **Native desktop** — Liquid Glass, light/dark appearance, accent colors, offline math rendering, an About page with opt-in update checks.
 
-See the [release notes](docs/releases/v1.0.1.md) and the [architecture review](docs/architecture.md).
+See the [release notes](docs/releases/v1.1.0.md) and the [architecture review](docs/architecture.md).
 
 <p align="center">
   <img src="assets/readme/Paperico_Reading.jpg" width="100%" alt="Paperico's reading view.">
@@ -92,7 +92,7 @@ See the [release notes](docs/releases/v1.0.1.md) and the [architecture review](d
 
 ## Run
 
-**Install:** download `Paperico-1.0.1.dmg` from the
+**Install:** download `Paperico-1.1.0.dmg` from the
 [latest release](https://github.com/juliusloon/paperico/releases), drag Paperico into
 Applications and replace any older copy. The DMG is not Developer ID signed or notarized;
 distribution signing options are described in the [macOS development guide](macos/README.md).
@@ -156,6 +156,10 @@ The sandboxed app stores its library under:
 Service configuration, appearance and progress use UserDefaults. API keys and MinerU
 tokens use macOS Keychain. Storage failures are surfaced; corrupt or newer-version
 indexes are not silently replaced with an empty library.
+
+1.1.0 upgrades the library to schema v2 and keeps an index backup before migration.
+1.0.x cannot open the upgraded library. Authors, year, venue and identifiers are
+recognized after new parsing; existing completed papers are not backfilled at startup.
 
 The unversioned native JSON index from the migration is compatible.
 **The old backend SQLite library and Fernet credentials remain separate and are not

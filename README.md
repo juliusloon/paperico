@@ -9,7 +9,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v1.0.1-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v1.1.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 [English](README.en.md) · 简体中文
 
@@ -75,7 +75,7 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 - **MCP**：默认关闭的 localhost 只读服务，提供 10 个工具、证据块与图像；在设置中复制客户端配置。详见 [连接说明](docs/mcp.md)。
 - **原生桌面**：Liquid Glass、深浅色外观、自定义强调色、离线公式渲染、带可选更新检查的关于页。
 
-详见[更新说明](docs/releases/v1.0.1.md)与[仓库分析与架构说明](docs/architecture.md)。
+详见[更新说明](docs/releases/v1.1.0.md)与[仓库分析与架构说明](docs/architecture.md)。
 
 <p align="center">
   <img src="assets/readme/Paperico_Reading.jpg" width="100%" alt="Paperico 的阅读页面。">
@@ -141,6 +141,9 @@ App 沙盒中的数据根目录：
 
 服务配置、外观与进度在 UserDefaults；API Key 与 MinerU Token 在 macOS 钥匙串。
 存储错误会明确显示，损坏或未知版本的索引不会被当作空库覆盖。
+
+1.1.0 将论文库升级到 schema v2，迁移前自动保留索引备份。升级后的库不能由 1.0.x
+打开；作者、年份、期刊和 DOI 在新解析完成后识别，已完成旧论文的元数据不会在启动时回填。
 
 可读取原生迁移期间的无版本 JSON 索引。**旧 Python 后端的 SQLite 论文库、Fernet
 密钥和原生论文库仍是两份独立数据，目前不会自动转换**；升级前请保留旧数据库和存储目录。
