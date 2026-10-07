@@ -5,29 +5,52 @@ import XCTest
 private final class MetadataProtocol: URLProtocol {
     struct Reply { let status: Int; let body: String; let delay: TimeInterval }
     nonisolated(unsafe) static var reply = Reply(status: 200, body: "{}", delay: 0)
+    nonisolated(unsafe) static var lastRequest: URLRequest?
+    private var pending: DispatchWorkItem?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        Self.lastRequest = request
         let reply = Self.reply
         let client = self.client
         let stub = self
         let url = request.url!
-        let work = {
+        let work = DispatchWorkItem {
             let response = HTTPURLResponse(url: url, statusCode: reply.status,
                                            httpVersion: nil, headerFields: nil)!
             client?.urlProtocol(stub, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(stub, didLoad: Data(reply.body.utf8))
             client?.urlProtocolDidFinishLoading(stub)
         }
+        pending = work
         if reply.delay > 0 {
             DispatchQueue.global().asyncAfter(deadline: .now() + reply.delay, execute: work)
         } else {
-            work()
+            work.perform()
         }
     }
-    override func stopLoading() {}
+    override func stopLoading() { pending?.cancel() }
+}
+
+private final class StreamingMetadataProtocol: URLProtocol {
+    private var timer: DispatchSourceTimer?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        let timer = DispatchSource.makeTimerSource(queue: .global())
+        self.timer = timer
+        timer.schedule(deadline: .now(), repeating: 1)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.client?.urlProtocol(self, didLoad: Data(" ".utf8))
+        }
+        timer.resume()
+    }
+    override func stopLoading() { timer?.cancel() }
 }
 
 final class PaperMetadataTests: XCTestCase {
@@ -116,6 +139,49 @@ final class PaperMetadataTests: XCTestCase {
         XCTAssertEqual(PaperMetadata.extractIdentifiers(from: blocks).doi, "10.1016/j.cell.2021.04.048")
     }
 
+    func testDoiPreservesBalancedParenthesesAndDropsSurroundingPunctuation() {
+        let doi = "10.1016/S0140-6736(20)30183-5"
+        for source in ["doi:\(doi)", "(https://doi.org/\(doi))", "[\(doi)]"] {
+            XCTAssertEqual(PaperMetadata.extractIdentifiers(from: [block(0, text: source)]).doi, doi)
+        }
+    }
+
+    func testParserRetainsIdentifiersFromFirstPageHeadersAndFooters() throws {
+        let content = root.appendingPathComponent("content_list.json")
+        let items: [[String: Any]] = [
+            ["type": "header", "page_idx": 0, "text": "https://doi.org/10.1038/s41467-026-75713-2"],
+            ["type": "footer", "page_idx": 0, "text": "arXiv:2501.01234v2"],
+            ["type": "header", "page_idx": 1, "text": "10.5555/repeated"],
+            ["type": "page_number", "page_idx": 0, "text": "1"],
+        ]
+        try JSONSerialization.data(withJSONObject: items).write(to: content)
+        let raw = try MinerUClient.parseContentList(at: content, dataRoot: root)
+        XCTAssertEqual(raw.count, 2)
+        let ids = PaperMetadata.extractIdentifiers(publicationTexts: raw.compactMap { $0["text_original"] as? String })
+        XCTAssertEqual(ids.doi, "10.1038/s41467-026-75713-2")
+        XCTAssertEqual(ids.arxivId, "2501.01234v2")
+    }
+
+    func testArxivUsesHTTPSInsideTheAppTransportPolicy() async {
+        MetadataProtocol.reply = .init(status: 200, body: arxivBody, delay: 0)
+        _ = await PaperMetadata.lookup(arxivId: "1501.00938", session: session)
+        XCTAssertEqual(MetadataProtocol.lastRequest?.url?.scheme, "https")
+    }
+
+    func testErrorStatusDoesNotApplyAnOtherwiseValidResponse() async {
+        MetadataProtocol.reply = .init(status: 503, body: crossrefBody, delay: 0)
+        let result = await PaperMetadata.lookup(doi: "10.5555/x", session: session)
+        XCTAssertNil(result)
+    }
+
+    func testDoiReservedURLCharactersStayInsideThePath() async {
+        MetadataProtocol.reply = .init(status: 200, body: crossrefBody, delay: 0)
+        _ = await PaperMetadata.lookup(doi: "10.5555/a?b#c", session: session)
+        XCTAssertNil(MetadataProtocol.lastRequest?.url?.query)
+        XCTAssertNil(MetadataProtocol.lastRequest?.url?.fragment)
+        XCTAssertEqual(MetadataProtocol.lastRequest?.url?.path, "/works/10.5555/a?b#c")
+    }
+
     func testArxivIdIsExtractedWithoutVersionNoise() {
         let blocks = [block(0, text: "arXiv:2501.01234v2 [cs.LG]")]
         let ids = PaperMetadata.extractIdentifiers(from: blocks)
@@ -183,6 +249,17 @@ final class PaperMetadataTests: XCTestCase {
         let metadata = await PaperMetadata.lookup(doi: "10.5555/fast", session: session)
         XCTAssertNotNil(metadata)
         XCTAssertEqual(PaperMetadata.requestTimeout, 8)
+    }
+
+    func testContinuouslyStreamingResponseStillHitsTheTotalDeadline() async {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StreamingMetadataProtocol.self]
+        let streamingSession = URLSession(configuration: config)
+        defer { streamingSession.invalidateAndCancel() }
+        let start = ContinuousClock.now
+        let result = await PaperMetadata.lookup(doi: "10.5555/drip", session: streamingSession)
+        XCTAssertNil(result)
+        XCTAssertLessThan(start.duration(to: .now), .seconds(PaperMetadata.requestTimeout + 2))
     }
 
     // MARK: - 4) manual metadata is never overwritten
@@ -313,5 +390,35 @@ final class PaperMetadataTests: XCTestCase {
         // Re-running recognition on the same paper must not report a duplicate of itself.
         let itself = await library.existingPaper(doi: "10.5555/self", arxivId: nil, excluding: paper.id)
         XCTAssertNil(itself)
+    }
+
+    func testConcurrentIdentifierRegistrationKeepsOneOwnerAndAllowsItsRetry() async throws {
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let first = try await library.importPDF(fileData: pdf("a"), fileName: "a.pdf", projectId: nil)
+        let second = try await library.importPDF(fileData: pdf("b"), fileName: "b.pdf", projectId: nil)
+        let ids = PaperMetadata.Identifiers(doi: "10.5555/shared")
+        async let a = library.registerIdentifiers(ids, paperId: first.id)
+        async let b = library.registerIdentifiers(ids, paperId: second.id)
+        let results = try await [a, b]
+        XCTAssertEqual(results.compactMap { $0 }.count, 1, "Exactly one duplicate must be rejected")
+        let owner = try XCTUnwrap(results.compactMap { $0 }.first)
+        let rejectedId = owner.id == first.id ? second.id : first.id
+        try await library.setStatus(paperId: rejectedId, status: "parsing")
+        try await library.setStatus(paperId: rejectedId, status: "normalizing")
+        let retry = try await library.registerIdentifiers(ids, paperId: owner.id)
+        XCTAssertNil(retry, "The rejected duplicate must not reject its owner on retry")
+        let reloaded = PaperLibrary(root: root)
+        try await reloaded.load()
+        let retryAfterRestart = try await reloaded.registerIdentifiers(ids, paperId: owner.id)
+        XCTAssertNil(retryAfterRestart)
+        try await reloaded.deletePaper(id: owner.id)
+        try await reloaded.setStatus(paperId: rejectedId, status: "normalizing")
+        let acceptedAfterOwnerRemoval = try await reloaded.registerIdentifiers(ids, paperId: rejectedId)
+        XCTAssertNil(acceptedAfterOwnerRemoval)
+        let accepted = await reloaded.paper(id: rejectedId)
+        XCTAssertNil(accepted?.errorCode)
+        let index = try JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("library.json"))) as? [String: Any]
+        XCTAssertTrue((index?["metadata_duplicate_by_paper_id"] as? [String: String] ?? [:]).isEmpty)
     }
 }

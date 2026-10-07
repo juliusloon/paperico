@@ -1,6 +1,19 @@
 import XCTest
 @testable import PapericoCore
 
+private final class ResultZipProtocol: URLProtocol {
+    nonisolated(unsafe) static var archive = Data()
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.archive)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
 private extension Data {
     mutating func append16(_ value: UInt16) { append(UInt8(value & 0xFF)); append(UInt8(value >> 8)) }
     mutating func append32(_ value: UInt32) { append16(UInt16(value & 0xFFFF)); append16(UInt16(value >> 16)) }
@@ -40,6 +53,23 @@ final class ZipArchiveTests: XCTestCase {
             try ZipArchive.extract(data: fixture(deflated: deflated), to: root)
             XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("images/test.txt"), encoding: .utf8), "hello")
         }
+    }
+
+    func testDownloadedContentListSurvivesMovingASymlinkedStagingDirectory() async throws {
+        let actual = root.appendingPathComponent("actual", isDirectory: true)
+        let alias = root.appendingPathComponent("alias", isDirectory: true)
+        try FileManager.default.createDirectory(at: actual, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: actual)
+        ResultZipProtocol.archive = fixture(name: "paper/task_content_list.json")
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ResultZipProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let output = alias.appendingPathComponent("output")
+        let result = try await MinerUClient.downloadAndExtractResults(
+            zipURL: "https://results.test/result.zip", outputDir: output, session: session)
+        XCTAssertEqual(try String(contentsOf: result, encoding: .utf8), "hello")
+        XCTAssertEqual(MinerUClient.findContentList(in: output)?.resolvingSymlinksInPath(), result.resolvingSymlinksInPath())
     }
 
     func testEveryTruncatedPrefixThrowsWithoutCrashing() {

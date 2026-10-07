@@ -266,16 +266,8 @@ final class PaperPipeline {
         let library = self.library
         let outcome = try await MetadataRecognition.run(blocks, actions: .init(
             paperId: paperId,
-            writeIdentifiers: { ids in
-                try await library.updatePaper { record in
-                    guard record.id == paperId, record.metaSource != MetaSource.manual else { return }
-                    if record.doi == nil { record.doi = PaperLibrary.normalizeDOI(ids.doi) }
-                    if record.arxivId == nil { record.arxivId = PaperLibrary.normalizeArxivId(ids.arxivId) }
-                }
-                return true
-            },
-            findDuplicate: { ids, id in
-                await library.existingPaper(doi: ids.doi, arxivId: ids.arxivId, excluding: id)
+            registerIdentifiers: { ids, id in
+                try await library.registerIdentifiers(ids, paperId: id)
             },
             lookup: { ids in
                 await PaperMetadata.lookup(doi: ids.doi, arxivId: ids.arxivId)

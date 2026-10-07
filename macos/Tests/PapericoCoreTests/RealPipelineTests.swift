@@ -27,8 +27,6 @@ final class RealPipelineTests: XCTestCase {
     }
 
     override func setUpWithError() throws {
-        try XCTSkipIf(Self.e2eDirectory == nil,
-                      "Set PAPERICO_E2E_PDF_DIR to a local directory of real PDFs to run this regression.")
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
@@ -38,12 +36,15 @@ final class RealPipelineTests: XCTestCase {
     }
 
     private func pdfs(limit: Int) throws -> [URL] {
+        guard let path = ProcessInfo.processInfo.environment["PAPERICO_E2E_PDF_DIR"], !path.isEmpty else {
+            throw XCTSkip("Set PAPERICO_E2E_PDF_DIR to run real parsing.")
+        }
         let directory = try XCTUnwrap(Self.e2eDirectory)
         let found = try FileManager.default
             .contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])
             .filter { $0.pathExtension.lowercased() == "pdf" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        XCTAssertFalse(found.isEmpty, "PAPERICO_E2E_PDF_DIR contains no PDFs")
+        guard !found.isEmpty else { throw PipelineError("PAPERICO_E2E_PDF_DIR contains no PDFs") }
         return Array(found.prefix(limit))
     }
 
@@ -63,18 +64,13 @@ final class RealPipelineTests: XCTestCase {
 
             // The parse step needs MinerU; skip that paper rather than the suite
             // when its credentials are not configured.
-            let mineruConfig = try await localMinerUConfig()
+            let mineruConfig = await localMinerUConfig()
             guard let mineruConfig else {
                 throw XCTSkip("MinerU is not configured locally; run MinerU and set its URL to exercise parsing.")
             }
-            let contentList: URL
-            do {
-                contentList = try await MinerUClient.runLocalPipeline(
-                    fileData: data, fileName: input.lastPathComponent,
-                    config: mineruConfig, outputDir: outputDir)
-            } catch {
-                throw XCTSkip("MinerU could not parse \(input.lastPathComponent): \(error.localizedDescription)")
-            }
+            let contentList = try await MinerUClient.runLocalPipeline(
+                fileData: data, fileName: input.lastPathComponent,
+                config: mineruConfig, outputDir: outputDir)
 
             let raw = try MinerUClient.parseContentList(at: contentList, dataRoot: await library.dataRoot)
             XCTAssertFalse(raw.isEmpty, "\(input.lastPathComponent): MinerU produced no readable blocks")
@@ -101,7 +97,9 @@ final class RealPipelineTests: XCTestCase {
 
             // Coverage: a paper that parses into almost nothing is a failure even
             // when the block count is non-zero.
-            let withText = blocks.filter { !$0.textOriginal.isEmpty }
+            let withText = blocks.filter {
+                !$0.textOriginal.isEmpty || !$0.captionOriginal.isEmpty || !$0.latex.isEmpty || !$0.tableHtml.isEmpty
+            }
             let coverage = Double(withText.count) / Double(max(1, blocks.count))
             XCTAssertGreaterThan(coverage, 0.8,
                                  "\(input.lastPathComponent): only \(withText.count)/\(blocks.count) blocks carry text")
@@ -129,18 +127,25 @@ final class RealPipelineTests: XCTestCase {
     /// Checks the recovery sidecar contract once a real analysis has been run.
     /// Skips unless a finished analysis exists, so it can be run repeatedly.
     func testExistingAnalysisSidecarMatchesCurrentInput() async throws {
+        guard let path = ProcessInfo.processInfo.environment["PAPERICO_E2E_LIBRARY_DIR"], !path.isEmpty else {
+            throw XCTSkip("Set PAPERICO_E2E_LIBRARY_DIR to check a copy of an analysed library.")
+        }
+        let source = URL(fileURLWithPath: path, isDirectory: true)
+        // Always exercise a snapshot; never migrate or mutate the user's source library.
+        for name in ["library.json", "papers", "analyses"] {
+            try FileManager.default.copyItem(at: source.appendingPathComponent(name),
+                                             to: root.appendingPathComponent(name))
+        }
         let library = PaperLibrary(root: root)
         try await library.load()
         let papers = await library.listPapers()
-        try XCTSkipIf(papers.isEmpty, "No analysed papers in this library.")
+        let analysed = papers.filter { $0.status == "ready" }
+        XCTAssertFalse(analysed.isEmpty, "No analysed papers in the configured library")
 
-        for paper in papers {
+        for paper in analysed {
             let sidecar = await library.analysesDir(paper.id).appendingPathComponent("single_pass.json")
-            try XCTSkipUnless(FileManager.default.fileExists(atPath: sidecar.path),
-                              "\(paper.id): no single_pass.json sidecar")
-
             let log = try JSONSerialization.jsonObject(with: Data(contentsOf: sidecar)) as? [String: Any]
-            XCTAssertEqual(log?["mode"] as? String, "single_pass")
+            XCTAssertTrue(["single_pass", "bounded_batches"].contains(log?["mode"] as? String ?? ""))
             let blocks = try await library.readBlocks(paperId: paper.id)
             XCTAssertEqual(log?["block_count"] as? Int, blocks.count,
                            "\(paper.id): sidecar block count no longer matches the parsed blocks")
@@ -152,10 +157,22 @@ final class RealPipelineTests: XCTestCase {
                  "caption_original": block.captionOriginal, "latex": block.latex,
                  "table_html": block.tableHtml, "section_title": block.sectionTitle]
             }
-            if let fingerprint = log?["input_fingerprint"] as? String {
-                XCTAssertEqual(fingerprint, AnalysisEngine.inputFingerprint(input),
-                               "\(paper.id): analysis was produced from different source text")
+            let fingerprint = try XCTUnwrap(log?["input_fingerprint"] as? String)
+            XCTAssertEqual(fingerprint, AnalysisEngine.inputFingerprint(input),
+                           "\(paper.id): analysis was produced from different source text")
+            let regions = PaperContentScope.regions(blocks)
+            let body = blocks.indices.filter { regions[$0] == .body && !blocks[$0].textOriginal.isEmpty }
+            XCTAssertFalse(body.isEmpty)
+            let translated = body.filter {
+                switch blocks[$0].kind {
+                case "figure", "table": return !blocks[$0].captionZh.isEmpty
+                case "equation": return !blocks[$0].plainExplanation.isEmpty
+                default: return !blocks[$0].textZh.isEmpty
+                }
             }
+            XCTAssertGreaterThan(Double(translated.count) / Double(max(1, body.count)), 0.8,
+                                 "\(paper.id) \(paper.displayTitle): \(translated.count)/\(body.count) body blocks translated")
+            XCTAssertTrue(body.contains { !blocks[$0].roleInNarrative.isEmpty })
         }
     }
 

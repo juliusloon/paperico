@@ -39,12 +39,9 @@ final class MetadataRecognitionTests: XCTestCase {
         let trace = Trace()
         return Harness(trace: trace, actions: .init(
             paperId: "paper-x",
-            writeIdentifiers: { ids in
+            registerIdentifiers: { ids, _ in
                 await trace.log("write")
-                if let writeIdentifiers { return try await writeIdentifiers(ids) }
-                return true
-            },
-            findDuplicate: { _, _ in
+                if let writeIdentifiers { _ = try await writeIdentifiers(ids) }
                 await trace.log("findDuplicate")
                 return duplicate
             },
@@ -171,15 +168,8 @@ final class MetadataRecognitionTests: XCTestCase {
                    plainExplanation: "", entityRefs: [])],
             actions: .init(
                 paperId: paper.id,
-                writeIdentifiers: { ids in
-                    try await library.updatePaper { record in
-                        guard record.id == paper.id, record.metaSource != MetaSource.manual else { return }
-                        if record.doi == nil { record.doi = PaperLibrary.normalizeDOI(ids.doi) }
-                    }
-                    return true
-                },
-                findDuplicate: { ids, id in
-                    await library.existingPaper(doi: ids.doi, arxivId: ids.arxivId, excluding: id)
+                registerIdentifiers: { ids, id in
+                    try await library.registerIdentifiers(ids, paperId: id)
                 },
                 lookup: { _ in metadata },
                 applyMetadata: { try await library.applyMetadata(paperId: paper.id, $0) },

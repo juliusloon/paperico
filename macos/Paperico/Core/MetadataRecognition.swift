@@ -19,10 +19,8 @@ enum MetadataRecognition {
     struct Actions {
         /// 已解析的论文 ID。
         let paperId: String
-        /// 写入标识符（不依赖网络）。返回是否真的写入。
-        let writeIdentifiers: (PaperMetadata.Identifiers) async throws -> Bool
-        /// 查是否存在同 DOI / arXiv 的其他论文。
-        let findDuplicate: (PaperMetadata.Identifiers, String) async -> PaperListItem?
+        /// 同一次库操作中写入标识符并判断重复，不允许在两步间释放 actor。
+        let registerIdentifiers: (PaperMetadata.Identifiers, String) async throws -> PaperListItem?
         /// 联网查询元数据；任何失败返回 nil。
         let lookup: (PaperMetadata.Identifiers) async -> PaperMetadata.Metadata?
         /// 写入查询结果。
@@ -57,9 +55,7 @@ enum MetadataRecognition {
         guard await actions.metaSource() != MetaSource.manual else { return .noIdentifier }
 
         // 标识符先落库。网络失败也要留痕——它是从原文里读出来的，不是查出来的。
-        _ = try await actions.writeIdentifiers(ids)
-
-        if let duplicate = await actions.findDuplicate(ids, actions.paperId) {
+        if let duplicate = try await actions.registerIdentifiers(ids, actions.paperId) {
             return .duplicate(duplicate)
         }
         guard let metadata = await actions.lookup(ids) else { return .recognized }

@@ -259,4 +259,63 @@ final class MCPIntegrationTests: XCTestCase {
         } catch { await server.stop(); throw error }
         await server.stop()
     }
+
+    /// Opt-in acceptance uses a separate Python process against the production
+    /// HTTP server and a snapshot of a real library, rather than synthetic blocks.
+    func testExternalProcessReadsRealLibraryBriefThenBlocks() async throws {
+        guard let path = ProcessInfo.processInfo.environment["PAPERICO_E2E_LIBRARY_DIR"], !path.isEmpty else {
+            throw XCTSkip("Set PAPERICO_E2E_LIBRARY_DIR to verify external-client reads of real papers.")
+        }
+        let source = URL(fileURLWithPath: path, isDirectory: true)
+        for name in ["library.json", "papers", "analyses"] {
+            try FileManager.default.copyItem(at: source.appendingPathComponent(name), to: root.appendingPathComponent(name))
+        }
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let papers = await library.listPapers()
+        let paper = try XCTUnwrap(papers.first)
+        let server = server(library)
+        let secret = (UUID().uuidString + UUID().uuidString).replacingOccurrences(of: "-", with: "")
+        let endpoint = try await server.start(token: secret)
+        do {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+            var environment = ProcessInfo.processInfo.environment
+            environment["PAPERICO_ACCEPTANCE_TOKEN"] = secret
+            process.environment = environment
+            process.arguments = ["-c", """
+            import json, os, sys, urllib.request
+            endpoint, paper_id = sys.argv[1:]
+            def request(method, params, request_id):
+                body = json.dumps(dict(jsonrpc='2.0', id=request_id, method=method, params=params)).encode()
+                headers = {'Authorization': 'Bearer ' + os.environ['PAPERICO_ACCEPTANCE_TOKEN'],
+                           'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream',
+                           'MCP-Protocol-Version': '2025-11-25'}
+                with urllib.request.urlopen(urllib.request.Request(endpoint, data=body, headers=headers), timeout=10) as response:
+                    result = json.load(response)
+                assert 'error' not in result, result
+                return result['result']
+            request('initialize', {'protocolVersion':'2025-11-25', 'capabilities':{},
+                                  'clientInfo':{'name':'Python external acceptance', 'version':'1'}}, 1)
+            def read(kind, request_id):
+                value = request('resources/read', {'uri':f'paperico://paper/{paper_id}/{kind}'}, request_id)
+                return json.loads(value['contents'][0]['text'])
+            brief = read('brief', 2)
+            blocks = read('blocks', 3)
+            assert brief['block_count'] == len(blocks) and blocks
+            assert '§' in brief['logic_chain'] and 'budget' in brief
+            assert any(block.get('text_original') for block in blocks)
+            print(f'PASS external Python client: brief → blocks; {len(blocks)} blocks; original IDs retained')
+            """, endpoint.absoluteString, paper.id]
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = output
+            try process.run()
+            process.waitUntilExit()
+            let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            XCTAssertEqual(process.terminationStatus, 0, text)
+            print(text)
+        } catch { await server.stop(); throw error }
+        await server.stop()
+    }
 }

@@ -243,7 +243,7 @@ actor PaperLibrary {
     /// 与已有论文相同的 DOI / arXiv ID —— 去重键的第二维度（第一维度是 SHA-256）。
     ///
     /// 调用时机：解析完成、标识符从原文提取并落盘之后，联网查询与模型分析之前
-    /// （`PaperPipeline` 把本方法注入 `MetadataRecognition` 的 `findDuplicate`）。
+    /// （`PaperPipeline` 通过 `registerIdentifiers` 原子登记后调用本查询）。
     ///
     /// 同一篇论文的两个版本（预印本 + 正式发表）内容不同、SHA 不同，
     /// 但 DOI 相同，应当视为重复。
@@ -253,10 +253,26 @@ actor PaperLibrary {
         guard normalizedDOI != nil || normalizedArxiv != nil else { return nil }
         return index.papers.first { record in
             guard record.id != id else { return false }
+            if let owner = index.metadataDuplicateByPaperId[record.id],
+               index.papers.contains(where: { $0.id == owner }) { return false }
             if let normalizedDOI, Self.normalizeDOI(record.doi) == normalizedDOI { return true }
             if let normalizedArxiv, Self.normalizeArxivId(record.arxivId) == normalizedArxiv { return true }
             return false
         }
+    }
+
+    /// Persist identifiers and reserve their owner in one actor turn. Separate
+    /// write/query awaits let two concurrent parsers reject each other.
+    func registerIdentifiers(_ ids: PaperMetadata.Identifiers, paperId: String) throws -> PaperListItem? {
+        try requirePaper(paperId)
+        guard let i = paperRecord(paperId), index.papers[i].metaSource != MetaSource.manual else { return nil }
+        let duplicate = existingPaper(doi: ids.doi, arxivId: ids.arxivId, excluding: paperId)
+        if index.papers[i].doi == nil { index.papers[i].doi = Self.normalizeDOI(ids.doi) }
+        if index.papers[i].arxivId == nil { index.papers[i].arxivId = Self.normalizeArxivId(ids.arxivId) }
+        // Ownership survives later parse errors/cancellation and restart reconciliation.
+        index.metadataDuplicateByPaperId[paperId] = duplicate?.id
+        try persistIndex()
+        return duplicate
     }
 
     static func normalizeDOI(_ value: String?) -> String? {
@@ -283,7 +299,7 @@ actor PaperLibrary {
     @discardableResult
     func applyMetadata(paperId: String, _ metadata: PaperMetadata.Metadata) throws -> Bool {
         guard let i = paperRecord(paperId) else { return false }
-        var changed = index.papers[i].apply(metadata: metadata)
+        let changed = index.papers[i].apply(metadata: metadata)
         if changed { try persistIndex() }
         return changed
     }
@@ -500,6 +516,7 @@ actor PaperLibrary {
         index.trash.removeAll { $0.id == id }
         index.shaByPaperId[id] = nil
         index.sourceUrlByPaperId[id] = nil
+        index.metadataDuplicateByPaperId[id] = nil
         try persistIndex()
     }
 

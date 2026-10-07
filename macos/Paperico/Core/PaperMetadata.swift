@@ -54,15 +54,21 @@ enum PaperMetadata {
         var seen = Set<String>()
         let candidates = (publication + leading).filter { seen.insert($0).inserted }
 
-        return Identifiers(
-            doi: firstMatch(of: Self.doiPattern, in: candidates),
-            arxivId: firstMatch(of: Self.arxivPattern, in: candidates)?.replacingOccurrences(
+        return extractIdentifiers(publicationTexts: candidates)
+    }
+
+    /// Also used by the parser to retain first-page identifier-bearing headers
+    /// and footers that would otherwise disappear before recognition.
+    static func extractIdentifiers(publicationTexts: [String]) -> Identifiers {
+        Identifiers(
+            doi: firstMatch(of: Self.doiPattern, in: publicationTexts),
+            arxivId: firstMatch(of: Self.arxivPattern, in: publicationTexts)?.replacingOccurrences(
                 of: #"^arXiv[:\s]\s*"#, with: "", options: [.regularExpression, .caseInsensitive]
             )
         )
     }
 
-    private static let doiPattern = #"10\.\d{4,9}/[^\s"'<>,;)\]]+"#
+    private static let doiPattern = #"10\.\d{4,9}/[^\s"'<>,;]+"#
     private static let arxivPattern = #"arXiv[:\s]\s*(\d{4}\.\d{4,5}(?:v\d+)?)"#
 
     private static func firstMatch(of pattern: String, in texts: [String]) -> String? {
@@ -74,6 +80,14 @@ enum PaperMetadata {
                 value = String(value[doiRange.lowerBound...])
             }
             while let last = value.last, ".,;:".contains(last) { value.removeLast() }
+            // Parentheses are legal inside a DOI (e.g. older Elsevier papers).
+            // Remove only unmatched punctuation belonging to the surrounding text.
+            for (opening, closing) in [("(", ")"), ("[", "]")] {
+                while value.hasSuffix(closing),
+                      value.filter({ String($0) == closing }).count > value.filter({ String($0) == opening }).count {
+                    value.removeLast()
+                }
+            }
             if !value.isEmpty { return value }
         }
         return nil
@@ -96,7 +110,8 @@ enum PaperMetadata {
     private static func lookupCrossref(_ doi: String, session: URLSession) async -> Metadata? {
         // DOI 里可能带尾随标点（见 extractIdentifiers），查询前归一化。
         let normalized = doi.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:"))
-        guard let encoded = normalized.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+        let pathCharacters = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "?#%"))
+        guard let encoded = normalized.addingPercentEncoding(withAllowedCharacters: pathCharacters),
               let url = URL(string: "https://api.crossref.org/works/\(encoded)") else { return nil }
         guard let data = await fetch(url, session: session),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -121,7 +136,7 @@ enum PaperMetadata {
         let id = arxivId.lowercased().replacingOccurrences(of: "arxiv:", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-              let url = URL(string: "http://export.arxiv.org/api/query?id_list=\(encoded)") else { return nil }
+              let url = URL(string: "https://export.arxiv.org/api/query?id_list=\(encoded)") else { return nil }
         guard let data = await fetch(url, session: session),
               let text = String(data: data, encoding: .utf8),
               let entry = text.range(of: #"(?s)<entry>(.*?)</entry>"#, options: .regularExpression)
@@ -145,8 +160,25 @@ enum PaperMetadata {
         request.timeoutInterval = requestTimeout
         request.setValue("Paperico/1.1 (metadata lookup)",
                          forHTTPHeaderField: "User-Agent")
-        do { return try await session.data(for: request).0 }
-        catch { return nil }
+        // URLRequest's timeout is an inactivity limit. Race the entire exchange
+        // against a deadline so a slowly streaming response cannot hold the pipeline.
+        return await withTaskGroup(of: Data?.self) { group in
+            group.addTask {
+                do {
+                    let (data, response) = try await session.data(for: request)
+                    guard let http = response as? HTTPURLResponse,
+                          (200..<300).contains(http.statusCode) else { return nil }
+                    return data
+                } catch { return nil }
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(requestTimeout))
+                return nil
+            }
+            let result = await group.next() ?? nil
+            group.cancelAll()
+            return result
+        }
     }
 
     private static func firstString(_ value: Any?) -> String {

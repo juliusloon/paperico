@@ -745,7 +745,7 @@ struct PaperCard: View {
                         .lineLimit(1)
                 }
                 if let year = paper.year {
-                    Text("\(year)").font(.system(size: 12)).foregroundStyle(palette.gray500)
+                    Text(String(year)).font(.system(size: 12)).foregroundStyle(palette.gray500)
                 }
                 if !projectName.isEmpty {
                     Text(projectName)

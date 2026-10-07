@@ -302,7 +302,14 @@ enum MinerUClient {
         guard let contentList = findContentList(in: incoming) else {
             throw MinerUServiceError("MinerU 结果不包含 content_list.json", .mineruParseFailed)
         }
-        let relativePath = String(contentList.path.dropFirst(incoming.path.count + 1))
+        // Enumeration can resolve /var → /private/var (or a symlinked data root).
+        // Strip the prefix only after resolving both sides to the same spelling.
+        let incomingPath = incoming.standardizedFileURL.resolvingSymlinksInPath().path + "/"
+        let contentPath = contentList.standardizedFileURL.resolvingSymlinksInPath().path
+        guard contentPath.hasPrefix(incomingPath) else {
+            throw MinerUServiceError("MinerU 内容清单位于结果目录之外", .mineruParseFailed)
+        }
+        let relativePath = String(contentPath.dropFirst(incomingPath.count))
         let resultDir = outputDir.appendingPathComponent("result-\(resultID)", isDirectory: true)
         try fm.moveItem(at: incoming, to: resultDir)
         let finalURL = resultDir.appendingPathComponent(relativePath)
@@ -367,7 +374,15 @@ enum MinerUClient {
         for item in items {
             guard let item = item as? [String: Any] else { continue }
             let itemType = item["type"] as? String ?? "text"
-            if ignoredTypes.contains(itemType) { continue }
+            if ignoredTypes.contains(itemType) {
+                // Journals put their own DOI in the first-page header/footer.
+                // Preserve only identifier-bearing publication text there, while
+                // continuing to discard recurring page furniture elsewhere.
+                let ids = PaperMetadata.extractIdentifiers(publicationTexts: [flattenText(item["text"])])
+                guard ["header", "footer"].contains(itemType),
+                      (item["page_idx"] as? NSNumber)?.intValue == 0,
+                      ids.doi != nil || ids.arxivId != nil else { continue }
+            }
             if itemType == "list", (item["sub_type"] as? String) == "ref_text" { continue }
 
             var text = flattenText(item["text"])

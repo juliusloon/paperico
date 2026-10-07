@@ -21,6 +21,9 @@ struct LibraryIndex: Codable {
     var papers: [PaperListItem] = []
     var shaByPaperId: [String: String] = [:]
     var sourceUrlByPaperId: [String: String] = [:]
+    /// Rejected metadata duplicates point to their accepted owner independently
+    /// of transient task errors, cancellation and restart reconciliation.
+    var metadataDuplicateByPaperId: [String: String] = [:]
     var trash: [TrashedPaper] = []
     var methodContent: [String: MethodIndexContent] = [:]
     var methodAliases: [String: String] = [:]
@@ -31,7 +34,7 @@ struct LibraryIndex: Codable {
     init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, projects, papers, shaByPaperId, sourceUrlByPaperId, trash
+        case schemaVersion, projects, papers, shaByPaperId, sourceUrlByPaperId, metadataDuplicateByPaperId, trash
         case methodContent, methodAliases, hiddenMethods, methodAddedAt, methodGroups
     }
 
@@ -47,6 +50,7 @@ struct LibraryIndex: Codable {
         papers = try values.decode([PaperListItem].self, forKey: .papers)
         shaByPaperId = try values.decodeIfPresent([String: String].self, forKey: .shaByPaperId) ?? [:]
         sourceUrlByPaperId = try values.decodeIfPresent([String: String].self, forKey: .sourceUrlByPaperId) ?? [:]
+        metadataDuplicateByPaperId = try values.decodeIfPresent([String: String].self, forKey: .metadataDuplicateByPaperId) ?? [:]
         trash = try values.decodeIfPresent([TrashedPaper].self, forKey: .trash) ?? []
         methodContent = try values.decodeIfPresent([String: MethodIndexContent].self, forKey: .methodContent) ?? [:]
         methodAliases = try values.decodeIfPresent([String: String].self, forKey: .methodAliases) ?? [:]
