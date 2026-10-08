@@ -93,6 +93,11 @@ Thumbs.db
 # T8 的 opt-in 回归从 PAPERICO_E2E_PDF_DIR 读取真实 PDF,该目录只在本地存在。
 tests/e2e/
 e2e/
+# 只提交评测说明与人工题单；PDF、报告和解析产物继续忽略。
+!macos/scripts/e2e/
+macos/scripts/e2e/*
+!macos/scripts/e2e/README.md
+!macos/scripts/e2e/citations.manifest*.json
 **/e2e-papers/
 macos/Tests/**/Fixtures/Papers/
 macos/Tests/**/__Fixtures__/

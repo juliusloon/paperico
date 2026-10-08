@@ -52,7 +52,7 @@ final class RealPipelineTests: XCTestCase {
     /// MinerU parse → normalize → blocks on disk. This is where MinerU format
     /// changes actually break the app.
     func testRealPapersParseIntoUsableBlocks() async throws {
-        let inputs = try pdfs(limit: 2)
+        let inputs = try pdfs(limit: 3)
         let library = PaperLibrary(root: root)
         try await library.load()
 

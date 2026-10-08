@@ -1,0 +1,207 @@
+{
+  "_comment": "section 与 mustContain 任一匹配即命中；文件名是语料坐标，不写死 block ID。requireTools / requiredTools 只对 agent 模式生效。",
+  "prepared_by": "Cano，2026-10-08；用户授权自主选题；原文证据已核对，真实问答质量待验收",
+  "papers": [
+    {
+      "file": "vaswani2017.pdf",
+      "source": "https://arxiv.org/abs/1706.03762v7",
+      "questions": [
+        {
+          "q": "多头注意力为何比只用一个注意力头更有表达能力？结合机制和消融实验回答并引用正文。",
+          "expect": {
+            "section": "3.2.2",
+            "mustContain": [
+              "representation subspaces"
+            ]
+          }
+        },
+        {
+          "q": "结合架构与位置编码章节说明：没有循环和卷积时，Transformer 如何知道词序？为何选择正弦余弦编码？",
+          "expect": {
+            "section": "3.5",
+            "mustContain": [
+              "sinusoids"
+            ]
+          }
+        },
+        {
+          "q": "训练时的标签平滑对困惑度与 BLEU 的影响是否一致？结合实验目标解释，引用相关段落。",
+          "expect": {
+            "section": "5.4",
+            "mustContain": [
+              "label smoothing"
+            ]
+          }
+        },
+        {
+          "q": "为什么自注意力在训练并行化和长距离依赖上有优势？结合复杂度对比和实际训练设置回答。",
+          "expect": {
+            "section": "4",
+            "mustContain": [
+              "sequential operations"
+            ]
+          }
+        },
+        {
+          "q": "对比 Transformer 与库中 ResNet 的残差连接：加法、维度匹配和归一化/激活各有什么区别？读取两篇原文证据。",
+          "expect": {
+            "section": "3.1",
+            "mustContain": [
+              "identity",
+              "projection"
+            ]
+          },
+          "library": true,
+          "expectPapers": [
+            "vaswani2017.pdf",
+            "he2015.pdf"
+          ],
+          "requireTools": true,
+          "requiredTools": [
+            "get_blocks"
+          ],
+          "requireBlockEvidence": true
+        },
+        {
+          "q": "仅根据当前 Transformer 论文解释位置编码为何必要；无需比较其他论文。请给出当前论文证据。",
+          "expect": {
+            "section": "3.5",
+            "mustContain": [
+              "sinusoids"
+            ]
+          },
+          "library": true,
+          "expectPapers": [
+            "vaswani2017.pdf"
+          ],
+          "maxReadPapers": 1
+        }
+      ],
+      "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697"
+    },
+    {
+      "file": "he2015.pdf",
+      "source": "https://arxiv.org/abs/1512.03385v1",
+      "questions": [
+        {
+          "q": "为什么论文把更深网络的退化问题视为优化困难，而不直接归因于过拟合？结合训练误差和残差思想解释。",
+          "expect": {
+            "section": "1",
+            "mustContain": [
+              "degradation"
+            ]
+          }
+        },
+        {
+          "q": "残差加法的输入输出维度不同时，shortcut 如何处理？对比补零和投影两种方案并说明使用条件。",
+          "expect": {
+            "section": "3.2",
+            "mustContain": [
+              "projection"
+            ]
+          }
+        },
+        {
+          "q": "瓶颈块的三个卷积分别做什么？为何很深的 ResNet 仍能控制计算量？结合架构与实验回答。",
+          "expect": {
+            "section": "4.1",
+            "mustContain": [
+              "bottleneck"
+            ]
+          }
+        },
+        {
+          "q": "比较 ImageNet 上普通 18/34 层网络与对应残差网络的训练表现，哪些结果支持残差学习的优化解释？",
+          "expect": {
+            "section": "4.1",
+            "mustContain": [
+              "training error"
+            ]
+          }
+        },
+        {
+          "q": "比较库中 SimCLR 的对比损失温度与 Transformer 注意力的缩放因子：两者调节什么，动机有何区别？请分别查阅两篇原文。",
+          "expect": {
+            "mustContain": [
+              "temperature",
+              "gradients"
+            ]
+          },
+          "library": true,
+          "expectPapers": [
+            "chen2020.pdf",
+            "vaswani2017.pdf"
+          ],
+          "requireTools": true,
+          "requiredTools": [
+            "get_blocks"
+          ],
+          "requireBlockEvidence": true
+        }
+      ],
+      "sha256": "1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a"
+    },
+    {
+      "file": "chen2020.pdf",
+      "source": "https://arxiv.org/abs/2002.05709v3",
+      "questions": [
+        {
+          "q": "为什么 SimCLR 要组合裁剪与颜色增强？结合捷径风险和增强实验解释，不只复述摘要。",
+          "expect": {
+            "section": "3.1",
+            "mustContain": [
+              "color distortion"
+            ]
+          }
+        },
+        {
+          "q": "为什么对比学习使用非线性投影头，但下游线性评估使用投影前的表示？结合消融与信息保留解释。",
+          "expect": {
+            "section": "4",
+            "mustContain": [
+              "nonlinear"
+            ]
+          }
+        },
+        {
+          "q": "更大的 batch 与更长训练分别怎样影响表示质量？论文如何在不使用 memory bank 的情况下取得负样本？",
+          "expect": {
+            "section": "5",
+            "mustContain": [
+              "batch size"
+            ]
+          }
+        },
+        {
+          "q": "对比损失中的归一化和温度分别起什么作用？结合方法定义和损失函数实验回答。",
+          "expect": {
+            "section": "5",
+            "mustContain": [
+              "temperature"
+            ]
+          }
+        },
+        {
+          "q": "对比 SimCLR 的 ResNet 编码器与原始 ResNet：架构复用了什么，监督目标、表示评估和训练增强有什么不同？查阅两篇论文证据。",
+          "expect": {
+            "mustContain": [
+              "ResNet",
+              "residual"
+            ]
+          },
+          "library": true,
+          "expectPapers": [
+            "chen2020.pdf",
+            "he2015.pdf"
+          ],
+          "requireTools": true,
+          "requiredTools": [
+            "get_blocks"
+          ],
+          "requireBlockEvidence": true
+        }
+      ],
+      "sha256": "e1b10db76adeb0d21a014b9abcf42f6a6af928540c223f010fa1d8c293d9d105"
+    }
+  ]
+}
