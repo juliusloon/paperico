@@ -1,0 +1,134 @@
+[
+  {
+    "function" : {
+      "description" : "Search local library metadata and methods; prefer this before reading full blocks.",
+      "name" : "search_library",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "limit" : {
+            "maximum" : 20,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "query" : {
+            "maxLength" : 1000,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "query"
+        ],
+        "type" : "object"
+      }
+    },
+    "type" : "function"
+  },
+  {
+    "function" : {
+      "description" : "Search local method names and definitions.",
+      "name" : "search_methods",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "limit" : {
+            "maximum" : 20,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "query" : {
+            "maxLength" : 1000,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "query"
+        ],
+        "type" : "object"
+      }
+    },
+    "type" : "function"
+  },
+  {
+    "function" : {
+      "description" : "Read metadata, outline and method overview of a library paper.",
+      "name" : "get_paper",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "paper_id" : {
+            "maxLength" : 128,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "paper_id"
+        ],
+        "type" : "object"
+      }
+    },
+    "type" : "function"
+  },
+  {
+    "function" : {
+      "description" : "Read a compact library paper brief before fetching blocks.",
+      "name" : "resource_brief",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "paper_id" : {
+            "maxLength" : 128,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "paper_id"
+        ],
+        "type" : "object"
+      }
+    },
+    "type" : "function"
+  },
+  {
+    "function" : {
+      "description" : "Read up to 12 original blocks from a library paper.",
+      "name" : "get_blocks",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "block_ids" : {
+            "items" : {
+              "maxLength" : 128,
+              "type" : "string"
+            },
+            "maxItems" : 12,
+            "type" : "array"
+          },
+          "limit" : {
+            "maximum" : 12,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "offset" : {
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "paper_id" : {
+            "maxLength" : 128,
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "paper_id"
+        ],
+        "type" : "object"
+      }
+    },
+    "type" : "function"
+  }
+]
