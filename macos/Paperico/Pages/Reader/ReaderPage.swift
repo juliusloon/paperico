@@ -59,7 +59,7 @@ struct ReaderPage: View {
                 .padding(14)
         }
         .overlay(alignment: .bottomTrailing) {
-            GlassEffectContainer(spacing: 8) {
+            GlassGroup(spacing: 8) {
                 if !floatingPanelsFit(containerWidth), !presentsHiddenPanels {
                     RoundIconButton(systemName: Ic.messagesSquare, size: 40,
                                     title: "打开论文信息与对话", foreground: .primary) {

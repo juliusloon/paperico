@@ -74,7 +74,7 @@ struct GlassSurface<S: Shape>: View {
     var body: some View {
         // Keep the effect's elevation inside its background layer. A page-wide
         // container otherwise lifts detached glass above unrelated text/fields.
-        GlassEffectContainer(spacing: 0) { material }
+        GlassGroup(spacing: 0) { material }
             .overlay {
                 if bordered {
                     shape.stroke(palette.dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09), lineWidth: 0.5)
@@ -106,6 +106,24 @@ struct GlassSurface<S: Shape>: View {
         if let tint { value = value.tint(tint) }
         if interactive { value = value.interactive() }
         return value
+    }
+}
+
+// MARK: - 玻璃容器（26+ 的共享玻璃合并区；旧系统透传）
+
+/// `GlassEffectContainer` 的可用性封装：macOS/iOS 26+ 原样转发共享玻璃合并行为，
+/// 旧系统直接透传内容，由内部的 `GlassSurface` 自行落到 `.regularMaterial` 回退。
+/// App 最低支持 macOS 15：需要玻璃容器一律走这里，禁止直接使用 GlassEffectContainer。
+struct GlassGroup<Content: View>: View {
+    var spacing: CGFloat = 0
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing, content: content)
+        } else {
+            content()
+        }
     }
 }
 
@@ -171,6 +189,16 @@ extension View {
     /// 浮动工具小件(阅读器悬浮工具条上的单件)。
     func liquidTool(cornerRadius: CGFloat = 12, tint: Color? = nil) -> some View {
         modifier(LiquidToolModifier(cornerRadius: cornerRadius, tint: tint))
+    }
+
+    /// macOS 26+ 的滚动边缘柔光；旧系统无对应效果，原样返回。
+    @ViewBuilder
+    func liquidScrollEdge(for edges: Edge.Set = .bottom) -> some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            scrollEdgeEffectStyle(.soft, for: edges)
+        } else {
+            self
+        }
     }
 }
 

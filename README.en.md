@@ -97,7 +97,8 @@ See the [release notes](docs/releases/v1.1.0.md) and the [architecture review](d
 Applications and replace any older copy. The DMG is not Developer ID signed or notarized;
 distribution signing options are described in the [macOS development guide](macos/README.md).
 
-**Build from source** — requires macOS 26+ and Xcode 26+; verified on macOS 27 / Xcode 27,
+**Build from source** — requires Xcode 26+; the app supports macOS 15+ (Liquid Glass on
+macOS 26+, system materials on older versions). Verified on macOS 27 / Xcode 27,
 Apple Silicon:
 
 ```bash

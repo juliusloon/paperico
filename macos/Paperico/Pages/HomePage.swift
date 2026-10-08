@@ -31,7 +31,7 @@ struct HomePage: View {
 
     private var scrollContent: some View {
         ScrollView {
-            GlassEffectContainer(spacing: 4) {
+            GlassGroup(spacing: 4) {
                 VStack(spacing: 10) {
                     hero
                     metrics
@@ -46,7 +46,7 @@ struct HomePage: View {
             .trafficLightTopPadding(6)
             .frame(maxWidth: .infinity)
         }
-        .scrollEdgeEffectStyle(.soft, for: .bottom)
+        .liquidScrollEdge()
     }
 
     private var readyCount: Int {

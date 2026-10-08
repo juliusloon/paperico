@@ -12,7 +12,7 @@ struct RightPanel: View {
     }
     var body: some View {
         GeometryReader { geometry in
-            GlassEffectContainer(spacing: 4) {
+            GlassGroup(spacing: 4) {
             VStack(spacing: 0) {
                 MetaCard().frame(height: resolvedTop).liquidPanel()
                 ReaderDivider(axis: .vertical, label: "调整信息与对话卡片高度") { translation in

@@ -8,7 +8,7 @@ for the current release notes.
 
 ## Native development
 
-Prerequisites: macOS 26+ and Xcode 26+. From the repository root:
+Prerequisites: Xcode 26+ (the app supports macOS 15+). From the repository root:
 
 ```bash
 ./script/build_and_run.sh

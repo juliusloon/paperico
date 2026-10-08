@@ -86,7 +86,7 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 **安装**：从 [最新 Release](https://github.com/juliusloon/paperico/releases) 下载 dmg 安装即可。本 app 未使用 Developer ID
 签名或 Apple 公证；正式分发的签名选项见 [macOS 开发说明](macos/README.md)。
 
-**从源码构建**——要求 macOS 26+、Xcode 26+；已验证环境为 macOS 27 / Xcode 27、Apple Silicon：
+**从源码构建**——需要 Xcode 26+；App 最低支持 macOS 15（26+ 呈现液态玻璃）；已验证环境为 macOS 27 / Xcode 27、Apple Silicon：
 
 ```bash
 git clone https://github.com/juliusloon/paperico.git

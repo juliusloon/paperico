@@ -17,7 +17,7 @@
 Paperico macOS 是一个**独立 SwiftUI 应用**（无 Python 后端依赖）：把 PDF 论文经 MinerU 解析为结构化段落，用一次流式 LLM 请求完成全文翻译 + 要点 + 方法索引，再提供双语精读、证据问答、批注与笔记导出。全部数据（论文、对话、笔记、批注、解析产物）持久化在沙盒内的 `Application Support/Paperico/`，配置存 UserDefaults，两个密钥（LLM API Key、MinerU Token）存 Keychain。
 
 - 技术栈：SwiftUI + @Observable（Swift 5）／AppKit（窗口、分割条、文本输入）／PDFKit（原稿阅读）／WKWebView（精读正文排版）／Foundation Networking（直连 MinerU 与 OpenAI 兼容 LLM）／Node + rolldown（仅用于预生成阅读器 JS bundle，App 构建不依赖 Node）。
-- 目标平台：macOS 26.0+（Xcode 26+）；bundle id `com.paperico.native`；App 沙盒开启。
+- 目标平台：macOS 15.0+（构建需 Xcode 26+；macOS 26+ 呈现液态玻璃，旧系统回退系统材质）；bundle id `com.paperico.native`；App 沙盒开启。
 - 单窗口工作台：路由只有 5 个页面（首页 / 论文库 / 方法索引 / 设置 / 阅读器），导航守卫、浮层、菜单都挂在这一个窗口上。
 
 ### 1.1 分层架构
@@ -494,6 +494,7 @@ Markdown/HTML 表格的矩形快照：把参差行补齐成等宽（短行尾补
 "液态玻璃"视觉系统核心：
 - 常量与环境键：`CornerRadius`（card 20 / inset 12 / chip 8）、`\.backgroundOpacity`（默认 1）、`\.glassOpacity`（默认 0.85）、`\.floatingSurface`、`\.drawerSurface`、`\.containerWidth`（默认 1280，RootView 注入）、`LayoutBreakpoint`（reader 900 / settings 800 / workspace 760）。
 - `GlassSurface`：macOS 26+ 用 `Color.clear.glassEffect(Glass)`，旧系统回退 `.regularMaterial`；`floatingSurface` 时垫 `.regularMaterial` + 白 overlay 保证遮挡后面文字；尊重 reduceTransparency。
+- `GlassGroup`：`GlassEffectContainer` 的可用性封装（26+ 原样转发，旧系统透传给内部 `GlassSurface` 落材质）——需要玻璃容器一律走它，禁止直接用 `GlassEffectContainer`；`View.liquidScrollEdge(for:)` 同理封装 26+ 的滚动边缘柔光。
 - 修饰器：`View.liquidPanel()`（页面级 panel：侧栏、内容卡、首页面板、右侧卡）、`liquidInset()`（嵌套块）、`liquidTool()`（浮动工具小件）、`LiquidActionButtonStyle`（胶囊玻璃按钮，prominent 时 tint 玻璃 + 对比前景色）、`noFocusRing()`、`trafficLightTopPadding()`（红绿灯留白）。
 **被谁使用**：几乎所有 UI 文件。
 

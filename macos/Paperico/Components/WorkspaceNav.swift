@@ -73,7 +73,7 @@ struct WorkspaceMenuOverlay: View {
                 if requests.contains(where: { $0.section != nil }) {
                     OutsideDismissArea(label: "收起底部菜单") { dismissAll() }
                 }
-                GlassEffectContainer(spacing: 0) {
+                GlassGroup(spacing: 0) {
                     ForEach(requests) { request in
                         let anchor = geometry[request.anchor]
                         let isCompactButton = request.collapsed && request.section == nil
@@ -318,7 +318,7 @@ struct WorkspaceSplitLayout<Sidebar: View, Content: View>: View {
             let contentWidth = max(0, geometry.size.width - 12 -
                 (compact ? WorkspaceNavMetrics.railWidth : reservedWidth))
             ZStack(alignment: .leading) {
-                GlassEffectContainer(spacing: 4) {
+                GlassGroup(spacing: 4) {
                     HStack(alignment: .top, spacing: 12) {
                         Color.clear.frame(width: reservedWidth)
                         content().frame(width: contentWidth, height: geometry.size.height)
@@ -335,7 +335,7 @@ struct WorkspaceSplitLayout<Sidebar: View, Content: View>: View {
                     .padding(-14)
                     .transition(.opacity)
                 }
-                GlassEffectContainer(spacing: 4) {
+                GlassGroup(spacing: 4) {
                     VStack(alignment: .leading, spacing: 12) {
                         sidebar().frame(maxHeight: .infinity, alignment: .top)
                             .padding(.top, max(0, trafficLightClearance - 8))

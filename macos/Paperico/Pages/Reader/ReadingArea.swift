@@ -160,7 +160,7 @@ struct ReadingArea: View {
     // MARK: floating tools
 
     private var floatingTools: some View {
-        GlassEffectContainer(spacing: 8) {
+        GlassGroup(spacing: 8) {
             HStack(spacing: 8) {
                 toolButton(icon: viewMode == .text ? Ic.fileText : Ic.fileType,
                            help: viewMode == .text ? "查看原始 PDF" : "返回文本精读") { toggleViewMode() }

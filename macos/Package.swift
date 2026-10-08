@@ -4,7 +4,7 @@ import PackageDescription
 // Exercise persistence/concurrency/archive code without booting SwiftUI or calling paid APIs.
 let package = Package(
     name: "PapericoCore",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS("15.0")],
     products: [.library(name: "PapericoCore", targets: ["PapericoCore"])],
     dependencies: [.package(path: "MCP")],
     targets: [
