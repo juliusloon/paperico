@@ -165,7 +165,7 @@ enum LLMClient {
         return ["reasoning_effort": effort]
     }
 
-    private static func makeRequest(baseURL: String, apiKey: String, timeout: TimeInterval) throws -> URLRequest {
+    static func makeRequest(baseURL: String, apiKey: String, timeout: TimeInterval) throws -> URLRequest {
         guard let url = URL(string: normalizeBaseURL(baseURL) + "/chat/completions"),
               ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else {
             throw LLMServiceError("Base URL 无法解析：\(baseURL)")
@@ -180,7 +180,7 @@ enum LLMClient {
         return request
     }
 
-    private static func postCompletions(
+    static func postCompletions(
         payload: [String: Any], baseURL: String, apiKey: String, timeout: TimeInterval, session: URLSession = .shared, compatibilityRetries: Bool = true
     ) async throws -> Data {
         var request = try makeRequest(baseURL: baseURL, apiKey: apiKey, timeout: timeout)
@@ -223,7 +223,7 @@ enum LLMClient {
         throw LLMServiceError("模型服务响应中缺少 choices[0].message.content")
     }
 
-    private static func drainBody(_ bytes: URLSession.AsyncBytes) async throws -> Data {
+    static func drainBody(_ bytes: URLSession.AsyncBytes) async throws -> Data {
         var data = Data()
         for try await byte in bytes { data.append(byte) }
         return data
@@ -244,7 +244,7 @@ enum LLMClient {
         return nil
     }
 
-    private static func errorResponse(statusCode: Int, body: Data?) -> LLMServiceError {
+    static func errorResponse(statusCode: Int, body: Data?) -> LLMServiceError {
         var message = body.map { errorMessage(fromBody: $0) } ?? ""
         message = message.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
         let detail = message.isEmpty ? "" : ": \(String(message.prefix(300)))"
