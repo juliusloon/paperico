@@ -225,6 +225,7 @@ struct ChatMessage: Codable, Hashable, Identifiable, Sendable {
     var citedBlockIds: [String]?
     var createdAt: String
     var generationState: String? = nil // stopped | failed; older saved messages decode without this field
+    var sourceRefs: [ChatSourceRef]? = nil
 
 }
 
