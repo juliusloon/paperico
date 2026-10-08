@@ -57,6 +57,33 @@ final class MetadataRecognitionTests: XCTestCase {
         ))
     }
 
+    func testBackfillRequiresParsedBlocksAndPreservesStatus() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let paper = try await library.importPDF(fileData: Data("%PDF-1.7\nbackfill".utf8), fileName: "backfill.pdf", projectId: nil)
+        do {
+            _ = try await MetadataRecognition.backfill(paperId: paper.id, library: library, lookup: { _ in nil })
+            XCTFail("Unparsed papers must be rejected")
+        } catch { XCTAssertEqual((error as? PipelineError)?.errorCode, .parseEmpty) }
+        try await library.writeBlocks(paperId: paper.id, blocks: doiBlock)
+        try await library.setStatus(paperId: paper.id, status: "ready")
+        let outcome = try await MetadataRecognition.backfill(paperId: paper.id, library: library, lookup: { _ in nil })
+        XCTAssertEqual(outcome, .recognized)
+        let stored = await library.paper(id: paper.id)
+        XCTAssertEqual(stored?.status, "ready")
+        XCTAssertEqual(stored?.doi, "10.5555/3295222.3295349")
+        _ = try await library.renamePaper(id: paper.id, title: "Manual")
+        let before = await library.paper(id: paper.id)
+        _ = try await MetadataRecognition.backfill(paperId: paper.id, library: library, lookup: { _ in
+            XCTFail("Manual backfill must never look up metadata")
+            return nil
+        })
+        let after = await library.paper(id: paper.id)
+        XCTAssertEqual(before, after)
+    }
+
     // MARK: - 1) 无标识符不做事
 
     func testPaperWithoutIdentifierTouchesNothing() async throws {

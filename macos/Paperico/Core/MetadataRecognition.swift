@@ -47,7 +47,36 @@ enum MetadataRecognition {
         return (error as? PipelineError)?.errorCode == .duplicatePaper
     }
 
+    static func actions(
+        library: PaperLibrary, paperId: String,
+        lookup: @escaping (PaperMetadata.Identifiers) async -> PaperMetadata.Metadata? = {
+            await PaperMetadata.lookup(doi: $0.doi, arxivId: $0.arxivId)
+        }
+    ) -> Actions {
+        Actions(paperId: paperId,
+                registerIdentifiers: { try await library.registerIdentifiers($0, paperId: $1) },
+                lookup: lookup,
+                applyMetadata: { try await library.applyMetadata(paperId: paperId, $0) },
+                metaSource: { await library.paper(id: paperId)?.metaSource ?? MetaSource.local })
+    }
+
+    static func backfill(
+        paperId: String, library: PaperLibrary,
+        lookup: @escaping (PaperMetadata.Identifiers) async -> PaperMetadata.Metadata? = {
+            await PaperMetadata.lookup(doi: $0.doi, arxivId: $0.arxivId)
+        }
+    ) async throws -> Outcome {
+        try Task.checkCancellation()
+        guard let paper = await library.paper(id: paperId), ["parsed", "ready"].contains(paper.status) else {
+            throw PipelineError("请先解析论文，再识别元数据。", .parseEmpty)
+        }
+        let blocks = try await library.readBlocks(paperId: paperId)
+        guard !blocks.isEmpty else { throw PipelineError("论文还没有解析段落，请先解析。", .parseEmpty) }
+        return try await run(blocks, actions: actions(library: library, paperId: paperId, lookup: lookup))
+    }
+
     static func run(_ blocks: [Block], actions: Actions) async throws -> Outcome {
+        try Task.checkCancellation()
         let ids = PaperMetadata.extractIdentifiers(from: blocks)
         guard ids.doi != nil || ids.arxivId != nil else { return .noIdentifier }
 
@@ -59,6 +88,7 @@ enum MetadataRecognition {
             return .duplicate(duplicate)
         }
         guard let metadata = await actions.lookup(ids) else { return .recognized }
+        try Task.checkCancellation()
         try await actions.applyMetadata(metadata)
         return .recognized
     }

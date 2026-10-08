@@ -37,6 +37,9 @@ struct LibraryPage: View {
     @State private var projectPendingDelete: ProjectGroup?
     @State private var showBatchDeleteConfirm = false
     @State private var showFileImporter = false
+    @State private var metadataFeedback = ""
+    @State private var recognizingMetadata = false
+    @State private var showMetadataFeedback = false
     @State private var dropTarget: String?
 
     private var isCompact: Bool { containerWidth < LayoutBreakpoint.workspace }
@@ -83,6 +86,9 @@ struct LibraryPage: View {
         }
         .task { await projectsStore.fetch(); await papersStore.fetch(); await pollLoop() }
         .sheet(isPresented: $showUpload) { uploadSheet.presentationDetents([.medium]) }
+        .alert("识别元数据", isPresented: $showMetadataFeedback) {
+            Button("确定", role: .cancel) {}
+        } message: { Text(metadataFeedback) }
         .alert("删除论文", isPresented: .init(get: { paperPendingDelete != nil }, set: { if !$0 { paperPendingDelete = nil } })) {
             Button("取消", role: .cancel) { paperPendingDelete = nil }
             Button("删除", role: .destructive) { if let paper = paperPendingDelete { Task { await deletePaper(paper) } } }
@@ -316,6 +322,9 @@ struct LibraryPage: View {
                 ToolbarButton(title: "移动", icon: Ic.folderInput, kind: .primary, busy: moving, disabled: selectedIds.isEmpty) {
                     Task { await move(ids: Array(selectedIds), projectId: targetProjectId.isEmpty ? nil : targetProjectId) }
                 }
+                ToolbarButton(title: "识别元数据", icon: Ic.refresh, busy: recognizingMetadata, disabled: selectedIds.isEmpty) {
+                    Task { await recognizeMetadata(ids: Array(selectedIds).sorted()) }
+                }
                 ToolbarButton(title: "删除", icon: Ic.trash, kind: .danger, busy: deleting, disabled: selectedIds.isEmpty) {
                     showBatchDeleteConfirm = true
                 }
@@ -442,6 +451,7 @@ struct LibraryPage: View {
                     onRenameChange: { renamingPaperTitle = $0 },
                     onConfirmRename: { Task { await confirmRenamePaper() } },
                     onCancelRename: { renamingPaperId = nil; renamingPaperTitle = "" },
+                    onRecognizeMetadata: { Task { await recognizeMetadata(ids: [paper.id]) } },
                     onDelete: { paperPendingDelete = paper },
                     onClick: {
                         if selectionMode { toggleSelection(paper.id) }
@@ -533,6 +543,33 @@ struct LibraryPage: View {
         catch { actionError = ApiFailure.wrap(error).localizedDescription; return }
         renamingPaperId = nil
         renamingPaperTitle = ""
+    }
+
+    private func recognizeMetadata(ids: [String]) async {
+        guard !recognizingMetadata else { return }
+        recognizingMetadata = true
+        defer { recognizingMetadata = false }
+        var results: [String] = []
+        for id in ids {
+            if Task.isCancelled { break }
+            guard let paper = papersStore.papers.first(where: { $0.id == id }) else { continue }
+            do {
+                let outcome = try await papersStore.recognizeMetadata(id: id)
+                let message: String
+                if paper.metaSource == MetaSource.manual { message = "已跳过：手动编辑的元数据会保持不变" }
+                else {
+                    switch outcome {
+                    case .noIdentifier: message = "原文未找到 DOI / arXiv 标识符"
+                    case .recognized: message = "标识符已保存；可获取的作者、年份与期刊已回填"
+                    case .duplicate(let existing): message = "与《\(existing.displayTitle)》重复（\(existing.id)）"
+                    }
+                }
+                results.append("\(paper.displayTitle)：\(message)")
+            } catch is CancellationError { break }
+            catch { results.append("\(paper.displayTitle)：\(ApiFailure.wrap(error).localizedDescription)") }
+        }
+        metadataFeedback = results.joined(separator: "\n")
+        showMetadataFeedback = !results.isEmpty
     }
 
     private func deletePaper(_ paper: PaperListItem) async {
@@ -707,6 +744,7 @@ struct PaperCard: View {
     let onRenameChange: (String) -> Void
     let onConfirmRename: () -> Void
     let onCancelRename: () -> Void
+    let onRecognizeMetadata: () -> Void
     let onDelete: () -> Void
     let onClick: () -> Void
 
@@ -806,6 +844,8 @@ struct PaperCard: View {
             Button(selected ? "取消选择" : "多选", systemImage: selected ? Ic.checkSquare : Ic.square, action: onToggle)
                 .disabled(renaming)
             Button("编辑条目", systemImage: Ic.pencil, action: onStartRename).disabled(renaming)
+            Button("识别元数据", systemImage: Ic.refresh, action: onRecognizeMetadata)
+                .disabled(renaming || !["parsed", "ready"].contains(paper.status))
             Button("删除条目", systemImage: Ic.trash, role: .destructive, action: onDelete).disabled(renaming)
         }
     }

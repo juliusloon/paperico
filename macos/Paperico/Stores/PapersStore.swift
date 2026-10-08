@@ -60,6 +60,12 @@ final class PapersStore {
         papers = papers.map { $0.id == id ? updated : $0 }
     }
 
+    func recognizeMetadata(id: String) async throws -> MetadataRecognition.Outcome {
+        let outcome = try await pipeline.runMetadataRecognition(paperId: id)
+        await fetch()
+        return outcome
+    }
+
     func deletePaper(id: String) async throws {
         await pipeline.cancel(paperId: id)
         try await library.deletePaper(id: id)

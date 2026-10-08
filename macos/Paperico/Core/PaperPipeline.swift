@@ -44,6 +44,11 @@ final class PaperPipeline {
         spawn(paperId: paperId, mode: .full)
     }
 
+    func runMetadataRecognition(paperId: String) async throws -> MetadataRecognition.Outcome {
+        guard tasks[paperId] == nil else { throw PipelineError("论文正在处理中，请完成后再识别元数据。", .parseEmpty) }
+        return try await MetadataRecognition.backfill(paperId: paperId, library: library)
+    }
+
     /// 重新解析:明确提交新的 MinerU 任务，不复用旧任务或解析文件。
     func reparse(paperId: String) {
         spawn(paperId: paperId, mode: .reparse)
@@ -263,18 +268,9 @@ final class PaperPipeline {
     /// 这里只提供 IO 动作；**编排决策在 `MetadataRecognition`（core target 内，可测）**，
     /// 包括"标识符先于网络落库"、"manual 记录不写"、"仅 duplicatePaper 可中断"。
     private func recognizeMetadata(paperId: String, blocks: [Block]) async throws {
-        let library = self.library
-        let outcome = try await MetadataRecognition.run(blocks, actions: .init(
-            paperId: paperId,
-            registerIdentifiers: { ids, id in
-                try await library.registerIdentifiers(ids, paperId: id)
-            },
-            lookup: { ids in
-                await PaperMetadata.lookup(doi: ids.doi, arxivId: ids.arxivId)
-            },
-            applyMetadata: { metadata in try await library.applyMetadata(paperId: paperId, metadata) },
-            metaSource: { await library.paper(id: paperId)?.metaSource ?? MetaSource.local }
-        ))
+        let outcome = try await MetadataRecognition.run(
+            blocks, actions: MetadataRecognition.actions(library: library, paperId: paperId)
+        )
         if case .duplicate(let existing) = outcome {
             throw PipelineError("与已有论文《\(existing.displayTitle)》是同一篇（DOI / arXiv 相同，id \(existing.id)）",
                                 .duplicatePaper)
