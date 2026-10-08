@@ -44,7 +44,7 @@ struct MetaCard: View {
                     .padding(.horizontal, 8).padding(.vertical, 4).liquidInset(cornerRadius: ControlSpec.radius)
                 Spacer()
             }
-            if paper.doi != nil || paper.arxivId != nil {
+            if paper.doi?.isEmpty == false || paper.arxivId?.isEmpty == false {
                 VStack(alignment: .leading, spacing: 5) {
                     if let doi = paper.doi, !doi.isEmpty { Text("DOI：\(doi)") }
                     if let arxiv = paper.arxivId, !arxiv.isEmpty { Text("arXiv：\(arxiv)") }
