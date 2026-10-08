@@ -280,6 +280,7 @@ enum LLMProbe {
         var supportsReasoning: Bool?
         var reasoningLevels: [String]?
         var defaultMaxOutputTokens: Int?
+        var supportsTools: Bool? = nil
     }
 
     static let reasoningLevels = ["off", "low", "medium", "high"]
@@ -308,6 +309,7 @@ enum LLMProbe {
         }
 
         let outputLimit = await probeModelOutputLimit(base: base, apiKey: key, model: model)
+        let tools = await probeTools(base: base, apiKey: key, model: model)
         var message = capability.supportsReasoning
             ? "连接成功，该模型支持思考强度调节"
             : "连接成功，该模型不支持思考强度（将保持关闭）"
@@ -316,11 +318,32 @@ enum LLMProbe {
         }
         return Result(
             success: true,
-            message: message + "。",
+            message: message + (tools == true ? "，支持工具调用。" : "，使用兼容检索模式。"),
             supportsReasoning: capability.supportsReasoning,
             reasoningLevels: capability.supportsReasoning ? reasoningLevels : ["off"],
-            defaultMaxOutputTokens: outputLimit
+            defaultMaxOutputTokens: outputLimit,
+            supportsTools: tools
         )
+    }
+
+    /// A protocol-only probe: no library content and no tool execution.
+    static func probeTools(base: String, apiKey: String, model: String, session: URLSession = .shared) async -> Bool? {
+        let name = "paperico_capability_probe"
+        let tool: [String: Any] = ["type": "function", "function": ["name": name, "description": "Protocol capability probe. No side effects.",
+            "parameters": ["type": "object", "properties": [:], "additionalProperties": false]]]
+        let llm = AnalysisEngine.LLMConfig(baseURL: base, apiKey: apiKey, model: model, reasoningEffort: nil, temperature: 0, maxTokens: 128, streaming: false)
+        do {
+            var result = LLMAgentAccumulator()
+            for try await event in LLMClient.agentResponse(messages: [["role": "user", "content": "Call paperico_capability_probe with empty arguments."]],
+                tools: [tool], llm: llm, toolChoice: ["type": "function", "function": ["name": name]], session: session, timeout: 8) {
+                try result.append(event)
+            }
+            let calls = try result.completedCalls()
+            guard calls.count == 1, calls[0].name == name else { return false }
+            return try calls[0].decodedArguments().isEmpty
+        } catch is CancellationError { return nil }
+        catch let error as URLError where error.code == .timedOut { return nil }
+        catch { return false }
     }
 
     static func friendly(_ error: Error) -> String {

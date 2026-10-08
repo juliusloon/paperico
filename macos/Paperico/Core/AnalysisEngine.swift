@@ -887,6 +887,7 @@ enum AnalysisEngine {
         var temperature: Double = 0.3
         var maxTokens: Int = AnalysisEngine.defaultMaxTokens
         var streaming: Bool = true
+        var supportsTools: Bool? = nil
 
         var isConfigured: Bool {
             !baseURL.isEmpty && !apiKey.isEmpty && !model.isEmpty

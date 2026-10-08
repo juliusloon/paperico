@@ -383,6 +383,7 @@ struct TestConnectionResult: Codable, Hashable, Sendable {
     var supportsReasoning: Bool?
     var reasoningLevels: [String]?
     var defaultMaxOutputTokens: Int?
+    var supportsTools: Bool? = nil
 }
 
 // MARK: - Library

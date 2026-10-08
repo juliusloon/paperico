@@ -20,6 +20,7 @@ struct LLMProfileConfig: Codable, Hashable, Sendable {
     var maxTokens: Int = AnalysisEngine.defaultMaxTokens
     var reasoningEffort: String = "medium"
     var streaming: Bool = true
+    var supportsTools: Bool? = nil
 }
 
 struct MinerUConfigCore: Codable, Hashable, Sendable {
@@ -43,6 +44,7 @@ final class SettingsStore {
     private var mineruCredential = ""
     private var lockedAccounts: Set<KeychainStore.Account> = []
     private var credentialVersion: UInt = 0
+    private var toolProbe: (base: String, model: String, key: String, supported: Bool?)?
     private let credentials: CredentialStore
     private(set) var credentialError = ""
     var credentialsNeedAuthorization: Bool { !lockedAccounts.isEmpty }
@@ -180,6 +182,9 @@ final class SettingsStore {
             credentialVersion &+= 1
             lockedAccounts.remove(.llmApiKey)
         }
+        let base = LLMClient.normalizeBaseURL(profile.baseUrl)
+        let probed = toolProbe.flatMap { $0.base == base && $0.model == profile.model && $0.key == llmCredential ? $0.supported : nil }
+        let previous = LLMClient.normalizeBaseURL(llmProfile.baseUrl) == base && llmProfile.model == profile.model && profile.apiKey.isEmpty ? llmProfile.supportsTools : nil
         llmProfile = LLMProfileConfig(
             id: profile.id ?? "primary",
             name: profile.name,
@@ -188,7 +193,8 @@ final class SettingsStore {
             temperature: profile.temperature ?? 0.3,
             maxTokens: profile.maxTokens ?? AnalysisEngine.defaultMaxTokens,
             reasoningEffort: profile.reasoningEffort ?? "medium",
-            streaming: profile.streaming
+            streaming: profile.streaming,
+            supportsTools: probed ?? previous
         )
         persist()
         settings = synthesized
@@ -229,8 +235,14 @@ final class SettingsStore {
             reasoningEffort: llmProfile.reasoningEffort,
             temperature: llmProfile.temperature,
             maxTokens: llmProfile.maxTokens,
-            streaming: llmProfile.streaming
+            streaming: llmProfile.streaming,
+            supportsTools: llmProfile.supportsTools
         )
+    }
+
+    func invalidateTools(for config: AnalysisEngine.LLMConfig) {
+        guard config.baseURL == LLMClient.normalizeBaseURL(llmProfile.baseUrl), config.model == llmProfile.model, config.apiKey == llmCredential else { return }
+        llmProfile.supportsTools = nil; toolProbe = nil; persist()
     }
 
     func mineruClientConfig() -> MinerUClient.Config {
@@ -250,12 +262,21 @@ final class SettingsStore {
             baseURL: baseUrl, apiKey: apiKey, model: model,
             savedKey: llmCredential
         )
+        if result.success {
+            let base = LLMClient.normalizeBaseURL(baseUrl)
+            let key = apiKey.isEmpty ? llmCredential : apiKey
+            toolProbe = (base, model, key, result.supportsTools)
+            if base == LLMClient.normalizeBaseURL(llmProfile.baseUrl), model == llmProfile.model, key == llmCredential {
+                llmProfile.supportsTools = result.supportsTools; persist()
+            }
+        }
         return TestConnectionResult(
             success: result.success,
             message: result.message,
             supportsReasoning: result.supportsReasoning,
             reasoningLevels: result.reasoningLevels,
-            defaultMaxOutputTokens: result.defaultMaxOutputTokens
+            defaultMaxOutputTokens: result.defaultMaxOutputTokens,
+            supportsTools: result.supportsTools
         )
     }
 

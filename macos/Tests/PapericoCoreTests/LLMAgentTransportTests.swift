@@ -54,6 +54,19 @@ final class LLMAgentTransportTests: XCTestCase {
             XCTAssertEqual(AgentFixtureProtocol.requests, 1)
         }
     }
+    func testToolsProbeSupportedRejectedAndMalformed() async {
+        AgentFixtureProtocol.status = 200
+        AgentFixtureProtocol.fixture = Data(#"{"choices":[{"message":{"tool_calls":[{"id":"id","function":{"name":"paperico_capability_probe","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}"#.utf8)
+        let supported = await LLMProbe.probeTools(base: "https://fixture.test", apiKey: "test", model: "test", session: session())
+        XCTAssertEqual(supported, true)
+        AgentFixtureProtocol.fixture = Data(#"{"choices":[{"message":{"tool_calls":[{"id":"id","function":{"name":"paperico_capability_probe","arguments":"[]"}}]},"finish_reason":"tool_calls"}]}"#.utf8)
+        let malformed = await LLMProbe.probeTools(base: "https://fixture.test", apiKey: "test", model: "test", session: session())
+        XCTAssertEqual(malformed, false)
+        AgentFixtureProtocol.status = 400
+        let rejected = await LLMProbe.probeTools(base: "https://fixture.test", apiKey: "test", model: "test", session: session())
+        XCTAssertEqual(rejected, false)
+    }
+
     func testRejectedToolsAndLengthNeverRetry() async throws {
         AgentFixtureProtocol.fixture = Data(#"{"error":{"message":"tools unsupported"}}"#.utf8)
         AgentFixtureProtocol.status = 400; AgentFixtureProtocol.requests = 0
