@@ -82,11 +82,15 @@ extension LLMClient {
                     if llm.streaming {
                         var request = try makeRequest(baseURL: llm.baseURL, apiKey: llm.apiKey, timeout: timeout)
                         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                        llmLog.debug("agent request: model=\(llm.model, privacy: .public) tools=\(tools.count) bodyBytes=\(request.httpBody?.count ?? 0)")
                         let (bytes, response) = try await session.bytes(for: request)
                         guard let http = response as? HTTPURLResponse else { throw LLMServiceError("模型服务响应无效。") }
+                        llmLog.debug("agent response: status=\(http.statusCode) model=\(llm.model, privacy: .public)")
                         guard (200..<300).contains(http.statusCode) else { throw errorResponse(statusCode: http.statusCode, body: try? await drainBody(bytes)) }
+                        var receivedBytes = 0
                         for try await line in bytes.lines {
                             try Task.checkCancellation()
+                            receivedBytes += line.utf8.count + 1
                             guard line.hasPrefix("data:") else { continue }
                             let text = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
                             if text == "[DONE]" { break }
@@ -96,6 +100,7 @@ extension LLMClient {
                             for event in agentEvents(from: choice, streaming: true) { continuation.yield(event) }
                             if choice["finish_reason"] as? String == "length" { throw LLMServiceError("模型输出达到 token 上限，已保留返回内容。") }
                         }
+                        llmLog.debug("agent stream completed: model=\(llm.model, privacy: .public) receivedBytes=\(receivedBytes)")
                     } else {
                         let data = try await postCompletions(payload: payload, baseURL: llm.baseURL, apiKey: llm.apiKey, timeout: timeout, session: session, compatibilityRetries: false)
                         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -105,7 +110,13 @@ extension LLMClient {
                     }
                     try Task.checkCancellation()
                     continuation.finish()
-                } catch { continuation.finish(throwing: error) }
+                } catch is CancellationError {
+                    llmLog.debug("agent stream cancelled: model=\(llm.model, privacy: .public)")
+                    continuation.finish(throwing: CancellationError())
+                } catch {
+                    llmLog.debug("agent stream failed: model=\(llm.model, privacy: .public) error=\(String(describing: error).prefix(300), privacy: .public)")
+                    continuation.finish(throwing: error)
+                }
             }
             continuation.onTermination = { _ in task.cancel() }
         }

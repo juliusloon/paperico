@@ -1,4 +1,10 @@
 import Foundation
+import OSLog
+
+/// LLM 请求/响应诊断:请求发出、状态码、首包字节、结束原因。debug 级,
+/// 平时不进统一日志,`log stream --level debug` 可见。以前客户端取消时
+/// 已收到的响应体无人能看到,这条日志把缺口补上。
+let llmLog = Logger(subsystem: "com.paperico.app", category: "llm")
 
 /// OpenAI-compatible Chat Completions 客户端(移植 backend/app/services/llm.py,
 /// 含 temperature 拒绝重试与流式 SSE 解析)。消息体直接用 JSON 字典,
@@ -86,12 +92,15 @@ enum LLMClient {
                     for attempt in 0..<(compatibilityRetries ? 3 : 1) {
                         var request = try makeRequest(baseURL: baseURL, apiKey: apiKey, timeout: timeout)
                         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                        llmLog.debug("stream request: model=\(model, privacy: .public) attempt=\(attempt) bodyBytes=\(request.httpBody?.count ?? 0)")
                         let (bytes, response) = try await session.bytes(for: request)
                         guard let http = response as? HTTPURLResponse else {
                             throw LLMServiceError("模型服务响应无效")
                         }
+                        llmLog.debug("stream response: status=\(http.statusCode) model=\(model, privacy: .public)")
                         guard (200..<300).contains(http.statusCode) else {
                             let body = try? await drainBody(bytes)
+                            llmLog.debug("stream error body: \(String(decoding: body ?? Data(), as: UTF8.self).prefix(400), privacy: .public)")
                             if compatibilityRetries, attempt < 2, let body,
                                let adjusted = compatiblePayload(payload, statusCode: http.statusCode, body: body) {
                                 payload = adjusted
@@ -100,8 +109,10 @@ enum LLMClient {
                             throw errorResponse(statusCode: http.statusCode, body: body)
                         }
                         // SSE:每行 "data: {...}",取 choices[0].delta.content 增量。
+                        var receivedBytes = 0
                         for try await line in bytes.lines {
                             try Task.checkCancellation()
+                            receivedBytes += line.utf8.count + 1
                             guard line.hasPrefix("data:") else { continue }
                             let dataString = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
                             if dataString.trimmingCharacters(in: .whitespaces) == "[DONE]" { break }
@@ -117,11 +128,16 @@ enum LLMClient {
                                 throw LLMServiceError("模型输出达到 token 上限，响应被截断；已保留返回内容，请提高输出上限或使用更大输出容量的模型。")
                             }
                         }
+                        llmLog.debug("stream completed: model=\(model, privacy: .public) receivedBytes=\(receivedBytes)")
                         continuation.finish()
                         return
                     }
                     continuation.finish()
+                } catch is CancellationError {
+                    llmLog.debug("stream cancelled: model=\(model, privacy: .public)")
+                    continuation.finish(throwing: CancellationError())
                 } catch {
+                    llmLog.debug("stream failed: model=\(model, privacy: .public) error=\(String(describing: error).prefix(300), privacy: .public)")
                     continuation.finish(throwing: error)
                 }
             }

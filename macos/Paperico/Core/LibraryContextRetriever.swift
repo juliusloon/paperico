@@ -27,13 +27,15 @@ enum LibraryContextRetriever {
             let fields = [(normalized(method.name), 6), (normalized(method.definitionZh), 3)]
             for paper in method.papers { methodFields[paper.paperId, default: []] += fields }
         }
-        return papers.filter { $0.id != excluding }.compactMap { paper -> Candidate? in
+        var candidates: [Candidate] = []
+        for paper in papers where paper.id != excluding {
             let fields = [(paper.title + " " + paper.titleZh, 8), (paper.tldr, 4), (paper.domainTags.joined(separator: " "), 6),
                           (paper.authors.joined(separator: " "), 3), (paper.year.map(String.init) ?? "", 2), (paper.venue, 2)]
                 .map { (normalized($0.0), $0.1) } + (methodFields[paper.id] ?? [])
             let score = fields.reduce(0) { sum, field in sum + terms.filter { field.0.contains($0) }.count * field.1 }
-            return score > 0 ? Candidate(paper: paper, score: score) : nil
-        }.sorted { $0.score == $1.score ? $0.paper.id < $1.paper.id : $0.score > $1.score }.prefix(limit).map { $0 }
+            if score > 0 { candidates.append(Candidate(paper: paper, score: score)) }
+        }
+        return candidates.sorted { $0.score == $1.score ? $0.paper.id < $1.paper.id : $0.score > $1.score }.prefix(limit).map { $0 }
     }
 
     /// Strict whole-line clipping also bounds heading-heavy papers.

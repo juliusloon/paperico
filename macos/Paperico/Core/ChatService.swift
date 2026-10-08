@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let chatLog = Logger(subsystem: "com.paperico.app", category: "chat")
 
 /// Removes only a leading title envelope, even when its tags span stream chunks.
 /// Providers that ignore the format keep their entire answer unchanged.
@@ -170,6 +173,7 @@ enum ChatService {
                     var agent: ChatAgent?
                     let stream: AsyncThrowingStream<String, Error>
                     if allowLibraryContext, llm.supportsTools == true, let executor {
+                        chatLog.debug("chat path: agent (supportsTools=true)")
                         let running = ChatAgent(registry: registry, executor: executor, llm: llm)
                         agent = running
                         stream = running.response(messages: messages, response: agentResponse) { activity in
@@ -179,6 +183,7 @@ enum ChatService {
                                 agentRankingMilliseconds: running.rankingMilliseconds, toolMilliseconds: running.toolMilliseconds, libraryToolNames: running.toolNames))
                         }
                     } else {
+                        chatLog.debug("chat path: \(allowLibraryContext ? "library no-tools leg" : "single-paper", privacy: .public) retrievedPapers=\(libraryPaperCount)")
                         stream = response?(messages, llm) ?? LLMClient.response(
                             messages: messages, baseURL: llm.baseURL, apiKey: llm.apiKey, model: llm.model,
                             temperature: llm.temperature, maxTokens: llm.maxTokens,

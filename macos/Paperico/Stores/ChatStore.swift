@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+import OSLog
+
+private let chatLog = Logger(subsystem: "com.paperico.app", category: "chat")
 
 // MARK: - ChatStore (mirrors useChatStore)
 
@@ -27,6 +30,8 @@ final class ChatStore {
     private var stopRequested = false
     private var activePaperId: String?
     private var requestVersion = UUID()
+    /// 流式开始时刻，用于停止请求的"武装期"（见 stopGenerating）。
+    @ObservationIgnored private var streamingBeganAt: Date?
 
     init(library: PaperLibrary, settings: SettingsStore) {
         self.library = library
@@ -131,6 +136,7 @@ final class ChatStore {
         error = ""
         streaming = true
         stopRequested = false
+        streamingBeganAt = Date()
         streamContent = ""
         streamSources = []; agentActivity = ""; libraryPaperCount = 0; libraryQueryCount = 0
 
@@ -205,6 +211,7 @@ final class ChatStore {
         }
         guard version == requestVersion else { return }
         streaming = false
+        streamingBeganAt = nil
         generationTask = nil
         streamContent = ""
         streamSources = []; agentActivity = ""
@@ -212,8 +219,18 @@ final class ChatStore {
         await fetchSessions(paperId: paperId)
     }
 
+    /// 发送后的一小段时间内忽略停止请求。发送/停止共用的双态按钮（以及 Enter、Esc）
+    /// 在流式刚开始的数百毫秒内被二次触发时，本意几乎都是"刚才到底发出去没有"的重复
+    /// 确认，而旧实现会把刚建立的请求立刻取消（NSURLError -999、空回答）。真正的停止
+    /// 意图在武装期过后随时生效；武装期内被忽略的停止会留下调试日志。
+    static let stopArmingInterval: TimeInterval = 1.0
+
     func stopGenerating() {
         guard streaming else { return }
+        if let beganAt = streamingBeganAt, Date().timeIntervalSince(beganAt) < Self.stopArmingInterval {
+            chatLog.debug("stop ignored: within arming window (\(String(format: "%.0f", Date().timeIntervalSince(beganAt) * 1000))ms)")
+            return
+        }
         stopRequested = true
         generationTask?.cancel()
     }
