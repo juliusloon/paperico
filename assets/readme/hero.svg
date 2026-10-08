@@ -17,7 +17,7 @@
     <text x="72" y="304" font-size="25" fill="#3E4450">提问可追溯定位段落，讨论支持沉淀导出。</text>
     <g font-family="ui-monospace, 'SFMono-Regular', 'Menlo', 'PingFang SC', monospace" font-size="17.5" fill="#3E4450">
       <rect x="72" y="338" width="132" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
-      <text x="90" y="360">macOS 26+</text>
+      <text x="90" y="360">macOS 15+</text>
       <rect x="216" y="338" width="112" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>
       <text x="236" y="360">自带 KEY</text>
       <rect x="340" y="338" width="68" height="34" rx="16" fill="#FFFFFF" stroke="#D9DEE6" stroke-width="1.5"/>

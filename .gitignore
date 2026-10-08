@@ -58,20 +58,10 @@ assets/Visuals/
 docs/verification/
 
 # ===== 内部规划 / 工程文档 =====
-/docs/architecture-FULL.md
-/docs/Workbench.md
-/docs/README.md
-/docs/agentero-execution-plan.md
-/docs/agentero-lessons-for-paperico.md
-/docs/agentero-lessons-recheck-2026-10.md
-/docs/v1.1.0-engineering-plan.md
-/docs/v1.1.0-release-closeout.md
-/docs/bbox-coordinate-system.md
-/docs/ios-app-plan.md
-/docs/macos-window-and-reader-perf.md
-/docs/mineru-chem-integration-spike.md
-/docs/storage-migration-and-ui.md
-/docs/differentiation.md
+!/docs/architecture.md
+!/docs/mcp.md
+!/docs/releases
+/docs/
 
 # ===== IDE / OS / AI 工具本地状态 =====
 .vscode/

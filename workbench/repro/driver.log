@@ -1,0 +1,136 @@
+[1791468971.433] ===== ITER 0 start =====
+[1791468971.465] AGENT round=0 finalOnly=false msgs=2 usedChars=0
+[1791468971.471] AGENT-REQ start tools=5 msgs=2 stream=true
+[1791468971.607] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791468973.629] AGENT-REQ [DONE] lines=137 rawBytes=4286
+[1791468973.629] AGENT-REQ stream-end lines=137 rawBytes=4286
+[1791468973.629] AGENT-REQ finish-ok
+[1791468973.629] AGENT round=0 stream-done content=0ch finish=tool_calls
+[1791468973.629] AGENT round=0 calls=["search_library", "search_library"]
+[1791468973.645] AGENT round=1 finalOnly=false msgs=5 usedChars=3854
+[1791468973.646] AGENT-REQ start tools=5 msgs=5 stream=true
+[1791468973.801] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791468975.829] AGENT-REQ [DONE] lines=64 rawBytes=4276
+[1791468975.829] AGENT-REQ stream-end lines=64 rawBytes=4276
+[1791468975.829] AGENT-REQ finish-ok
+[1791468975.829] AGENT round=1 stream-done content=0ch finish=tool_calls
+[1791468975.830] AGENT round=1 calls=["search_library", "search_library"]
+[1791468975.841] AGENT round=2 finalOnly=false msgs=8 usedChars=7128
+[1791468975.841] AGENT-REQ start tools=5 msgs=8 stream=true
+[1791468976.044] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791468978.294] AGENT-REQ [DONE] lines=67 rawBytes=4244
+[1791468978.294] AGENT-REQ stream-end lines=67 rawBytes=4244
+[1791468978.294] AGENT-REQ finish-ok
+[1791468978.294] AGENT round=2 stream-done content=0ch finish=tool_calls
+[1791468978.294] AGENT round=2 calls=["search_library", "search_library"]
+[1791468978.308] AGENT round=3 finalOnly=true msgs=12 usedChars=8948
+[1791468978.309] AGENT-REQ start tools=0 msgs=12 stream=true
+[1791468978.429] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469007.089] AGENT-REQ [DONE] lines=5637 rawBytes=4288
+[1791469007.090] AGENT-REQ stream-end lines=5637 rawBytes=4288
+[1791469007.090] AGENT-REQ finish-ok
+[1791469007.090] AGENT round=3 stream-done content=7040ch finish=stop
+[1791469007.090] AGENT round=3 calls=[]
+[1791469007.094] ===== ITER 0 end ok=true contentLen=6995 rounds=3 calls=6 lastMsgState=? err= =====
+[1791469008.096] ===== ITER 1 start =====
+[1791469008.132] AGENT round=0 finalOnly=false msgs=2 usedChars=0
+[1791469008.132] AGENT-REQ start tools=5 msgs=2 stream=true
+[1791469008.238] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469010.353] AGENT-REQ [DONE] lines=153 rawBytes=4291
+[1791469010.354] AGENT-REQ stream-end lines=153 rawBytes=4291
+[1791469010.354] AGENT-REQ finish-ok
+[1791469010.354] AGENT round=0 stream-done content=71ch finish=tool_calls
+[1791469010.354] AGENT round=0 calls=["search_library", "search_library"]
+[1791469010.369] AGENT round=1 finalOnly=false msgs=5 usedChars=2597
+[1791469010.369] AGENT-REQ start tools=5 msgs=5 stream=true
+[1791469010.489] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469012.483] AGENT-REQ [DONE] lines=84 rawBytes=4269
+[1791469012.483] AGENT-REQ stream-end lines=84 rawBytes=4269
+[1791469012.483] AGENT-REQ finish-ok
+[1791469012.483] AGENT round=1 stream-done content=25ch finish=tool_calls
+[1791469012.483] AGENT round=1 calls=["search_library", "search_library"]
+[1791469012.498] AGENT round=2 finalOnly=false msgs=8 usedChars=5662
+[1791469012.499] AGENT-REQ start tools=5 msgs=8 stream=true
+[1791469012.609] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469014.853] AGENT-REQ [DONE] lines=91 rawBytes=4241
+[1791469014.853] AGENT-REQ stream-end lines=91 rawBytes=4241
+[1791469014.853] AGENT-REQ finish-ok
+[1791469014.853] AGENT round=2 stream-done content=22ch finish=tool_calls
+[1791469014.854] AGENT round=2 calls=["search_library", "search_library"]
+[1791469014.868] AGENT round=3 finalOnly=true msgs=12 usedChars=6975
+[1791469014.868] AGENT-REQ start tools=0 msgs=12 stream=true
+[1791469014.981] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469036.294] AGENT-REQ [DONE] lines=4416 rawBytes=4288
+[1791469036.294] AGENT-REQ stream-end lines=4416 rawBytes=4288
+[1791469036.294] AGENT-REQ finish-ok
+[1791469036.294] AGENT round=3 stream-done content=3331ch finish=stop
+[1791469036.294] AGENT round=3 calls=[]
+[1791469036.299] ===== ITER 1 end ok=true contentLen=3286 rounds=3 calls=6 lastMsgState=? err= =====
+[1791469037.346] ===== ITER 2 start =====
+[1791469037.372] AGENT round=0 finalOnly=false msgs=2 usedChars=0
+[1791469037.373] AGENT-REQ start tools=5 msgs=2 stream=true
+[1791469037.474] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469039.628] AGENT-REQ [DONE] lines=171 rawBytes=4281
+[1791469039.629] AGENT-REQ stream-end lines=171 rawBytes=4281
+[1791469039.629] AGENT-REQ finish-ok
+[1791469039.629] AGENT round=0 stream-done content=72ch finish=tool_calls
+[1791469039.629] AGENT round=0 calls=["search_library", "search_library"]
+[1791469039.635] AGENT round=1 finalOnly=false msgs=5 usedChars=2597
+[1791469039.635] AGENT-REQ start tools=5 msgs=5 stream=true
+[1791469039.739] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469041.693] AGENT-REQ [DONE] lines=76 rawBytes=4262
+[1791469041.693] AGENT-REQ stream-end lines=76 rawBytes=4262
+[1791469041.693] AGENT-REQ finish-ok
+[1791469041.693] AGENT round=1 stream-done content=17ch finish=tool_calls
+[1791469041.693] AGENT round=1 calls=["search_library", "search_library"]
+[1791469041.702] AGENT round=2 finalOnly=false msgs=8 usedChars=5662
+[1791469041.702] AGENT-REQ start tools=5 msgs=8 stream=true
+[1791469041.815] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469043.950] AGENT-REQ [DONE] lines=73 rawBytes=4267
+[1791469043.950] AGENT-REQ stream-end lines=73 rawBytes=4267
+[1791469043.950] AGENT-REQ finish-ok
+[1791469043.950] AGENT round=2 stream-done content=20ch finish=tool_calls
+[1791469043.950] AGENT round=2 calls=["search_library", "search_library"]
+[1791469043.960] AGENT round=3 finalOnly=true msgs=12 usedChars=8232
+[1791469043.960] AGENT-REQ start tools=0 msgs=12 stream=true
+[1791469044.213] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469071.610] AGENT-REQ [DONE] lines=5733 rawBytes=4288
+[1791469071.610] AGENT-REQ stream-end lines=5733 rawBytes=4288
+[1791469071.610] AGENT-REQ finish-ok
+[1791469071.611] AGENT round=3 stream-done content=4734ch finish=stop
+[1791469071.611] AGENT round=3 calls=[]
+[1791469071.618] ===== ITER 2 end ok=true contentLen=4693 rounds=3 calls=6 lastMsgState=? err= =====
+[1791469072.655] ===== ITER 3 start =====
+[1791469072.689] AGENT round=0 finalOnly=false msgs=2 usedChars=0
+[1791469072.690] AGENT-REQ start tools=5 msgs=2 stream=true
+[1791469072.794] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469074.696] AGENT-REQ [DONE] lines=125 rawBytes=4281
+[1791469074.696] AGENT-REQ stream-end lines=125 rawBytes=4281
+[1791469074.696] AGENT-REQ finish-ok
+[1791469074.696] AGENT round=0 stream-done content=0ch finish=tool_calls
+[1791469074.696] AGENT round=0 calls=["search_library", "search_library"]
+[1791469074.708] AGENT round=1 finalOnly=false msgs=5 usedChars=2597
+[1791469074.709] AGENT-REQ start tools=5 msgs=5 stream=true
+[1791469074.825] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469076.802] AGENT-REQ [DONE] lines=83 rawBytes=4276
+[1791469076.803] AGENT-REQ stream-end lines=83 rawBytes=4276
+[1791469076.803] AGENT-REQ finish-ok
+[1791469076.803] AGENT round=1 stream-done content=0ch finish=tool_calls
+[1791469076.803] AGENT round=1 calls=["search_library", "search_library"]
+[1791469076.818] AGENT round=2 finalOnly=false msgs=8 usedChars=5862
+[1791469076.819] AGENT-REQ start tools=5 msgs=8 stream=true
+[1791469076.932] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469078.989] AGENT-REQ [DONE] lines=66 rawBytes=4242
+[1791469078.989] AGENT-REQ stream-end lines=66 rawBytes=4242
+[1791469078.989] AGENT-REQ finish-ok
+[1791469078.989] AGENT round=2 stream-done content=0ch finish=tool_calls
+[1791469078.989] AGENT round=2 calls=["search_library", "search_library"]
+[1791469079.003] AGENT round=3 finalOnly=true msgs=12 usedChars=8746
+[1791469079.004] AGENT-REQ start tools=0 msgs=12 stream=true
+[1791469079.137] AGENT-REQ headers status=200 ct=text/event-stream te=- conn=close
+[1791469129.905] AGENT-REQ [DONE] lines=10221 rawBytes=4288
+[1791469129.906] AGENT-REQ stream-end lines=10221 rawBytes=4288
+[1791469129.906] AGENT-REQ finish-ok
+[1791469129.906] AGENT round=3 stream-done content=6522ch finish=stop
+[1791469129.906] AGENT round=3 calls=[]
+[1791469129.914] ===== ITER 3 end ok=true contentLen=6477 rounds=3 calls=6 lastMsgState=? err= =====

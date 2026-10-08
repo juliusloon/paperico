@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>net.daringfireball.markdown</string>
+			<key>UTTypeDescription</key>
+			<string>Markdown</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>md</string>
+					<string>markdown</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>text/markdown</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.paperico.papers</string>
+			<key>UTTypeDescription</key><string>Paperico Papers</string>
+			<key>UTTypeConformsTo</key><array><string>public.data</string></array>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.paperico.methods</string>
+			<key>UTTypeDescription</key><string>Paperico Methods</string>
+			<key>UTTypeConformsTo</key><array><string>public.data</string></array>
+		</dict>
+	</array>
+</dict>
+</plist>
