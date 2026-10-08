@@ -4,6 +4,11 @@ import Foundation
 enum LocalPrefs {
     private static let d = UserDefaults.standard
 
+    static var allowLibraryChat: Bool {
+        get { d.bool(forKey: "paperico:allow-library-chat") }
+        set { d.set(newValue, forKey: "paperico:allow-library-chat") }
+    }
+
     // MARK: workspace nav
 
     static var lastPaperId: String? {

@@ -164,6 +164,7 @@ final class ChatStore {
                 paperId: paperId, content: content, sessionId: sessionId,
                 attachedContext: attachedContext, library: library, llm: chatConfig,
                 onTask: { [weak self] task in self?.generationTask = task },
+                allowLibraryContext: LocalPrefs.allowLibraryChat,
                 onToolsRejected: { [weak self] in self?.settings.invalidateTools(for: chatConfig) }
             )
             for try await event in stream {

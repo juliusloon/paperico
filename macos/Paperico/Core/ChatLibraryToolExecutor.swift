@@ -10,6 +10,7 @@ struct ChatLibraryToolExecutor {
         var content: String
         var paperIds: Set<String> = []
         var clipped = false
+        var rankingMilliseconds: Double?
     }
     static var schemas: [[String: Any]] {
         func schema(_ name: String, _ description: String, _ properties: [String: Any], _ required: [String]) -> [String: Any] {
@@ -50,6 +51,7 @@ struct ChatLibraryToolExecutor {
     func execute(_ call: LLMToolCall, registry: inout ChatSourceRegistry, budget: Int) async throws -> Output {
         try Task.checkCancellation()
         var draft = registry
+        var rankingMilliseconds: Double?
         do {
             let args = try call.decodedArguments()
             let allowed: [String: Set<String>] = ["search_library": ["query", "limit"], "search_methods": ["query", "category", "limit"],
@@ -60,7 +62,10 @@ struct ChatLibraryToolExecutor {
             switch call.name {
             case "search_library":
                 let query = try query(args), limit = try integer(args, "limit", default: 4, range: 1...20)
-                for candidate in LibraryContextRetriever.rank(query: query, papers: papers, methods: methods, excluding: nil, limit: limit) {
+                let rankingStart = Date()
+                let candidates = LibraryContextRetriever.rank(query: query, papers: papers, methods: methods, excluding: nil, limit: limit)
+                rankingMilliseconds = Date().timeIntervalSince(rankingStart) * 1000
+                for candidate in candidates {
                     guard await library.paper(id: candidate.paper.id) != nil else { continue }
                     let p = candidate.paper
                     lines.append(("paper_id=\(p.id) · \(String(p.displayTitle.prefix(200))) · \(String(p.tldr.prefix(400)))",
@@ -151,7 +156,7 @@ struct ChatLibraryToolExecutor {
             guard output.count <= budget else { return Output(content: "", clipped: true) }
             try Task.checkCancellation()
             registry = draft
-            return Output(content: output, paperIds: selectedPaperIds, clipped: clipped)
+            return Output(content: output, paperIds: selectedPaperIds, clipped: clipped, rankingMilliseconds: rankingMilliseconds)
         } catch is CancellationError { throw CancellationError() }
         catch {
             let output = AnalysisEngine.jsonString(["error": String(error.localizedDescription.prefix(200)), "untrusted_content": true])

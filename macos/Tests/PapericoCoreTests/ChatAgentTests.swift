@@ -88,4 +88,52 @@ final class ChatAgentTests: XCTestCase {
         XCTAssertLessThanOrEqual(requests, 1)
         XCTAssertEqual(agent.toolCalls, 0)
     }
+    func testAgentPersistsOnlyVisibleAnswerAndRegisteredSources() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = PaperLibrary(root: root); try await library.load()
+        let current = try await library.importPDF(fileData: Data("%PDF-1.7\nsource".utf8), fileName: "source.pdf", projectId: nil)
+        let other = try await library.importPDF(fileData: Data("%PDF-1.7\nevidence".utf8), fileName: "evidence.pdf", projectId: nil)
+        var requests = 0, answer = ""
+        for try await event in ChatService.send(paperId: current.id, content: "read evidence", sessionId: nil, attachedContext: nil,
+            library: library, llm: llm, allowLibraryContext: true, agentResponse: { messages, tools, _ in
+                requests += 1
+                XCTAssertFalse(tools.isEmpty)
+                if requests == 1 {
+                    return self.events([.content("private intermediate"), .toolCallDelta(index: 0, id: "read", name: "get_paper", arguments: AnalysisEngine.jsonString(["paper_id": other.id])), .finishReason("tool_calls")])
+                }
+                XCTAssertEqual(messages.last?["role"] as? String, "tool")
+                XCTAssertTrue((messages.last?["content"] as? String ?? "").contains("s001"))
+                return self.events([.content("answer [s001] [s999]"), .finishReason("stop")])
+            }) { answer += event.content ?? "" }
+        XCTAssertEqual(requests, 2)
+        XCTAssertEqual(answer, "answer [s001] [s999]")
+        let session = try await library.chatSessions(paperId: current.id).first!
+        XCTAssertEqual(session.messages.count, 2)
+        XCTAssertEqual(session.messages.last?.sourceRefs?.map(\.paperId), [other.id])
+        XCTAssertFalse(session.messages.contains { $0.content.contains("private intermediate") })
+        let unchanged = await library.paper(id: other.id)
+        XCTAssertNil(unchanged?.lastOpenedAt)
+    }
+    func testToolsRejectionFailsOnceWithoutHiddenFallback() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = PaperLibrary(root: root); try await library.load()
+        let current = try await library.importPDF(fileData: Data("%PDF-1.7\nreject".utf8), fileName: "reject.pdf", projectId: nil)
+        var requests = 0, invalidated = false
+        do {
+            for try await _ in ChatService.send(paperId: current.id, content: "test", sessionId: nil, attachedContext: nil,
+                library: library, llm: llm, response: { _, _ in XCTFail("No hidden fallback"); return AsyncThrowingStream { $0.finish() } },
+                allowLibraryContext: true, agentResponse: { _, _, _ in
+                    requests += 1
+                    return AsyncThrowingStream { $0.finish(throwing: LLMServiceError("HTTP 400: unsupported tools")) }
+                }, onToolsRejected: { invalidated = true }) {}
+            XCTFail("Tools rejection must fail the turn")
+        } catch { XCTAssertTrue(ChatAgent.isToolsRejection(error)) }
+        XCTAssertEqual(requests, 1)
+        XCTAssertTrue(invalidated)
+        let session = try await library.chatSessions(paperId: current.id).first!
+        XCTAssertEqual(session.messages.last?.generationState, "failed")
+    }
+
 }

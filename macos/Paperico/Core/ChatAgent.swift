@@ -10,8 +10,11 @@ final class ChatAgent {
     private(set) var registry: ChatSourceRegistry
     private(set) var toolRounds = 0
     private(set) var toolCalls = 0
+    private(set) var toolNames: [String] = []
     private(set) var paperIds: Set<String> = []
     private(set) var usedCharacters = 0
+    private(set) var rankingMilliseconds: [Double] = []
+    private(set) var toolMilliseconds: [Double] = []
     let executor: ChatLibraryToolExecutor
     let llm: AnalysisEngine.LLMConfig
 
@@ -56,10 +59,14 @@ final class ChatAgent {
                             let result: String
                             if self.toolCalls < Self.maxToolCalls && self.usedCharacters < Self.contextBudget {
                                 self.toolCalls += 1
+                                self.toolNames.append(call.name)
                                 activity(call.name == "get_blocks" ? "正在读取原文" : (call.name == "search_library" || call.name == "search_methods" ? "正在检索论文库" : "正在阅读论文摘要"))
                                 var updated = self.registry
+                                let toolStart = Date()
                                 let output = try await self.executor.execute(call, registry: &updated, budget: Self.contextBudget - self.usedCharacters)
                                 try Task.checkCancellation()
+                                self.toolMilliseconds.append(Date().timeIntervalSince(toolStart) * 1000)
+                                if let ms = output.rankingMilliseconds { self.rankingMilliseconds.append(ms) }
                                 self.registry = updated
                                 self.paperIds.formUnion(output.paperIds)
                                 result = output.content

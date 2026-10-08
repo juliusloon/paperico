@@ -12,6 +12,7 @@ struct SettingsPage: View {
     @Environment(UpdateStore.self) private var updateStore
     @Environment(\.openURL) private var openURL
 
+    @AppStorage("paperico:allow-library-chat") private var allowLibraryChat = false
     @State private var tab: Tab = .model
     @State private var saving = false
     @State private var testingLlm = false
@@ -518,6 +519,11 @@ struct SettingsPage: View {
                         .opacity(llmGateOpen ? 1 : 0.55)
                 }
             }
+            Toggle("允许对话参考论文库", isOn: $allowLibraryChat)
+            Text("开启后，助手可按需把其他论文的摘要或原文发送给你配置的模型服务。关闭时仅使用当前论文。")
+                .font(.system(size: 12)).foregroundStyle(palette.gray500)
+            Text(settingsStore.llmProfile.supportsTools == true ? "支持工具调用" : "使用兼容检索模式（测试连通性后更新能力）")
+                .font(.system(size: 12)).foregroundStyle(palette.gray500)
             Text("全文分析会按原文长度提高输出预算，并受服务端实际输出容量限制；默认预算为 65,536 tokens。对话使用上面的输出上限。")
                 .font(.system(size: 12)).foregroundStyle(palette.gray500)
         }
