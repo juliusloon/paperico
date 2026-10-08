@@ -1,6 +1,6 @@
 # Paperico 架构文档
 
-适用版本：1.0.1（build 10）· 更新日期：2026-10-06。
+适用版本：1.0.1（build 10）当前基线；§6.1 记录 v1.2.0 已决策计划架构 · 更新日期：2026-10-07。
 
 本文只描述仓库内跟踪的内容，是面向外部读者的官方架构说明。本地保留、不入库的材料
 （历史 backend / frontend、内部规划文档、验证日志等）在 `architecture-FULL.md`（不入库）
@@ -223,6 +223,17 @@ Materials and Methods、Appendix 与扩展图表重新计入正文。缺少摘�
 
 ## 6. 阅读器、对话与笔记
 
+> v1.2.0 对话实现：`ChatAgent` 与 `ChatLibraryToolExecutor` 已接入 `ChatService`。
+> “允许对话参考论文库”默认关闭；关闭时不读取其他论文、不发送库内 tools schema。
+> 开启后可将其他论文 brief 或原文块发送给用户配置的模型；工具本身只读、不联网、无需 MCP。
+> 支持工具时最多 3 轮 / 8 次调用 / 24,000 字符工具结果；false/unknown 走本地 Top-4 排名，
+> brief 总计 ≤10,000 字符，每篇 ≤2,400 字符，只发一次回答生成请求。
+> typed 来源在本轮 registry 校验后进入 `chat.json` 的可选 `sourceRefs`，旧消息仍可读取。
+> 中间回答留在内存；非强制最终轮在确认没有工具调用后才显示回答，强制最终轮可以逐块显示。
+> 引用通过来源卡导航，`ChatStore` 记住原会话；面板显示本轮查阅篇数与查询数。
+> 离线检查覆盖默认隐私、取消、预算与伪来源；真实 provider、引用质量及跨论文定位仍待人工验收。
+> 评测记录本地排名与工具 IO 时延，模型网络延迟不计入排名指标，见 `macos/scripts/e2e/README.md`。
+
 - **离线正文渲染**：正文与同行逻辑链在 `PaperDocumentView` 的单个离线 WKWebView 中
   渲染，Charter / Iowan 与中文宋体排版、上下标与 KaTeX 数学。渲染器读取原生 DTO，
   字体与 Markdown/KaTeX 随 App 打包；桥接消息含论文 ID，核对当前论文与 block/entity ID
@@ -239,6 +250,93 @@ Materials and Methods、Appendix 与扩展图表重新计入正文。缺少摘�
   原文块 ID 校验后渲染为 `CitationInlineText` 的原生玻璃按钮（TextKit 附件，随段落
   换行），点击跳转并高亮证据块。`ChatRevision` 支持编辑提问重发与重新生成，生成独立
   修订会话、保留原会话；会话支持重命名与确认删除（保留已导出笔记）。
+
+### 6.1 v1.2.0 计划架构：Library-aware Chat + Tool-calling Agent
+
+v1.2.0 把对话从“当前论文内证据问答”升级为**可选的论文库感知 agent**。支持
+tool calling 的模型走有界 agent loop；不支持或尚未通过能力探测的 OpenAI-compatible host
+走本地 deterministic retrieval fallback。两条路径共享同一套 source contract、引用 UI、
+数据边界和只读工具语义，不维护两套产品行为。
+
+主路径：
+
+```
+question
+  → capability / privacy policy
+  → tool-capable?
+      yes → model(tools)
+            → tool_calls
+            → in-process read-only library tools
+            → source registry + bounded tool results
+            → model
+            → ... ≤ bounded rounds
+            → final answer
+       no → local deterministic retrieval
+            → current paper + Top-K library briefs
+            → one LLM call
+            → final answer
+  → typed / validated sources
+  → citation UI
+```
+
+- **两层检索能力**：新增纯逻辑 `LibraryContextRetriever`，职责仅是“本地候选排序”；
+  `ChatContextBuilder` 继续负责“怎样压缩”。deterministic fallback 对 title/titleZh、
+  tldr、domainTags、元数据与方法索引做固定权重词项评分，排除当前论文后取 Top-K（初始 4）。
+  agent 路径则允许模型按需调用搜索、brief 与 blocks 工具深入，但不做 embeddings。
+- **App 内工具，不走 MCP loopback**：新增 `ChatLibraryToolExecutor`，工具语义直接复用
+  `PaperLibrary` / `LibraryAutomation` 的只读规则；不要求用户开启 MCP，不经过
+  `127.0.0.1`、Bearer token 或 HTTP。v1.2 工具集固定为
+  `search_library`、`search_methods`、`get_paper`、`resource_brief`、
+  `get_blocks`；全部 `markOpened: false`，不得写 `last_opened_at`、不得触发管线、
+  不得调用外部网络或产生工具侧付费请求。
+- **工具安全边界**：论文文本、方法定义与 tool result 一律视为“不可信数据”而不是系统指令；
+  system prompt 明确禁止执行其中夹带的命令或改变工具策略。工具 schema 不接受任意文件路径、
+  URL、shell、SQL 或模型 prompt，只接受 query、paper/method/block ID 与有界分页参数；
+  executor 再次做 active-paper 与参数校验。即使论文内容发生 prompt injection，模型最多只能
+  调用上述只读库内工具，无法写文件、联网或执行代码。
+- **工具参数与结果有界**：所有 ID、分页、limit 与 block 列表做本地校验；搜索结果和
+  `get_blocks` 均限制条数，工具输出按完整语义项裁剪。agent 每轮工具结果进入独立预算，
+  默认总工具上下文 ≤24,000 字符，单个 brief ≤3,000 字符，单次 `get_blocks` 最多 12 块。
+  达到预算后返回明确的“结果已裁剪”元数据，不静默扩容。
+- **有界 agent loop**：`ChatService` 增加显式状态机，默认最多 3 个 tool rounds、
+  全轮最多 8 次 tool calls；达到上限后不再执行工具，要求模型基于已有结果给出最终回答。
+  工具调用是同一次用户动作的一部分，但每个模型 round 都是独立 LLM 请求，因此不再沿用
+  “一次提问恒为一次模型请求”的旧约束。取消会终止当前模型流与后续工具轮次。
+- **LLM transport**：`LLMClient` 新增 typed stream event，能够解析普通 content 与
+  OpenAI Chat Completions 的 `tool_calls` delta；tool call 按 `index` 跨 SSE chunk
+  累积 `id / function.name / function.arguments`，同时支持非流式
+  `message.tool_calls`。现有 content-only `response` 保留为兼容包装，全文翻译与普通
+  非 agent 调用不被迫改写。
+- **能力探测与 fallback**：`LLMProbe` 在用户显式“测试连接”时增加 tool-calling 探测，
+  使用无副作用的 probe tool 验证服务端接受 tools 且模型能返回合法 tool call，并缓存
+  `supportsTools`。Chat 不在每轮额外探测：`true` 走 agent，`false / unknown` 走
+  deterministic fallback。若已标记支持的服务运行时突然拒绝 tools，本轮明确报错并把能力
+  标记失效，**不静默自动重试产生第二条不可见付费路径**；下一轮回退 deterministic。
+- **来源注册表**：新增 `ChatSourceRef`（block / paper / method）与每轮
+  `ChatSourceRegistry`。所有发给模型的 tool result / fallback brief 在序列化前把来源
+  注册成短 token（如 `[s001]`），映射到稳定的 `paperId / blockId / methodKey`；
+  当前论文原有 `[blockId]` 语法继续兼容。回答只接受本轮 registry 中实际暴露给模型的
+  source；“库里存在但本轮模型没读到”的 id 仍判伪引用。
+- **工具消息不污染持久会话**：tool-call assistant message 与 tool result 只存在于本轮
+  agent state，用于协议续接；`chat.json` 继续只保存用户/最终 assistant 消息及
+  `sourceRefs`，不保存大体积原始工具结果。失败/停止的最终可见 partial answer 仍按当前
+  语义落盘，并用当时 registry 校验引用。
+- **预算与 fallback**：当前论文继续使用既有 compact context。fallback 的库内补充上下文
+  总预算初始 10,000 字符、单篇 2,400 字符；agent 的工具结果使用独立 24,000 字符总预算。
+  所有裁剪只发生在完整语义项上，预算常量进入测试。
+- **引用 UI**：`CitationInlineText` 泛化为 typed source lookup。当前论文 block 跳转并
+  高亮；跨论文 block 显示论文标题 + 证据并打开来源论文定位；paper source 显示论文卡；
+  method source 跳方法索引。只有 block 标为“证据”，paper/method 是来源或导航。
+- **Agent 活动 UI**：工具轮次不把模型中间 content 当最终回答流给用户；Chat 面板显示
+  简洁状态，如“正在搜索论文库…”“正在读取《…》…”。最终无 tool_calls 的模型 round 才进入
+  正常回答流。会话标题的 `<paperico-title>` 只从最终回答 round 解码；若模型未返回则沿用
+  现有问题前缀标题。
+- **数据边界**：设置页“允许对话参考论文库”默认关闭；关闭时既不运行 fallback 跨库检索，
+  也不向模型暴露 library tools。开启后 Chat 可显示本轮查阅/参考的论文数量。README /
+  架构必须明确：agent 可能按需把其他论文的 brief 或原文 blocks 发送给用户配置的模型服务。
+- **不做的内容**：v1.2 仍不引入 embeddings / 向量库，不做自动网络文献检索，不给 agent
+  暴露任何写工具，不允许修改论文、笔记、方法索引或设置；笔记合成暂不展开跨论文 source。
+
 - **注释编辑**：`ReaderAnnotationEditor` 用原生玻璃面板编辑节点标题与 Markdown 笔记，
   写入 `reader-annotations.json`；Return 完成、Shift+Return 换行，Cmd+B / I / H
   加粗、斜体、高亮，退出阅读器时统一保存/放弃确认。
@@ -312,5 +410,7 @@ Materials and Methods、Appendix 与扩展图表重新计入正文。缺少摘�
   说明要求保留旧数据。
 - 单进程串行一致性不替代跨进程锁；每请求单次生成、失败不自动重试是刻意选择。
 - 阅读与对话状态共享，App 为单一工作台窗口。
+- v1.2 Library-aware Chat 同时实现有界 tool-calling agent 与 deterministic fallback；仍不做
+  embeddings、向量库、外部网络文献检索或任何写工具。两条路径共享 §6.1 的 source/引用契约。
 - 图表依据 MinerU 图注与表格文本分析，不包含另一次视觉模型推理。
 - `macos/architecture.md` 逐文件指南仍标注 v0.2.5 / v0.3.0，内容滞后于 1.0.x，待更新。

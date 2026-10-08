@@ -124,6 +124,23 @@ First session:
 receives the text and conversation context needed for each task. The app connects directly
 to your configured services. Paperico does not operate a relay.
 
+### Library-aware chat (optional)
+
+“Allow chat to reference the library” is off by default. While off, chat reads only the current paper.
+When enabled, the assistant may send other papers' compact briefs or original blocks to your configured
+model service. Chat shows the number of papers consulted and library queries made in the current turn.
+
+After testing connectivity in Settings, tool-capable models can use five read-only library tools, with
+at most 3 tool rounds, 8 calls and 24,000 characters of tool context. These tools work with MCP disabled
+and do not modify papers or notes. Unsupported or unverified providers use local keyword ranking to
+select up to 4 paper briefs, followed by one answer-generation request. If a previously supported provider
+rejects tools, the turn fails visibly; the next question uses compatible retrieval.
+
+Validated citations distinguish papers, methods and evidence. Cross-paper evidence opens a source card
+with an action to open and locate the paper, then return to the original conversation. Sources must have
+been supplied to the model in the current turn. See the [acceptance guide](macos/scripts/e2e/README.md)
+for opt-in citation evaluation; real PDFs and generated reports remain local.
+
 ### Migrate from Zotero
 
 For Zotero 7–10:
