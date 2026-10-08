@@ -32,7 +32,10 @@ import Darwin
         let credentials = CredentialStore(backend: .init(
             read: { _, _ in .init(data: nil, status: errSecItemNotFound) },
             write: { _, _, _ in }))
-        let settings = SettingsStore(credentials: credentials)
+        let suiteName = "paperico-release-check-" + UUID().uuidString
+        guard let defaults = UserDefaults(suiteName: suiteName) else { throw PipelineError("Cannot isolate acceptance settings") }
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = SettingsStore(credentials: credentials, defaults: defaults)
         await settings.fetch()
         try await settings.saveLLMProfile(profile: .init(id: "release-check", name: "Release acceptance",
             baseUrl: modelURL, apiKey: env["PAPERICO_E2E_LLM_API_KEY"] ?? "local",
@@ -43,9 +46,21 @@ import Darwin
             defaultOptions: MinerUDefaultOptions()))
         let pipeline = PaperPipeline(library: library, settings: settings)
         let store = PapersStore(library: library, pipeline: pipeline)
-        let inputs = Array(try FileManager.default.contentsOfDirectory(at: pdfDirectory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension.lowercased() == "pdf" }.sorted { $0.path < $1.path }.prefix(3))
-        guard inputs.count == 3 else { throw PipelineError("Provide three distinct real PDFs for queue acceptance") }
+        let available = try FileManager.default.contentsOfDirectory(at: pdfDirectory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension.lowercased() == "pdf" }.sorted { $0.path < $1.path }
+        let inputs: [URL]
+        if let path = env["PAPERICO_E2E_QUESTIONS"], !path.isEmpty {
+            let manifest = try JSONDecoder().decode(CitationAcceptance.Manifest.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+            let names = manifest.papers.map(\.file)
+            guard (3...5).contains(names.count), Set(names).count == names.count else {
+                throw PipelineError("Citation acceptance requires 3–5 distinct manifest papers")
+            }
+            inputs = try names.map { name in
+                guard let url = available.first(where: { $0.lastPathComponent == name }) else { throw PipelineError("Manifest PDF missing: " + name) }
+                return url
+            }
+        } else { inputs = Array(available.prefix(3)) }
+        guard inputs.count >= 3 else { throw PipelineError("Provide three distinct real PDFs for queue acceptance") }
         var papers: [PaperListItem] = []
         for input in inputs {
             papers.append(try await store.upload(fileData: Data(contentsOf: input),
@@ -74,11 +89,22 @@ import Darwin
             let sidecar = await library.analysesDir(paper.id).appendingPathComponent("single_pass.json")
             guard FileManager.default.fileExists(atPath: sidecar.path) else { throw PipelineError("Missing analysis sidecar") }
         }
-        guard completed.count == 3, peakParsing == 1, peakWaiting == 2 else { throw PipelineError("Serial queue acceptance failed") }
-        guard completed.contains(where: { $0.doi != nil && !$0.authors.isEmpty && $0.year != nil && !$0.venue.isEmpty }) else { throw PipelineError("No persisted DOI metadata") }
+        guard completed.count == inputs.count, peakParsing == 1, peakWaiting == inputs.count - 1 else { throw PipelineError("Serial queue acceptance failed") }
+        let hasDOIMetadata = completed.contains { $0.doi != nil && !$0.authors.isEmpty && $0.year != nil && !$0.venue.isEmpty }
+        let hasQuestions = env["PAPERICO_E2E_QUESTIONS"]?.isEmpty == false
+        // Preserve the legacy DOI gate; a citation corpus may consist solely of arXiv preprints.
+        if !hasQuestions, !hasDOIMetadata { throw PipelineError("No persisted DOI metadata") }
         let summary: [String: Any] = ["ready": completed.count, "local_parse_peak": peakParsing,
                                       "queued_peak": peakWaiting, "library_root": root.path]
         try LibraryFiles.writeJSONAny(summary, to: root.appendingPathComponent("acceptance.json"))
-        print("PASS production PapersStore.upload → PaperPipeline: 3 ready; local peak=1; queued peak=2; DOI metadata persisted")
+        if hasQuestions {
+            print("PASS production PapersStore.upload → PaperPipeline: \(inputs.count) ready; local peak=1; queued peak=\(inputs.count - 1); DOI metadata=\(hasDOIMetadata); citation stage follows")
+        } else {
+            print("PASS production PapersStore.upload → PaperPipeline: 3 ready; local peak=1; queued peak=2; DOI metadata persisted")
+        }
+        if let manifest = env["PAPERICO_E2E_QUESTIONS"], !manifest.isEmpty {
+            try await CitationAcceptance.run(manifestURL: URL(fileURLWithPath: manifest), library: library,
+                config: settings.llmConfig(for: .chat), output: root, environment: env)
+        }
     }
 }

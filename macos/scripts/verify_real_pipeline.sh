@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Opt-in production upload/parse/analysis acceptance on three real PDFs.
+# Opt-in production upload/parse/analysis acceptance on three real PDFs
+# (three to five when PAPERICO_E2E_QUESTIONS selects a citation manifest).
 set -euo pipefail
 PAPERICO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode.app ]; then
@@ -21,6 +22,7 @@ sources = [str(base / path) for path in target["sources"]]
 sources += [str(root / "macos/Paperico" / path) for path in (
     "Core/PaperPipeline.swift", "Stores/SettingsStore.swift", "Stores/PapersStore.swift", "Support/LocalPrefs.swift")]
 sources.append(str(root / "macos/scripts/VerifyRealPipeline.swift"))
+sources.append(str(root / "macos/scripts/CitationAcceptance.swift"))
 subprocess.run(["xcrun", "swiftc", "-parse-as-library", "-o", sys.argv[2], *sources], check=True)
 PY
 "$PAPERICO_CHECK_BUILD/verify-real-pipeline"

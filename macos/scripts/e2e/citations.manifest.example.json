@@ -1,0 +1,20 @@
+{
+  "papers": [{
+    "file": "vaswani2017.pdf",
+    "questions": [{
+      "q": "多头注意力相比单头的优势是什么？请引用原文证据。",
+      "expect": {"section": "3.2.2", "mustContain": ["different representation subspaces"]}
+    }, {
+      "q": "比较这篇论文与论文库中的另一篇注意力论文，分别引用来源。",
+      "library": true,
+      "expectPapers": ["vaswani2017.pdf", "second-attention-paper.pdf"],
+      "expect": {"section": "Attention", "mustContain": ["attention"]},
+      "maxReadPapers": 4
+    }, {
+      "q": "本文的多头注意力如何工作？使用原文即可。",
+      "library": true,
+      "expect": {"section": "3.2", "mustContain": ["attention"]},
+      "maxReadPapers": 1
+    }]
+  }]
+}
