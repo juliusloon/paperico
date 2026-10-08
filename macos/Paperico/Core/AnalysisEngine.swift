@@ -803,13 +803,20 @@ enum AnalysisEngine {
     }
 
     static func buildChatSystemPrompt(
-        title: String, titleZh: String, domainTags: [String], tldr: String, paperContext: String
+        title: String, titleZh: String, domainTags: [String], tldr: String, paperContext: String,
+        authors: [String] = [], year: Int? = nil, venue: String = "", doi: String? = nil
     ) -> String {
+        var metadata: [String] = []
+        if !authors.isEmpty { metadata.append("作者：" + authors.joined(separator: ", ")) }
+        if let year { metadata.append("年份：" + String(year)) }
+        if !venue.isEmpty { metadata.append("期刊：" + venue) }
+        if let doi, !doi.isEmpty { metadata.append("DOI：" + doi) }
+        let metadataLine = metadata.isEmpty ? "" : "\n" + metadata.joined(separator: " · ")
         return """
         你是本工作台内嵌的论文精读助手，用户正在阅读以下论文：
 
         【论文元信息】
-        标题：\(title) / \(titleZh)
+        标题：\(title) / \(titleZh)\(metadataLine)
         领域标签：\(domainTags.joined(separator: ", "))
         一句话总结：\(tldr)
 

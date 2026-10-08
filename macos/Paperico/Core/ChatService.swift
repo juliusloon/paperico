@@ -95,7 +95,8 @@ enum ChatService {
                         titleZh: paper.titleZh,
                         domainTags: paper.domainTags,
                         tldr: paper.tldr,
-                        paperContext: ChatContextBuilder.buildPaperContext(blocks: blocks, entities: entities)
+                        paperContext: ChatContextBuilder.buildPaperContext(blocks: blocks, entities: entities),
+                        authors: paper.authors, year: paper.year, venue: paper.venue, doi: paper.doi
                     )
                     let needsTitle = !session.messages.contains { $0.role == "assistant" }
                     if needsTitle {
