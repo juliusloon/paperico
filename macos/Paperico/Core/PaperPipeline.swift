@@ -8,6 +8,7 @@ final class PaperPipeline {
 
     private let library: PaperLibrary
     private let settings: SettingsStore
+    private let session: URLSession
 
     /// 每篇论文在跑的任务;取消即 Task.cancel(),各阶段检查点自行退出。
     private var tasks: [String: Task<Void, Never>] = [:]
@@ -26,9 +27,10 @@ final class PaperPipeline {
     private let cloudGate = JobGate(limit: JobGateLimit.cloudParse)
     private let llmGate = JobGate(limit: JobGateLimit.llm)
 
-    init(library: PaperLibrary, settings: SettingsStore) {
+    init(library: PaperLibrary, settings: SettingsStore, session: URLSession = .shared) {
         self.library = library
         self.settings = settings
+        self.session = session
     }
 
     var isConfigured: Bool {
@@ -190,7 +192,7 @@ final class PaperPipeline {
                     contentListURL = try await MinerUClient.runFullPipeline(
                         fileData: fileData, fileName: fileName,
                         pdfURL: sourceURL,
-                        config: mineruConfig, outputDir: outputDir, forceNewTask: forceReparse,
+                        config: mineruConfig, outputDir: outputDir, forceNewTask: forceReparse, session: session,
                         submissionGate: cloudGate, waitForQueuedTask: true,
                         stateChanged: { [weak self] state in
                             await self?.updateCloudState(paperId: paperId, state: state)
@@ -376,7 +378,7 @@ final class PaperPipeline {
         let existingMethods = try await library.methodIndex()
         let result = try await AnalysisEngine.analyzePaper(
             llm: config, blocks: input, title: title, methodGroups: methodGroups, existingMethods: existingMethods,
-            resumeLog: resume,
+            resumeLog: resume, session: session,
             progress: { [weak self] completed, total in
                 await self?.updateProgress(paperId: paperId, completed: completed, total: total)
             },

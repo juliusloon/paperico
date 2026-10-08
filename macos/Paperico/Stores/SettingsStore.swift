@@ -54,14 +54,15 @@ final class SettingsStore {
     /// 外观等合成设置刷新后的回调(AppStore 借此做一次性迁移)。
     var onSettingsApplied: (() -> Void)?
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private static let llmKey = "paperico:llm-profile"
     private static let mineruKey = "paperico:mineru-config"
 
-    init(credentials: CredentialStore = .shared) {
+    init(credentials: CredentialStore = .shared, defaults: UserDefaults = .standard) {
         self.credentials = credentials
-        llmProfile = Self.loadConfig(LLMProfileConfig.self, key: Self.llmKey, defaults: UserDefaults.standard) ?? LLMProfileConfig()
-        mineruConfig = Self.loadConfig(MinerUConfigCore.self, key: Self.mineruKey, defaults: UserDefaults.standard) ?? MinerUConfigCore()
+        self.defaults = defaults
+        llmProfile = Self.loadConfig(LLMProfileConfig.self, key: Self.llmKey, defaults: defaults) ?? LLMProfileConfig()
+        mineruConfig = Self.loadConfig(MinerUConfigCore.self, key: Self.mineruKey, defaults: defaults) ?? MinerUConfigCore()
         settings = synthesized
     }
 
