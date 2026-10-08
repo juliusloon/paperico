@@ -40,6 +40,7 @@ struct LLMAgentAccumulator {
     }
     func completedCalls() throws -> [LLMToolCall] {
         guard finishReason != "length" else { throw LLMServiceError("模型输出达到 token 上限，工具调用未完成。") }
+        guard calls.isEmpty || finishReason != nil else { throw LLMServiceError("工具调用流未完整结束。") }
         let result = calls.keys.sorted().compactMap { calls[$0] }
         var ids = Set<String>()
         for call in result {
