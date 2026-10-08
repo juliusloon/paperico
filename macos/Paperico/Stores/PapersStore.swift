@@ -66,6 +66,11 @@ final class PapersStore {
         return outcome
     }
 
+    func editMetadata(id: String, metadata: PaperMetadata.Metadata) async throws {
+        let updated = try await library.editMetadata(id: id, metadata: metadata)
+        papers = papers.map { $0.id == id ? updated : $0 }
+    }
+
     func deletePaper(id: String) async throws {
         await pipeline.cancel(paperId: id)
         try await library.deletePaper(id: id)

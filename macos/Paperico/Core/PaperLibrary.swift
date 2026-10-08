@@ -422,6 +422,28 @@ actor PaperLibrary {
         return index.papers[i]
     }
 
+    /// One actor turn updates all user fields and the manual authority marker.
+    @discardableResult
+    func editMetadata(id: String, metadata: PaperMetadata.Metadata) throws -> PaperListItem {
+        try requirePaper(id)
+        guard let i = paperRecord(id) else { throw PipelineError("Paper not found", .internalError) }
+        let doi = Self.normalizeDOI(metadata.doi)
+        let arxiv = Self.normalizeArxivId(metadata.arxivId)
+        if let duplicate = existingPaper(doi: doi, arxivId: arxiv, excluding: id) {
+            throw PipelineError("与已有论文《\(duplicate.displayTitle)》的标识符重复", .duplicatePaper)
+        }
+        index.papers[i].title = metadata.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        index.papers[i].authors = metadata.authors.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        index.papers[i].year = metadata.year
+        index.papers[i].venue = metadata.venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        index.papers[i].doi = doi
+        index.papers[i].arxivId = arxiv
+        index.papers[i].metaSource = MetaSource.manual
+        index.metadataDuplicateByPaperId[id] = nil
+        try persistIndex()
+        return index.papers[i]
+    }
+
     func movePapers(paperIds: [String], projectId: String?) throws -> Int {
         var moved = 0
         for paperId in paperIds {

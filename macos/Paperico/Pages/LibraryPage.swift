@@ -37,6 +37,7 @@ struct LibraryPage: View {
     @State private var projectPendingDelete: ProjectGroup?
     @State private var showBatchDeleteConfirm = false
     @State private var showFileImporter = false
+    @State private var editingMetadata: PaperListItem?
     @State private var metadataFeedback = ""
     @State private var recognizingMetadata = false
     @State private var showMetadataFeedback = false
@@ -85,6 +86,11 @@ struct LibraryPage: View {
             mainColumn
         }
         .task { await projectsStore.fetch(); await papersStore.fetch(); await pollLoop() }
+        .sheet(item: $editingMetadata) { paper in
+            MetadataEditorSheet(paper: paper) { metadata in
+                try await papersStore.editMetadata(id: paper.id, metadata: metadata)
+            }
+        }
         .sheet(isPresented: $showUpload) { uploadSheet.presentationDetents([.medium]) }
         .alert("识别元数据", isPresented: $showMetadataFeedback) {
             Button("确定", role: .cancel) {}
@@ -444,10 +450,7 @@ struct LibraryPage: View {
                     renameValue: renamingPaperId == paper.id ? renamingPaperTitle : "",
                     saving: savingPaperTitle,
                     onToggle: { toggleSelection(paper.id) },
-                    onStartRename: {
-                        renamingPaperId = paper.id
-                        renamingPaperTitle = paper.displayTitle
-                    },
+                    onStartRename: { editingMetadata = paper },
                     onRenameChange: { renamingPaperTitle = $0 },
                     onConfirmRename: { Task { await confirmRenamePaper() } },
                     onCancelRename: { renamingPaperId = nil; renamingPaperTitle = "" },

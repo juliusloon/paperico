@@ -38,6 +38,18 @@ struct MetaCard: View {
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(palette.gray600)
                 }
             }
+            HStack {
+                Text(paper.metaSource == MetaSource.manual ? "手动" : (paper.metaSource == MetaSource.auto ? "已识别" : "本地"))
+                    .font(.system(size: 11)).foregroundStyle(palette.gray600)
+                    .padding(.horizontal, 8).padding(.vertical, 4).liquidInset(cornerRadius: ControlSpec.radius)
+                Spacer()
+            }
+            if paper.doi != nil || paper.arxivId != nil {
+                VStack(alignment: .leading, spacing: 5) {
+                    if let doi = paper.doi, !doi.isEmpty { Text("DOI：\(doi)") }
+                    if let arxiv = paper.arxivId, !arxiv.isEmpty { Text("arXiv：\(arxiv)") }
+                }.font(.system(size: 11)).foregroundStyle(palette.gray600).textSelection(.enabled)
+            }
             HStack(spacing: 14) {
                 fact("\(minutes) 分钟", icon: "clock")
                 fact("\(PaperOutline.entries(detail.blocks).count) 节点", icon: "text.alignleft")

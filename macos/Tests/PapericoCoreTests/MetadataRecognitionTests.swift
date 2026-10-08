@@ -74,7 +74,8 @@ final class MetadataRecognitionTests: XCTestCase {
         let stored = await library.paper(id: paper.id)
         XCTAssertEqual(stored?.status, "ready")
         XCTAssertEqual(stored?.doi, "10.5555/3295222.3295349")
-        _ = try await library.renamePaper(id: paper.id, title: "Manual")
+        _ = try await library.editMetadata(id: paper.id, metadata: .init(title: "Manual", authors: ["User"], year: 2020,
+                                                                       venue: "Venue", doi: "10.5555/manual", arxivId: "arXiv:2501.01234v2"))
         let before = await library.paper(id: paper.id)
         _ = try await MetadataRecognition.backfill(paperId: paper.id, library: library, lookup: { _ in
             XCTFail("Manual backfill must never look up metadata")
