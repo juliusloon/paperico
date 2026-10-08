@@ -1,26 +1,5 @@
 import Foundation
 
-struct ChatSourceRef: Codable, Hashable, Sendable {
-    enum Kind: String, Codable, Sendable { case block, paper, method }
-    var token: String
-    var kind: Kind
-    var paperId: String?
-    var blockId: String?
-    var methodKey: String?
-    var title: String?
-
-    func label(currentPaperId: String?) -> String {
-        let shortTitle = String((title ?? "来源").prefix(24))
-        switch kind {
-        case .paper: return "论文 · " + shortTitle
-        case .method: return "方法 · " + shortTitle
-        case .block:
-            let evidence = "证据 " + (blockId?.split(separator: "-").last.map(String.init) ?? token)
-            return paperId == currentPaperId ? evidence : "《\(shortTitle)》 · \(evidence)"
-        }
-    }
-}
-
 /// Each round owns its registry. A source becomes eligible only when its content is sent.
 struct ChatSourceRegistry: Sendable {
     private(set) var sources: [ChatSourceRef] = []
@@ -32,13 +11,18 @@ struct ChatSourceRegistry: Sendable {
             return existing.token
         }
         let value: String
-        if let token { value = token } else { value = String(format: "s%03d", next); next += 1 }
-        guard !sources.contains(where: { $0.token == value }) else { return value }
+        if let token, !sources.contains(where: { $0.token == token }) { value = token }
+        else {
+            var candidate: String
+            repeat { candidate = String(format: "s%03d", next); next += 1 }
+            while sources.contains(where: { $0.token == candidate })
+            value = candidate
+        }
         sources.append(ChatSourceRef(token: value, kind: kind, paperId: paperId, blockId: blockId, methodKey: methodKey, title: title))
         return value
     }
     mutating func registerCurrent(blocks: [Block], paperId: String, context: String) {
-        for block in blocks where context.contains(block.id) {
+        for block in blocks where Self.idRange(block.id, in: context) != nil {
             register(kind: .block, paperId: paperId, blockId: block.id, token: block.id)
         }
     }
@@ -52,10 +36,18 @@ struct ChatSourceRegistry: Sendable {
     /// Translate cross-paper refs only after a bounded semantic line has been selected.
     mutating func tokenize(_ text: String, paper: PaperListItem, blocks: [Block]) -> String {
         var result = text
-        for block in blocks where result.contains(block.id) {
-            let token = register(kind: .block, paperId: paper.id, blockId: block.id, title: paper.displayTitle)
-            result = result.replacingOccurrences(of: block.id, with: token)
+        for block in blocks {
+            if Self.idRange(block.id, in: result) != nil {
+                let token = register(kind: .block, paperId: paper.id, blockId: block.id, title: paper.displayTitle)
+                result = result.replacingOccurrences(of: Self.idPattern(block.id), with: token, options: .regularExpression)
+            }
         }
         return result
+    }
+    private static func idRange(_ id: String, in text: String) -> Range<String.Index>? {
+        text.range(of: idPattern(id), options: .regularExpression)
+    }
+    private static func idPattern(_ id: String) -> String {
+        "(?<![A-Za-z0-9_-])" + NSRegularExpression.escapedPattern(for: id) + "(?![A-Za-z0-9_-])"
     }
 }

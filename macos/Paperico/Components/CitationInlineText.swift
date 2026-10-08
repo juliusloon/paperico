@@ -11,6 +11,7 @@ struct CitationInlineText: NSViewRepresentable {
     let onCitation: (String) -> Void
     var baseWeight: NSFont.Weight = .regular
     var mathSplitter = true
+    var labels: [String: String] = [:]
     @Environment(\.palette) private var palette
     @Environment(\.glassOpacity) private var glassOpacity
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -44,7 +45,7 @@ struct CitationInlineText: NSViewRepresentable {
 
         fileprivate func configure(_ parent: CitationInlineText) {
             onCitation = parent.onCitation
-            let key = "\(parent.markdown)|\(parent.fontSize)|\(parent.baseWeight.rawValue)|\(parent.mathSplitter)|\(parent.validIds.sorted())|\(NSColor(parent.color))|\(NSColor(parent.palette.accent))|\(parent.palette.dark)|\(parent.glassOpacity)|\(parent.reduceTransparency)"
+            let key = "\(parent.markdown)|\(parent.fontSize)|\(parent.baseWeight.rawValue)|\(parent.mathSplitter)|\(parent.validIds.sorted())|\(parent.labels.sorted { $0.key < $1.key }.map { $0.key + $0.value })|\(NSColor(parent.color))|\(NSColor(parent.palette.accent))|\(parent.palette.dark)|\(parent.glassOpacity)|\(parent.reduceTransparency)"
             guard signature != key else { return }
             signature = key
             buttons.forEach { $0.1.removeFromSuperview() }; buttons.removeAll()
@@ -67,7 +68,7 @@ struct CitationInlineText: NSViewRepresentable {
             for match in ChatCitation.matches(in: text.string, validIds: parent.validIds).reversed() {
                 let intent = InlinePresentationIntent(rawValue: (text.attribute(.inlinePresentationIntent, at: match.range.location, effectiveRange: nil) as? NSNumber)?.uintValue ?? 0)
                 guard !intent.contains(.code), text.attribute(.link, at: match.range.location, effectiveRange: nil) == nil else { continue }
-                let label = "证据 " + (match.blockId.split(separator: "-").last.map(String.init) ?? match.blockId)
+                let label = parent.labels[match.blockId] ?? ("证据 " + (match.blockId.split(separator: "-").last.map(String.init) ?? match.blockId))
                 let width = (label as NSString).size(withAttributes: [.font:NSFont.systemFont(ofSize: 10)]).width + 33
                 let attachment = NSTextAttachment()
                 attachment.attachmentCell = CitationCell(size: NSSize(width: width, height: 24))
@@ -78,7 +79,7 @@ struct CitationInlineText: NSViewRepresentable {
             text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, range, _ in
                 guard let attachment = value as? NSTextAttachment, let id = textView.citations[ObjectIdentifier(attachment)] else { return }
                 let button = Button { [weak self] in self?.onCitation?(id) } label: {
-                    Label("证据 " + (id.split(separator: "-").last.map(String.init) ?? id), systemImage: "arrow.up.right")
+                    Label(parent.labels[id] ?? ("证据 " + (id.split(separator: "-").last.map(String.init) ?? id)), systemImage: "arrow.up.right")
                         .font(.system(size: 10)).foregroundStyle(parent.palette.accent)
                         .padding(.horizontal, 7).padding(.vertical, 4)
                         .liquidInset(cornerRadius: CornerRadius.chip, tint: parent.palette.accentFaint)

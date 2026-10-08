@@ -9,7 +9,7 @@ enum ChatCitation {
         guard !validIds.isEmpty,
               let regex = try? NSRegularExpression(pattern: #"\[([A-Za-z0-9][A-Za-z0-9_-]{0,100})\]"#) else { return [] }
         let source = text as NSString
-        let codeRanges = (try? NSRegularExpression(pattern: #"```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`+[^`\n]*`+"#))?
+        let codeRanges = (try? NSRegularExpression(pattern: #"```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`+[^`\n]*(?:`+|$)"#))?
             .matches(in: text, range: NSRange(location: 0, length: source.length)).map(\.range) ?? []
         return regex.matches(in: text, range: NSRange(location: 0, length: source.length)).compactMap { match in
             guard !codeRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) else { return nil }

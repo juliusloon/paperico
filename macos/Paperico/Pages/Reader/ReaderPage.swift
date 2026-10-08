@@ -10,6 +10,7 @@ struct ReaderPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppServices.self) private var services
     @Environment(ReaderStore.self) private var readerStore
+    @Environment(Router.self) private var router
     @Environment(ChatStore.self) private var chatStore
 
     @State private var leftWidth: CGFloat = LocalPrefs.leftWidth > 0 ? LocalPrefs.leftWidth : 250
@@ -44,6 +45,14 @@ struct ReaderPage: View {
         }
         .background(Color.clear)
         .environment(\.trafficLightClearance, 0)
+        .overlay(alignment: .topLeading) {
+            if let origin = router.citationReturnPaperId, origin != paperId {
+                Button("返回来源对话", systemImage: "arrow.backward") {
+                    router.citationReturnPaperId = nil
+                    router.go(.reader(paperId: origin))
+                }.buttonStyle(.bordered).padding(12)
+            }
+        }
         .overlay(alignment: .bottomLeading) {
             WorkspaceNav(currentPaperId: paperId, includesDirectory: true,
                          surfaceScheme: colorScheme)
@@ -83,6 +92,10 @@ struct ReaderPage: View {
         guard !Task.isCancelled else { return }
         await chatStore.fetchSessions(paperId: paperId)
         guard !Task.isCancelled else { return }
+        if let source = router.pendingCitationSource, source.paperId == paperId {
+            if let blockId = source.blockId { readerStore.scrollToBlock(blockId, centered: true) }
+            router.pendingCitationSource = nil
+        }
         ReaderPerf.end("reader.open(\(paperId))", startedAt: startedAt)
     }
 

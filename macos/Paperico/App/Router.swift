@@ -13,6 +13,8 @@ final class Router {
     }
 
     var page: Page = .home
+    var pendingCitationSource: ChatSourceRef?
+    var citationReturnPaperId: String?
     var libraryManagement: LibraryManagementSheet.Section?
 
     @ObservationIgnored var navigationGuard: ((Page) -> Bool)?

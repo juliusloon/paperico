@@ -176,6 +176,29 @@ struct PaperStatusOut: Codable, Hashable, Sendable {
 
 // MARK: - Chat
 
+struct ChatSourceRef: Codable, Hashable, Sendable, Identifiable {
+    enum Kind: String, Codable, Sendable { case block, paper, method }
+    var token: String
+    var kind: Kind
+    var paperId: String?
+    var blockId: String?
+    var methodKey: String?
+    var title: String?
+    var id: String { token }
+
+    func label(currentPaperId: String?) -> String {
+        let shortTitle = String((title ?? "来源").prefix(24))
+        switch kind {
+        case .paper: return "论文 · " + shortTitle
+        case .method: return "方法 · " + shortTitle
+        case .block:
+            let evidence = "证据 " + (blockId?.split(separator: "-").last.map(String.init) ?? token)
+            return paperId == currentPaperId ? evidence : "《\(shortTitle)》 · \(evidence)"
+        }
+    }
+}
+
+
 enum AttachedContextType: String, Codable, Sendable {
     case textSelection = "text_selection"
     case methodCard = "method_card"

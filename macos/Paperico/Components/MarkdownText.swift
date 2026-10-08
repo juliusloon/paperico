@@ -18,6 +18,7 @@ struct MarkdownText: View {
     var fontSize: CGFloat = 14
     var color: Color?
     var citationIds: Set<String> = []
+    var citationLabels: [String: String] = [:]
     var onCitation: ((String) -> Void)?
 
     var body: some View {
@@ -85,7 +86,7 @@ struct MarkdownText: View {
                 .padding(.vertical, 8)
                 .horizontalScrollIfAvailable()
         case .table(let rows):
-            NativeMarkdownTable(rows: rows, fontSize: fontSize, citationIds: citationIds, onCitation: onCitation)
+            NativeMarkdownTable(rows: rows, fontSize: fontSize, citationIds: citationIds, citationLabels: citationLabels, onCitation: onCitation)
         case .rule:
             Rectangle().fill(palette.gray200).frame(height: 1).padding(.vertical, 4)
         }
@@ -114,7 +115,7 @@ struct MarkdownText: View {
     @ViewBuilder private func inlineText(_ markdown: String, mathSplitter: Bool, size: CGFloat? = nil, color: Color? = nil, bold: Bool = false) -> some View {
         if let onCitation, !ChatCitation.matches(in: markdown, validIds: citationIds).isEmpty {
             CitationInlineText(markdown: markdown, fontSize: size ?? fontSize, color: color ?? self.color ?? palette.gray800,
-                               validIds: citationIds, onCitation: onCitation, baseWeight: bold ? .semibold : .regular, mathSplitter: mathSplitter)
+                               validIds: citationIds, onCitation: onCitation, baseWeight: bold ? .semibold : .regular, mathSplitter: mathSplitter, labels: citationLabels)
         } else if let attributed = PaperMarkdown.attributedString(
             markdown: markdown,
             fontSize: fontSize,
@@ -144,6 +145,7 @@ struct NativeMarkdownTable: View {
     let rows: [[String]]
     let fontSize: CGFloat
     var citationIds: Set<String> = []
+    var citationLabels: [String: String] = [:]
     var onCitation: ((String) -> Void)?
 
     var body: some View {
@@ -170,7 +172,7 @@ struct NativeMarkdownTable: View {
 
     @ViewBuilder private func cellView(_ value: String, heading: Bool) -> some View {
         if let onCitation, !ChatCitation.matches(in: value, validIds: citationIds).isEmpty {
-            CitationInlineText(markdown: value, fontSize: fontSize * 0.92, color: palette.gray800, validIds: citationIds, onCitation: onCitation, baseWeight: heading ? .semibold : .regular)
+            CitationInlineText(markdown: value, fontSize: fontSize * 0.92, color: palette.gray800, validIds: citationIds, onCitation: onCitation, baseWeight: heading ? .semibold : .regular, labels: citationLabels)
         } else { Text(cell(value)) }
     }
 

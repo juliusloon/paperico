@@ -17,4 +17,21 @@ final class ChatSourceTests: XCTestCase {
         let data = Data(#"{"id":"m","sessionId":"s","role":"assistant","content":"old","createdAt":"now"}"#.utf8)
         XCTAssertNil(try JSONDecoder().decode(ChatMessage.self, from: data).sourceRefs)
     }
+    func testExactBlockTokensAndUnclosedCode() {
+        let short = Block(id: "b001", order: 0, kind: "paragraph", pageIdx: nil, bbox: nil,
+                          sectionTitle: "", textOriginal: "", textZh: "", oneLiner: "", keywords: [], roleInNarrative: "",
+                          imagePath: "", captionOriginal: "", captionZh: "", figureType: "", coreTakeaways: [], dataReadingNotes: "",
+                          tableHtml: "", latex: "", plainExplanation: "", entityRefs: [])
+        var long = short; long.id = "b0010"
+        var paper = PaperListItem.empty(id: "p"); paper.title = "Evidence"
+        var registry = ChatSourceRegistry()
+        registry.registerCurrent(blocks: [short, long], paperId: paper.id, context: "[b0010]")
+        XCTAssertEqual(registry.sources.map(\.blockId), [long.id])
+        registry = ChatSourceRegistry()
+        let translated = registry.tokenize("[b0010,b001]", paper: paper, blocks: [short, long])
+        XCTAssertEqual(translated, "[s002,s001]")
+        XCTAssertEqual(registry.sources.map(\.blockId), [short.id, long.id])
+        XCTAssertTrue(registry.validatedSources(in: "`unfinished [s001]").isEmpty)
+    }
+
 }

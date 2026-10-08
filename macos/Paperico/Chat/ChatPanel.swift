@@ -6,12 +6,14 @@ struct ChatPanel: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppServices.self) private var services
+    @Environment(Router.self) private var router
     @Environment(ChatStore.self) private var chatStore
     @Environment(ReaderStore.self) private var readerStore
     @Environment(SettingsStore.self) private var settingsStore
 
     let paperId: String
 
+    @State private var selectedSource: ChatSourceRef?
     @State private var input = ""
     @State private var composerFocused = false
     @State private var inputHeight: CGFloat = 32
@@ -43,6 +45,10 @@ struct ChatPanel: View {
         VStack(spacing: 0) {
             sessionBar
             messagesList
+            if chatStore.libraryPaperCount > 0 || chatStore.libraryQueryCount > 0 {
+                Text("查阅 \(chatStore.libraryPaperCount) 篇论文 / 执行 \(chatStore.libraryQueryCount) 次库内查询")
+                    .font(.caption).foregroundStyle(.secondary).padding(6)
+            }
             if !readerStore.attachedContext.isEmpty { attachedRow }
             if !prompts.isEmpty { promptRow }
             if noteMode { noteToolbar }
@@ -60,6 +66,17 @@ struct ChatPanel: View {
                             .transition(.opacity.combined(with: .offset(y: -6)))
                     }
                 }.padding(.top, 44)
+            }
+        }
+        .sheet(item: $selectedSource) { source in
+            ChatSourceCard(source: source, library: services.library) {
+                selectedSource = nil
+                if source.kind == .method { router.go(.methods) }
+                else if let target = source.paperId {
+                    router.pendingCitationSource = source
+                    router.citationReturnPaperId = paperId
+                    router.go(.reader(paperId: target))
+                }
             }
         }
         .onExitCommand {
@@ -303,7 +320,9 @@ struct ChatPanel: View {
                 messageActions(message, isUser: true)
             } else {
                 MarkdownText(text: message.content, fontSize: 13, color: palette.gray800,
-                             citationIds: citationIds, onCitation: { readerStore.scrollToBlock($0, centered: true) })
+                             citationIds: Set(message.sourceRefs?.map(\.token) ?? Array(citationIds)),
+                             citationLabels: labels(message.sourceRefs ?? []),
+                             onCitation: { openSource($0, sources: message.sourceRefs ?? []) })
                     .lineSpacing(4)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
@@ -315,6 +334,17 @@ struct ChatPanel: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+    }
+
+    private func labels(_ sources: [ChatSourceRef]) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: sources.map { ($0.token, $0.label(currentPaperId: paperId)) })
+    }
+    private func openSource(_ token: String, sources: [ChatSourceRef]) {
+        if let source = sources.first(where: { $0.token == token }) {
+            if source.kind == .block, source.paperId == paperId, let block = source.blockId {
+                readerStore.scrollToBlock(block, centered: true)
+            } else { selectedSource = source }
+        } else if citationIds.contains(token) { readerStore.scrollToBlock(token, centered: true) }
     }
 
     private func messageActions(_ message: ChatMessage, isUser: Bool) -> some View {
@@ -353,11 +383,13 @@ struct ChatPanel: View {
             if chatStore.streamContent.isEmpty {
                 HStack(spacing: 7) {
                     SpinnerIcon(size: 11)
-                    Text("正在思考…").font(.system(size: 12)).foregroundStyle(palette.gray500)
+                    Text(chatStore.agentActivity.isEmpty ? "正在思考…" : chatStore.agentActivity).font(.system(size: 12)).foregroundStyle(palette.gray500)
                 }
             } else {
                 MarkdownText(text: chatStore.streamContent, fontSize: 13, color: palette.gray800,
-                             citationIds: citationIds, onCitation: { readerStore.scrollToBlock($0, centered: true) })
+                             citationIds: Set(chatStore.streamSources.map(\.token)),
+                             citationLabels: labels(chatStore.streamSources),
+                             onCitation: { openSource($0, sources: chatStore.streamSources) })
                     .lineSpacing(4)
                 SpinnerIcon(size: 11)
             }

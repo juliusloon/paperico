@@ -17,6 +17,11 @@ final class ChatStore {
     private(set) var updatingSession = false
     var busy: Bool { streaming || preparingRevision || updatingSession }
     var streamContent = ""
+    var streamSources: [ChatSourceRef] = []
+    var agentActivity = ""
+    var libraryPaperCount = 0
+    var libraryQueryCount = 0
+    @ObservationIgnored private var rememberedSessions: [String: String] = [:]
     var pendingMessage: ChatMessage?
     @ObservationIgnored private var generationTask: Task<Void, Never>?
     private var stopRequested = false
@@ -30,6 +35,7 @@ final class ChatStore {
 
     func bind(to paperId: String) {
         guard activePaperId != paperId else { return }
+        if let activePaperId, let session = currentSession { rememberedSessions[activePaperId] = session.id }
         generationTask?.cancel()
         generationTask = nil
         activePaperId = paperId
@@ -40,6 +46,7 @@ final class ChatStore {
         preparingRevision = false
         updatingSession = false
         streamContent = ""
+        streamSources = []; agentActivity = ""; libraryPaperCount = 0; libraryQueryCount = 0
         pendingMessage = nil
         error = ""
     }
@@ -51,6 +58,9 @@ final class ChatStore {
             let loaded = try await library.chatSessions(paperId: paperId)
             guard version == requestVersion else { return }
             sessions = loaded
+            if currentSession == nil, let id = rememberedSessions[paperId] {
+                currentSession = loaded.first { $0.id == id }
+            }
         } catch {
             guard version == requestVersion else { return }
             self.error = ApiFailure.wrap(error).localizedDescription
@@ -103,6 +113,7 @@ final class ChatStore {
             if currentSession?.id == sessionId {
                 currentSession = nil
                 streamContent = ""
+                streamSources = []; agentActivity = ""; libraryPaperCount = 0; libraryQueryCount = 0
                 pendingMessage = nil
             }
         } catch {
@@ -121,6 +132,7 @@ final class ChatStore {
         streaming = true
         stopRequested = false
         streamContent = ""
+        streamSources = []; agentActivity = ""; libraryPaperCount = 0; libraryQueryCount = 0
 
         let userMessage = ChatMessage(
             id: "temp-\(Date().timeIntervalSince1970 * 1000)",
@@ -147,13 +159,19 @@ final class ChatStore {
         var sessionId = session?.id
 
         do {
+            let chatConfig = settings.llmConfig(for: .chat)
             let stream = ChatService.send(
                 paperId: paperId, content: content, sessionId: sessionId,
-                attachedContext: attachedContext, library: library, llm: settings.llmConfig(for: .chat),
-                onTask: { [weak self] task in self?.generationTask = task }
+                attachedContext: attachedContext, library: library, llm: chatConfig,
+                onTask: { [weak self] task in self?.generationTask = task },
+                onToolsRejected: { [weak self] in self?.settings.invalidateTools(for: chatConfig) }
             )
             for try await event in stream {
                 guard version == requestVersion else { return }
+                if let sources = event.sourceRefs { streamSources = sources }
+                if let activity = event.activity { agentActivity = activity }
+                if let count = event.libraryPaperCount { libraryPaperCount = count }
+                if let count = event.libraryQueryCount { libraryQueryCount = count }
                 if let chunk = event.content, !chunk.isEmpty {
                     fullContent += chunk
                     streamContent = fullContent
@@ -188,6 +206,7 @@ final class ChatStore {
         streaming = false
         generationTask = nil
         streamContent = ""
+        streamSources = []; agentActivity = ""
         pendingMessage = nil
         await fetchSessions(paperId: paperId)
     }
@@ -235,6 +254,7 @@ final class ChatStore {
         requestVersion = UUID()
         currentSession = nil
         streamContent = ""
+        streamSources = []; agentActivity = ""; libraryPaperCount = 0; libraryQueryCount = 0
         pendingMessage = nil
     }
 }
