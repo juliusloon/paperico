@@ -33,7 +33,8 @@ enum CitationAcceptance {
         guard !manifest.papers.isEmpty, manifest.papers.contains(where: { !$0.questions.isEmpty }) else { throw PipelineError("Citation manifest contains no questions") }
         let papers = await library.listPapers()
         var llm = config
-        llm.temperature = 0; llm.maxTokens = 2048
+        // Reasoning models consume budget on hidden thinking; low effort + a larger cap keep answers untruncated.
+        llm.temperature = 0; llm.maxTokens = 8192; llm.reasoningEffort = "low"
         let mode = environment["PAPERICO_E2E_CHAT_MODE"] ?? "fallback"
         guard ["agent", "fallback"].contains(mode) else { throw PipelineError("PAPERICO_E2E_CHAT_MODE must be agent or fallback") }
         if mode == "agent" {
