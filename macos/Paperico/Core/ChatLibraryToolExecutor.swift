@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 /// Only these five schemas reach the model. Execution uses active library records directly.
 struct ChatLibraryToolExecutor {
@@ -36,7 +37,8 @@ struct ChatLibraryToolExecutor {
     }
     private func integer(_ args: [String: Any], _ key: String, default defaultValue: Int, range: ClosedRange<Int>) throws -> Int {
         guard let raw = args[key] else { return defaultValue }
-        guard let value = raw as? Int, !(raw is Bool), range.contains(value) else { throw AutomationError("\(key) 超出允许范围。") }
+        guard let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+              let value = raw as? Int, range.contains(value) else { throw AutomationError("\(key) 超出允许范围。") }
         return value
     }
     private func query(_ args: [String: Any]) throws -> String {

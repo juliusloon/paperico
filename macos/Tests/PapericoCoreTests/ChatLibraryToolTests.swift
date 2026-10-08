@@ -27,6 +27,9 @@ final class ChatLibraryToolTests: XCTestCase {
             XCTAssertTrue(output.content.contains("untrusted_content"))
             XCTAssertLessThanOrEqual(output.content.count, 4000)
         }
+        let integerLimit = try await executor.execute(.init(id: "one", name: "get_blocks", arguments: AnalysisEngine.jsonString(["paper_id": paper.id, "limit": 1])), registry: &registry, budget: 4000)
+        XCTAssertFalse(integerLimit.content.contains("error"))
+        XCTAssertTrue(integerLimit.content.contains("Contrastive evidence"))
         XCTAssertTrue(registry.sources.contains { $0.kind == .block && $0.blockId == block.id })
         let before = registry.sources
         for args in [["paper_id": "../outside"], ["paper_id": paper.id, "path": "/tmp"], ["paper_id": paper.id, "limit": 13], ["paper_id": paper.id, "limit": true]] as [[String: Any]] {
