@@ -31,6 +31,7 @@ Paperico is designed as a **single-user, local-first** application:
 - The native app stores PDFs and results in its sandboxed Application Support directory.
   The API uses `PAPERICO_STORAGE_ROOT`. Cloud parsing sends PDFs to MinerU; model requests
   send the relevant text/context to the model endpoints you configure.
+- Zotero export import reads local files and makes no network requests; subsequent processing uses the configured parser and model services.
 - Native ZIP extraction validates paths, existing symlinks, sizes and CRC32. Library
   corruption and unsupported schema versions are surfaced without replacing source files.
 

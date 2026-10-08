@@ -123,6 +123,18 @@ First session:
 receives the text and conversation context needed for each task. The app connects directly
 to your configured services. Paperico does not operate a relay.
 
+### Migrate from Zotero
+
+For Zotero 7–10:
+
+1. Export a collection using **BibTeX**.
+2. Enable **Export Files** and retain the `.bib` and PDF folder structure.
+3. In Paperico's library, choose **Import Zotero export**, the folder and a destination project.
+
+Import reads local files without network calls or modifying Zotero. Paired metadata is treated as manual authority.
+Duplicate PDFs or identifiers are skipped; unmatched entries and invalid attachments appear in the result summary.
+When services are configured, subsequent parsing and analysis use the normal service data flow.
+
 ## How it works
 
 <p align="center">
