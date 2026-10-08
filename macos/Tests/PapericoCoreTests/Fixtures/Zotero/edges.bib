@@ -1,0 +1,11 @@
+% Comments, macros, nested protection, quoted values and malformed recovery.
+@string{venue = "Science"}
+@unknown{edge,
+ title = {Nested {GPU} } # "methods \& data",
+ author = {Garc\'{i}a, Jos\'e},
+ year = {Spring 2026}, journal = venue,
+ file = {file:///tmp/edge%20paper.pdf}
+}
+@misc{empty, title = {}}
+@article{broken, title = {unterminated
+@book{recovered, title = {Recovered}, publisher = {Press}}
