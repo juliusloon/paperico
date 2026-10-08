@@ -421,14 +421,7 @@ final class PaperPipeline {
         let metadata = result.paper
         try await library.updatePaper { record in
             guard record.id == paperId else { return }
-            let originalTitle = AnalysisEngine.asString(metadata["title"])
-            if !originalTitle.isEmpty { record.title = originalTitle }
-            record.titleZh = AnalysisEngine.asString(metadata["title_zh"])
-            record.tldr = AnalysisEngine.asString(metadata["tldr"])
-            record.narrativeSummary = AnalysisEngine.asString(metadata["narrative_summary"])
-            record.contributions = metadata["contributions"] as? [String] ?? []
-            record.domainTags = metadata["domain_tags"] as? [String] ?? []
-            record.difficultyEstimate = AnalysisEngine.asString(metadata["difficulty_estimate"])
+            AnalysisEngine.applyPaperSummary(metadata, to: &record)
         }
         try Task.checkCancellation()
         try await library.setStatus(paperId: paperId, status: "ready")

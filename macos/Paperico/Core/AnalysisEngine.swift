@@ -790,6 +790,18 @@ enum AnalysisEngine {
 
     // MARK: - 对话系统提示词
 
+    /// Shared by pipeline persistence and offline regression tests.
+    static func applyPaperSummary(_ metadata: [String: Any], to record: inout PaperListItem) {
+        let title = asString(metadata["title"])
+        if record.metaSource != MetaSource.manual && !title.isEmpty { record.title = title }
+        record.titleZh = asString(metadata["title_zh"])
+        record.tldr = asString(metadata["tldr"])
+        record.narrativeSummary = asString(metadata["narrative_summary"])
+        record.contributions = metadata["contributions"] as? [String] ?? []
+        record.domainTags = metadata["domain_tags"] as? [String] ?? []
+        record.difficultyEstimate = asString(metadata["difficulty_estimate"])
+    }
+
     static func buildChatSystemPrompt(
         title: String, titleZh: String, domainTags: [String], tldr: String, paperContext: String
     ) -> String {
