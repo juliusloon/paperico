@@ -18,6 +18,7 @@ struct LibraryPage: View {
     @State private var newProjectName = ""
     @State private var searchQuery = ""
     @State private var showUpload = false
+    @State private var showZoteroImport = false
     @State private var uploading = false
     @State private var uploadError = ""
     @State private var selectionMode = false
@@ -92,6 +93,7 @@ struct LibraryPage: View {
             }
         }
         .sheet(isPresented: $showUpload) { uploadSheet.presentationDetents([.medium]) }
+        .sheet(isPresented: $showZoteroImport) { ZoteroImportSheet() }
         .alert("识别元数据", isPresented: $showMetadataFeedback) {
             Button("确定", role: .cancel) {}
         } message: { Text(metadataFeedback) }
@@ -235,6 +237,7 @@ struct LibraryPage: View {
                 Text("\(papersStore.papers.count) 篇论文")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 0)
+                PillIconButton(title: "从 Zotero 导出导入", icon: "square.and.arrow.down") { showZoteroImport = true }
                 if containerWidth < 620 {
                     PillIconButton(title: "处理任务", icon: "list.bullet.rectangle") { router.libraryManagement = .tasks }
                     PillIconButton(title: "回收站", icon: Ic.trash) { router.libraryManagement = .trash }

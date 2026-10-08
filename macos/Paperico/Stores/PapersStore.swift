@@ -40,6 +40,14 @@ final class PapersStore {
         return paper
     }
 
+    func importZotero(folder: URL, projectId: String?) async throws -> ZoteroImport.Report {
+        let report = try await ZoteroImport.run(folder: folder, projectId: projectId, library: library)
+        // All authority fields are already persisted before any analysis starts.
+        if pipeline.isConfigured { report.imported.forEach { pipeline.startProcessing(paperId: $0.id) } }
+        await fetch()
+        return report
+    }
+
     func movePapers(paperIds: [String], projectId: String?) async throws {
         guard !paperIds.isEmpty else { return }
         _ = try await library.movePapers(paperIds: paperIds, projectId: projectId)

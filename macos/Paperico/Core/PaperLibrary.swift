@@ -190,12 +190,15 @@ actor PaperLibrary {
     // MARK: - 论文入库
 
     /// 导入 PDF:落盘 + sha256 去重(对齐 create_paper 的 T1.4 语义)。
-    func importPDF(fileData: Data, fileName: String, projectId: String?) throws -> PaperListItem {
+    func importPDF(fileData: Data, fileName: String, projectId: String?, metadata: PaperMetadata.Metadata? = nil) throws -> PaperListItem {
         guard fileName.lowercased().hasSuffix(".pdf") else {
             throw PipelineError("Only PDF files are supported", .pdfMissing)
         }
         guard fileData.starts(with: Data("%PDF-".utf8)) else {
             throw PipelineError("The uploaded file is not a valid PDF", .pdfMissing)
+        }
+        if let metadata, let existing = existingPaper(doi: metadata.doi, arxivId: metadata.arxivId) {
+            throw PipelineError("元数据重复：与《\(existing.displayTitle)》相同（id \(existing.id)）", .duplicatePaper)
         }
         let digest = SHA256.hash(data: fileData).map { String(format: "%02x", $0) }.joined()
         if let duplicateId = index.shaByPaperId.first(where: { key, sha in
@@ -215,6 +218,15 @@ actor PaperLibrary {
         paper.projectId = projectId
         paper.sourceType = "pdf_upload"
         paper.originalFileName = fileName
+        if let metadata {
+            paper.title = metadata.title
+            paper.authors = metadata.authors
+            paper.year = metadata.year
+            paper.venue = metadata.venue
+            paper.doi = Self.normalizeDOI(metadata.doi)
+            paper.arxivId = Self.normalizeArxivId(metadata.arxivId)
+            paper.metaSource = MetaSource.manual
+        }
         index.shaByPaperId[id] = digest
 
         index.papers.insert(paper, at: 0)
