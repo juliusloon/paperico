@@ -36,6 +36,34 @@ final class ZoteroImportTests: XCTestCase {
         XCTAssertEqual(second.duplicates.count, 3)
     }
 
+    func testImportedAuthoritySurvivesRecognitionAndAnalysis() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = PaperLibrary(root: root)
+        try await library.load()
+        let authority = PaperMetadata.Metadata(title: "Zotero title", authors: ["Ada"], year: 2021, venue: "Journal", doi: "10.5555/bib")
+        let paper = try await library.importPDF(fileData: Data("%PDF-1.7\nauthority".utf8), fileName: "authority.pdf", projectId: nil, metadata: authority)
+        let block = Block(id: "b0001", order: 0, kind: "paragraph", pageIdx: 0, bbox: nil, sectionTitle: "",
+                          textOriginal: "DOI:10.5555/auto", textZh: "", oneLiner: "", keywords: [], roleInNarrative: "",
+                          imagePath: "", captionOriginal: "", captionZh: "", figureType: "", coreTakeaways: [],
+                          dataReadingNotes: "", tableHtml: "", latex: "", plainExplanation: "", entityRefs: [])
+        _ = try await MetadataRecognition.run([block], actions: MetadataRecognition.actions(library: library, paperId: paper.id, lookup: { _ in
+            XCTFail("Authority must skip automatic recognition")
+            return .init(title: "Automatic title")
+        }))
+        try await library.updatePaper { record in
+            AnalysisEngine.applyPaperSummary(["title": "LLM title", "title_zh": "模型译名", "tldr": "模型摘要"], to: &record)
+        }
+        let stored = await library.paper(id: paper.id)
+        XCTAssertEqual(stored?.title, authority.title)
+        XCTAssertEqual(stored?.authors, authority.authors)
+        XCTAssertEqual(stored?.year, authority.year)
+        XCTAssertEqual(stored?.venue, authority.venue)
+        XCTAssertEqual(stored?.doi, authority.doi)
+        XCTAssertEqual(stored?.metaSource, MetaSource.manual)
+        XCTAssertEqual(stored?.titleZh, "模型译名")
+    }
+
     func testEmptyAndMultipleBibFoldersFail() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
