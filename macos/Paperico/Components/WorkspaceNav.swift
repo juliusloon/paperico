@@ -171,7 +171,7 @@ private struct WorkspaceNavSurface: View {
                 brandIcon.frame(width: WorkspaceNavMetrics.railWidth, height: WorkspaceNavMetrics.barHeight)
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain).noFocusRing()
+            .buttonStyle(.plain)
             .help("展开工作台导航").accessibilityLabel("展开工作台导航")
         } else {
             expandedBottomBar
@@ -219,7 +219,7 @@ private struct WorkspaceNavSurface: View {
         .padding(.horizontal, 8)
         .frame(width: WorkspaceNavMetrics.expandedWidth,
                height: WorkspaceNavMetrics.barHeight, alignment: .leading)
-        .buttonStyle(.plain).noFocusRing()
+        .buttonStyle(.plain)
     }
 
     private var pageMenu: some View {
@@ -243,7 +243,7 @@ private struct WorkspaceNavSurface: View {
                         .background(Color.primary.opacity(item.page == router.page ? 0.07 : 0),
                                     in: RoundedRectangle(cornerRadius: CornerRadius.inset))
                         .contentShape(Rectangle())
-                    }.buttonStyle(.plain).noFocusRing()
+                    }.buttonStyle(.plain)
                 }
             }.padding(8)
         }
@@ -283,7 +283,7 @@ private struct WorkspaceNavSurface: View {
                             .background(Color.primary.opacity(block.id == readerStore.activeBlockId ? 0.07 : 0),
                                         in: RoundedRectangle(cornerRadius: CornerRadius.inset))
                             .contentShape(Rectangle())
-                        }.buttonStyle(.plain).noFocusRing()
+                        }.buttonStyle(.plain)
                         }
                     }
                 }.padding(.horizontal, 6).padding(.bottom, 8)
@@ -366,7 +366,7 @@ struct OutsideDismissArea: View {
             Color.black.opacity(dimOpacity).contentShape(Rectangle())
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .buttonStyle(.plain).noFocusRing()
+        .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 }

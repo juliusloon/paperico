@@ -9,7 +9,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v1.1.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v1.3.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 English · [简体中文](README.md)
 
@@ -84,7 +84,7 @@ the translation, chat citations, method cards and annotations.
 - **MCP** — opt-in localhost access with 10 read-only tools, evidence blocks and figures; copy client configuration from settings. See the [connection guide](docs/mcp.md).
 - **Native desktop** — Liquid Glass, light/dark appearance, accent colors, offline math rendering, an About page with opt-in update checks.
 
-See the [release notes](docs/releases/v1.1.0.md) and the [architecture review](docs/architecture.md).
+See the [release notes](docs/releases/v1.3.0.md) and the [architecture review](docs/architecture.md).
 
 <p align="center">
   <img src="assets/readme/Paperico_Reading.jpg" width="100%" alt="Paperico's reading view.">
@@ -92,7 +92,7 @@ See the [release notes](docs/releases/v1.1.0.md) and the [architecture review](d
 
 ## Run
 
-**Install:** download `Paperico-1.1.0.dmg` from the
+**Install:** download `Paperico-1.3.0.dmg` from the
 [latest release](https://github.com/juliusloon/paperico/releases), drag Paperico into
 Applications and replace any older copy. The DMG is not Developer ID signed or notarized;
 distribution signing options are described in the [macOS development guide](macos/README.md).
@@ -206,9 +206,9 @@ require separate Keychain management.
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-The DMG is written to `macos/build/`. Release packaging runs locally; the CI and release
-workflows under `.github/` are kept out of the public repository. Local builds use ad-hoc
-signing and are not Developer ID notarized. See the [macOS development guide](macos/README.md)
+The DMG is written to `macos/build/`. You can package locally; GitHub Actions also runs CI
+and builds release DMGs on version tags, preserving existing assets with the same names.
+Default builds use ad-hoc signing and are not Developer ID signed or Apple notarized. See the [macOS development guide](macos/README.md)
 for distribution signing options.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

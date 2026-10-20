@@ -61,11 +61,9 @@ struct ReaderPage: View {
         .overlay(alignment: .bottomTrailing) {
             GlassGroup(spacing: 8) {
                 if !floatingPanelsFit(containerWidth), !presentsHiddenPanels {
-                    RoundIconButton(systemName: Ic.messagesSquare, size: 40,
-                                    title: "打开论文信息与对话", foreground: .primary) {
+                    PillIconButton(title: "打开论文信息与对话", icon: Ic.messagesSquare) {
                         presentsHiddenPanels = true
                     }
-                    .liquidTool(cornerRadius: 20)
                     .transition(.opacity)
                 }
             }
@@ -148,10 +146,13 @@ struct ReaderPage: View {
     private var desktopReader: some View {
         GeometryReader { shell in
             let visible = floatingPanelsFit(shell.size.width)
-            let drawerWidth = visible ? rightWidth : min(rightWidth, max(0, shell.size.width * 0.5 - 12))
+            // The overlay can use the window's available width; its 12pt outer
+            // margins still leave room to dismiss without squeezing the chat.
+            let drawerWidth = visible ? rightWidth : min(rightWidth, max(0, shell.size.width - 24))
             ZStack(alignment: .trailing) {
                 ReadingArea(toolsObscured: presentsHiddenPanels && !visible, leftWidth: $leftWidth)
                     .padding(.trailing, visible ? rightWidth + 24 : 0)
+                    .accessibilityHidden(presentsHiddenPanels && !visible)
                 if !visible, presentsHiddenPanels {
                     OutsideDismissArea(label: "关闭论文信息与对话") { presentsHiddenPanels = false }
                         .background(.black.opacity(0.08))

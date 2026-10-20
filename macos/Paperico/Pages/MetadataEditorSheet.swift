@@ -2,6 +2,8 @@ import SwiftUI
 
 struct MetadataEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    @Environment(\.containerWidth) private var containerWidth
     let onSave: (PaperMetadata.Metadata) async throws -> Void
     @State private var title: String
     @State private var authors: String
@@ -23,26 +25,46 @@ struct MetadataEditorSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("编辑论文元数据").font(.headline)
-            Form {
-                TextField("标题", text: $title)
-                TextField("作者（逗号分隔）", text: $authors)
-                TextField("年份", text: $year)
-                TextField("期刊 / 会议", text: $venue)
-                TextField("DOI", text: $doi)
-                TextField("arXiv ID", text: $arxiv)
-            }.textFieldStyle(.roundedBorder).disabled(saving)
+        VStack(alignment: .leading, spacing: SheetSpec.spacing) {
+            Text("编辑论文元数据").font(SheetSpec.titleFont).foregroundStyle(palette.gray900)
+            VStack(spacing: 10) {
+                field("标题", text: $title, placeholder: "论文标题")
+                field("作者", text: $authors, placeholder: "多位作者以逗号分隔")
+                field("年份", text: $year, placeholder: "出版年份（可选）")
+                field("期刊 / 会议", text: $venue, placeholder: "期刊或会议名称（可选）")
+                field("DOI", text: $doi, placeholder: "DOI（可选）")
+                field("arXiv ID", text: $arxiv, placeholder: "arXiv ID（可选）")
+            }.disabled(saving)
             Text("保存后标记为手动，自动识别与分析会保留这些信息。")
-                .font(.caption).foregroundStyle(.secondary)
-            if !error.isEmpty { Text(error).font(.caption).foregroundStyle(.red) }
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction).disabled(saving)
-                Button("保存") { Task { await save() } }
-                    .keyboardShortcut(.defaultAction).disabled(saving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .font(SheetSpec.captionFont).foregroundStyle(palette.gray500)
+                .fixedSize(horizontal: false, vertical: true)
+            if !error.isEmpty {
+                Text(error).font(SheetSpec.captionFont).foregroundStyle(palette.danger)
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
-        }.padding(24).frame(width: 520).interactiveDismissDisabled(saving)
+            HStack(spacing: 8) {
+                Spacer()
+                ToolbarButton(title: "取消", disabled: saving) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                ToolbarButton(title: "保存", kind: .primary, busy: saving,
+                              disabled: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                    Task { await save() }
+                }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .foregroundStyle(palette.gray800)
+        .padding(SheetSpec.padding)
+        .frame(width: SheetSpec.width(preferred: 520, containerWidth: containerWidth))
+        .interactiveDismissDisabled(saving)
+    }
+
+    private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {
+        HStack(spacing: 12) {
+            Text(label).font(SheetSpec.bodyFont).foregroundStyle(palette.gray600)
+                .frame(width: 82, alignment: .leading)
+            FormTextField(text: text, placeholder: placeholder)
+                .accessibilityLabel(label)
+        }
     }
 
     private func save() async {

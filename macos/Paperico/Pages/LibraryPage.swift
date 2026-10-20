@@ -317,7 +317,7 @@ struct LibraryPage: View {
                 Button { toggleSelectAll() } label: {
                     Label("选择当前结果", systemImage: allVisibleSelected ? Ic.checkSquare : Ic.square)
                         .font(.system(size: 12)).foregroundStyle(palette.accent)
-                }.buttonStyle(.plain).noFocusRing()
+                }.buttonStyle(.plain)
                 Text(selectedIds.isEmpty ? "点击论文进行选择" : "已选择 \(selectedIds.count) 篇")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
@@ -350,6 +350,10 @@ struct LibraryPage: View {
         return !ids.isEmpty && ids.allSatisfy { selectedIds.contains($0) }
     }
 
+    private var paperColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 360), spacing: 12)]
+    }
+
     @ViewBuilder
     private var contentArea: some View {
         ScrollView {
@@ -358,8 +362,8 @@ struct LibraryPage: View {
                     inlineError
                 }
                 if papersStore.loading && papersStore.papers.isEmpty {
-                    HStack(alignment: .top, spacing: 12) {
-                        SkeletonCard(); SkeletonCard(); SkeletonCard()
+                    LazyVGrid(columns: paperColumns, spacing: 12) {
+                        ForEach(0..<3) { _ in SkeletonCard() }
                     }
                 } else if !papersStore.error.isEmpty && papersStore.papers.isEmpty {
                     errorState
@@ -441,7 +445,7 @@ struct LibraryPage: View {
     }
 
     private var paperGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 12)], spacing: 12) {
+        LazyVGrid(columns: paperColumns, spacing: 12) {
             ForEach(visiblePapers) { paper in
                 PaperCard(
                     paper: paper,
@@ -651,11 +655,11 @@ struct LibraryPage: View {
     }
 
     private var uploadSheet: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             HStack {
-                Text("上传论文").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.gray800)
+                Text("上传论文").font(SheetSpec.titleFont).foregroundStyle(palette.gray900)
                 Spacer(minLength: 0)
-                RoundIconButton(systemName: Ic.close, size: 28) { showUpload = false }
+                RoundIconButton(systemName: Ic.close, size: 30, title: "关闭上传论文") { showUpload = false }
                     .disabled(uploading)
             }
             Button {
@@ -667,7 +671,7 @@ struct LibraryPage: View {
                     } else {
                         Image.ic(Ic.upload).font(.system(size: 22)).foregroundStyle(palette.gray500)
                         Text("点击选择 PDF 文件").font(.system(size: 14)).foregroundStyle(palette.gray600)
-                        Text("支持多选批量上传").font(.system(size: 12)).foregroundStyle(palette.gray500.opacity(0.6))
+                        Text("支持多选批量上传").font(.system(size: 12)).foregroundStyle(palette.gray500)
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 130)
@@ -678,7 +682,7 @@ struct LibraryPage: View {
                 )
             }
             .buttonStyle(.plain)
-            .noFocusRing()
+
             .disabled(uploading)
 
             if !pipelineReady {
@@ -702,7 +706,7 @@ struct LibraryPage: View {
                         .foregroundStyle(palette.accent)
                     }
                     .buttonStyle(.plain)
-                    .noFocusRing()
+
                     .disabled(uploading)
                 }
                 .padding(12)
@@ -721,7 +725,7 @@ struct LibraryPage: View {
                 .foregroundStyle(palette.gray500)
                 .frame(maxWidth: .infinity)
         }
-        .padding(20)
+        .padding(SheetSpec.padding)
         .frame(width: 384)
         .background(Color.clear)
         .interactiveDismissDisabled(uploading)

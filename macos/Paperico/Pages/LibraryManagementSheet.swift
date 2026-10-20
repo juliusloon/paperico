@@ -28,7 +28,7 @@ struct LibraryManagementSheet: View {
             HStack(spacing: 10) {
                 Image.ic(section == .tasks ? "list.bullet.rectangle" : section == .files ? "folder.badge.questionmark" : Ic.trash)
                     .font(.system(size: 19)).foregroundStyle(palette.accent)
-                Text(section.rawValue).font(.system(size: 20, weight: .semibold))
+                Text(section.rawValue).font(SheetSpec.titleFont).foregroundStyle(palette.gray900)
                 Spacer()
                 RoundIconButton(systemName: Ic.close, size: 30, title: "关闭论文库管理", foreground: .primary) { onClose() }
                     .keyboardShortcut(.cancelAction)
@@ -38,8 +38,8 @@ struct LibraryManagementSheet: View {
                  : section == .trash
                  ? "可恢复论文及其 PDF、解析结果、对话与笔记，也可永久删除。"
                  : "磁盘上存在、但论文索引里没有对应记录的文件。默认只报告，不会自动删除。")
-                .font(.callout).foregroundStyle(.secondary)
-            if !error.isEmpty { Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled) }
+                .font(.system(size: 13)).foregroundStyle(palette.gray600)
+            if !error.isEmpty { Text(error).font(.system(size: 13)).foregroundStyle(palette.danger).textSelection(.enabled) }
             if section == .tasks && tasks.isEmpty {
                 emptyState("当前没有待处理任务", symbol: "checkmark.circle")
             } else if section == .trash && trash.isEmpty {
@@ -62,7 +62,7 @@ struct LibraryManagementSheet: View {
                 }
             }
         }
-        .padding(20)
+        .padding(SheetSpec.padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .liquidPanel(cornerRadius: 24)
         .environment(\.floatingSurface, true)
@@ -97,7 +97,7 @@ struct LibraryManagementSheet: View {
                     perform(id: entry.id) { try await services.library.restorePaper(id: entry.id) }
                 }.buttonStyle(LiquidActionButtonStyle())
                 Button("永久删除", role: .destructive) { pendingDeleteId = entry.id }
-                    .buttonStyle(LiquidActionButtonStyle()).foregroundStyle(palette.danger)
+                    .buttonStyle(LiquidActionButtonStyle(foreground: palette.danger))
             }
             .disabled(busy.contains(entry.id))
             if pendingDeleteId == entry.id {
@@ -106,13 +106,13 @@ struct LibraryManagementSheet: View {
                 HStack {
                     Spacer()
                     Button("取消") { pendingDeleteId = nil }.buttonStyle(LiquidActionButtonStyle())
-                    ToolbarButton(title: "确认永久删除", icon: Ic.trash, busy: busy.contains(entry.id)) {
+                    ToolbarButton(title: "确认永久删除", icon: Ic.trash, kind: .danger, busy: busy.contains(entry.id)) {
                         perform(id: entry.id) {
                             await services.pipeline.cancel(paperId: entry.id)
                             try await services.library.permanentlyDeletePaper(id: entry.id)
                             pendingDeleteId = nil
                         }
-                    }.foregroundStyle(palette.danger)
+                    }
                 }.disabled(busy.contains(entry.id))
             }
         }
@@ -145,12 +145,12 @@ struct LibraryManagementSheet: View {
                     Button("取消选择") { selection.clear() }
                         .buttonStyle(LiquidActionButtonStyle())
                     if selection.isConfirming {
-                        ToolbarButton(title: "确认删除", icon: Ic.trash, busy: busy.contains("orphans")) {
+                        ToolbarButton(title: "确认删除", icon: Ic.trash, kind: .danger, busy: busy.contains("orphans")) {
                             Task { await deleteConfirmedOrphans() }
-                        }.foregroundStyle(palette.danger)
+                        }
                     } else {
                         Button("删除所选…") { selection.requestConfirmation() }
-                            .buttonStyle(LiquidActionButtonStyle()).foregroundStyle(palette.danger)
+                            .buttonStyle(LiquidActionButtonStyle(foreground: palette.danger))
                     }
                 }
                 .padding(.top, 4)
@@ -204,8 +204,8 @@ struct LibraryManagementSheet: View {
                 if let progress = services.pipeline.progress[paper.id] {
                     Text(progress).font(.caption).foregroundStyle(.secondary)
                 }
-                if !paper.errorMessage.isEmpty { Text(paper.errorMessage).font(.caption).foregroundStyle(.red).lineLimit(3) }
-                if let failure = services.pipeline.failures[paper.id] { Text(failure).font(.caption).foregroundStyle(.red) }
+                if !paper.errorMessage.isEmpty { Text(paper.errorMessage).font(.caption).foregroundStyle(palette.danger).lineLimit(3) }
+                if let failure = services.pipeline.failures[paper.id] { Text(failure).font(.caption).foregroundStyle(palette.danger) }
             }
             Spacer()
             Button("打开") { onClose(); router.go(.reader(paperId: paper.id)) }.buttonStyle(LiquidActionButtonStyle())
@@ -227,7 +227,7 @@ struct LibraryManagementSheet: View {
                 .menuStyle(.borderlessButton).menuIndicator(.hidden)
                 .tint(palette.gray800).foregroundStyle(palette.gray800)
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .fixedSize().noFocusRing()
+                .fixedSize()
                 .liquidTool().disabled(busy.contains(paper.id))
             }
         }.padding(.vertical, 6)

@@ -40,7 +40,7 @@ struct WorkspaceGroupRow: View {
                         Image(systemName: "plus.circle.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.accent)
                             .accessibilityLabel("移入此分组")
                     } else {
-                        Text("\(count)").font(.system(size: 10)).foregroundStyle(palette.gray500.opacity(0.6))
+                        Text("\(count)").font(.system(size: 12)).monospacedDigit().foregroundStyle(palette.gray500)
                     }
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)

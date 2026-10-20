@@ -93,10 +93,14 @@ struct GlassSurface<S: Shape>: View {
     }
 
     @ViewBuilder private var material: some View {
-        if #available(macOS 26.0, iOS 26.0, *) {
+        if reduceTransparency {
+            shape.fill(palette.gray0)
+                .overlay { if let tint { shape.fill(tint) } }
+        } else if #available(macOS 26.0, iOS 26.0, *) {
             Color.clear.glassEffect(glass, in: shape).glassEffectTransition(.identity)
         } else {
             shape.fill(.regularMaterial)
+                .overlay { if let tint { shape.fill(tint) } }
         }
     }
 
@@ -150,7 +154,9 @@ struct LiquidToolModifier: ViewModifier {
     var cornerRadius: CGFloat
     var tint: Color? = nil
     func body(content: Content) -> some View {
-        content.background { GlassSurface(shape: Capsule(), tint: tint, interactive: true) }
+        content
+            .contentShape(.focusEffect, Capsule())
+            .background { GlassSurface(shape: Capsule(), tint: tint, interactive: true) }
     }
 }
 
@@ -164,14 +170,26 @@ struct LiquidActionButtonStyle: ButtonStyle {
     @Environment(\.palette) private var palette
     @Environment(\.glassOpacity) private var glassOpacity
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var usesProminentFill: Bool {
+        prominent && (reduceTransparency || glassOpacity > 0.45)
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(foreground ?? (prominent && glassOpacity > 0.45 ? (tint ?? palette.accent).contrastingForeground : (prominent ? tint ?? palette.accent : palette.gray800)))
+            .foregroundStyle(foreground ?? (usesProminentFill ? (tint ?? palette.accent).contrastingForeground : (prominent ? tint ?? palette.accent : palette.gray800)))
             .padding(.horizontal, horizontalPadding).padding(.vertical, verticalPadding)
-            .background { GlassSurface(shape: Capsule(), tint: prominent ? tint ?? palette.accent : nil, interactive: true) }
+            .contentShape([.interaction, .focusEffect], Capsule())
+            .background {
+                // Keep primary-action contrast independent of the material's
+                // tint rendering and the user's glass-opacity preference.
+                GlassSurface(shape: Capsule(), tint: prominent ? tint ?? palette.accent : nil, interactive: true)
+                    .background { if usesProminentFill { Capsule().fill(tint ?? palette.accent) } }
+            }
             .opacity(isEnabled ? 1 : 0.5)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
     }
 }
 
@@ -199,21 +217,6 @@ extension View {
         } else {
             self
         }
-    }
-}
-
-// MARK: - 聚焦框(蓝色方框)禁用
-
-extension View {
-    /// macOS 的 popover 初始焦点与全键盘导航会给自绘按钮套系统蓝色聚焦框,
-    /// 自绘的导航/工具按钮统一禁用;输入框、拾色器等系统控件不受影响。
-    @ViewBuilder
-    func noFocusRing() -> some View {
-        #if os(macOS)
-        self.focusable(false)
-        #else
-        self
-        #endif
     }
 }
 

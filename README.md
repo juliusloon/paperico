@@ -9,7 +9,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/download-v1.1.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
+[![Release](https://img.shields.io/badge/download-v1.3.0-0A84FF)](https://github.com/juliusloon/paperico/releases)
 
 [English](README.en.md) · 简体中文
 
@@ -75,7 +75,7 @@ Paperico 是一款 macOS 原生论文精读应用。导入 PDF，用 MinerU 恢�
 - **MCP**：默认关闭的 localhost 只读服务，提供 10 个工具、证据块与图像；在设置中复制客户端配置。详见 [连接说明](docs/mcp.md)。
 - **原生桌面**：Liquid Glass、深浅色外观、自定义强调色、离线公式渲染、带可选更新检查的关于页。
 
-详见[更新说明](docs/releases/v1.1.0.md)与[仓库分析与架构说明](docs/architecture.md)。
+详见[更新说明](docs/releases/v1.3.0.md)与[仓库分析与架构说明](docs/architecture.md)。
 
 <p align="center">
   <img src="assets/readme/Paperico_Reading.jpg" width="100%" alt="Paperico 的阅读页面。">
@@ -183,8 +183,8 @@ App 沙盒中的数据根目录：
 ./macos/scripts/make_dmg.sh CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 ```
 
-DMG 输出在 `macos/build/`。发布打包在本地执行；`.github/` 下的 CI 与 release 工作流保留在
-本地、不入公开仓库。本地构建使用临时签名，未经 Developer ID 公证；正式分发的签名
+DMG 输出在 `macos/build/`。可在本地打包；仓库的 GitHub Actions 会运行 CI，并在推送版本标签时
+构建 Release DMG，保留已上传的同名附件。默认构建使用临时签名，未经 Developer ID 签名或 Apple 公证；正式分发的签名
 选项见 [macOS 开发说明](macos/README.md)。
 
 贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全说明见 [SECURITY.md](SECURITY.md)。

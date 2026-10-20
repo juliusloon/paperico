@@ -211,9 +211,9 @@ struct HomePage: View {
                         .foregroundStyle(palette.gray800)
                         .lineLimit(1)
                     Text(paper.statusEnum == .ready ? (paper.tldr.isEmpty ? "已完成解析" : paper.tldr)
-                         : (paper.statusEnum == .uploaded ? "已导入，等待解析" : "正在准备阅读内容"))
+                         : (paper.statusEnum == .uploaded ? "已导入，等待解析" : paper.statusEnum.label))
                         .font(.system(size: 12))
-                        .foregroundStyle(palette.gray500)
+                        .foregroundStyle(paper.statusEnum == .error ? palette.danger : palette.gray500)
                         .lineLimit(1)
                 }
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)

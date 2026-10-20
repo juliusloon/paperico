@@ -159,7 +159,7 @@ struct ChatPanel: View {
             }.help("选择回答导出笔记").accessibilityLabel("导出笔记")
                 .frame(width: 71, alignment: .trailing)
         }
-        .foregroundStyle(palette.gray500).buttonStyle(.plain).noFocusRing()
+        .foregroundStyle(palette.gray500).buttonStyle(.plain)
         .padding(.horizontal, 12).padding(.vertical, 6).frame(height: 44)
     }
 
@@ -196,7 +196,7 @@ struct ChatPanel: View {
                         .background(session.id == chatStore.currentSession?.id ? palette.accentFaint : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .contentShape(Rectangle())
-                        }.buttonStyle(.plain).noFocusRing().disabled(chatStore.busy)
+                        }.buttonStyle(.plain).disabled(chatStore.busy)
                         .contextMenu {
                             Button("改名", systemImage: "pencil") {
                                 sessionTitle = session.title
@@ -304,7 +304,7 @@ struct ChatPanel: View {
                             FlowChips {
                                 ForEach(Array(contexts.enumerated()), id: \.offset) { _, context in
                                     Label(context.snippet?.prefix(36).description ?? context.type, systemImage: "text.quote")
-                                        .font(.system(size: 10)).lineLimit(2)
+                                        .font(.system(size: 11)).lineLimit(2)
                                         .foregroundStyle(palette.gray600)
                                 }
                             }
@@ -404,17 +404,21 @@ struct ChatPanel: View {
             ForEach(Array(readerStore.attachedContext.enumerated()), id: \.offset) { index, context in
                 HStack(spacing: 3) {
                     Image.ic(context.type == "text_selection" ? Ic.fileText : (context.type == "figure" ? Ic.image : Ic.tag))
-                        .font(.system(size: 9))
+                        .font(.system(size: 11))
                     Text(context.snippet?.prefix(28).description ?? context.type)
                         .lineLimit(1)
                     Button {
                         readerStore.removeAttachedContext(at: index)
                     } label: {
-                        Image.ic(Ic.close).font(.system(size: 8))
+                        Image.ic(Ic.close).font(.system(size: 10, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .help("移除附加证据")
+                    .accessibilityLabel("移除附加证据")
                 }
-                .font(.system(size: 9))
+                .font(.system(size: 11))
                 .foregroundStyle(palette.accent)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)

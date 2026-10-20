@@ -192,12 +192,12 @@ extension Color {
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
     }
 
-    /// Prefer white ink on saturated control fills; use black when the fill is
-    /// too light for 3:1 white contrast. Body text uses the semantic palette.
+    /// Choose the higher-contrast ink for small labels on accent-filled controls.
     var contrastingForeground: Color {
         let luminance = relativeLuminance
         let whiteContrast = 1.05 / (luminance + 0.05)
-        return whiteContrast >= 3 ? .white : .black
+        let blackContrast = (luminance + 0.05) / 0.05
+        return whiteContrast >= blackContrast ? .white : .black
     }
 
     var isLight: Bool {

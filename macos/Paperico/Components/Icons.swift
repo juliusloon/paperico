@@ -179,7 +179,7 @@ struct RoundIconButton: View {
                 .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
-        .noFocusRing()
+        .contentShape(.focusEffect, Circle())
         .contentShape(Circle())
         .accessibilityLabel(title)
         .help(Text(title))
@@ -202,7 +202,7 @@ struct PrimaryActionButton: View {
         }
         .buttonStyle(LiquidActionButtonStyle(prominent: true))
         .controlSize(.large).buttonBorderShape(.capsule)
-        .noFocusRing()
+
     }
 }
 
@@ -222,6 +222,6 @@ struct SecondaryActionButton: View {
         }
         .buttonStyle(LiquidActionButtonStyle())
         .controlSize(.large).buttonBorderShape(.capsule)
-        .noFocusRing()
+
     }
 }

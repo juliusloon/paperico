@@ -83,7 +83,7 @@ struct CitationInlineText: NSViewRepresentable {
                         .font(.system(size: 10)).foregroundStyle(parent.palette.accent)
                         .padding(.horizontal, 7).padding(.vertical, 4)
                         .liquidInset(cornerRadius: CornerRadius.chip, tint: parent.palette.accentFaint)
-                }.buttonStyle(.plain).noFocusRing().accessibilityLabel("跳转到证据 " + id)
+                }.buttonStyle(.plain).accessibilityLabel("跳转到证据 " + id)
                 let host = NSHostingView(rootView: AnyView(button.environment(\.palette, parent.palette)
                     .environment(\.glassOpacity,parent.glassOpacity)
                     .environment(\.colorScheme,parent.palette.dark ? .dark : .light)))

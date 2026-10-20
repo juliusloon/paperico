@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ChatSourceCard: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    @Environment(\.containerWidth) private var containerWidth
     let source: ChatSourceRef
     let library: PaperLibrary
     let onOpen: () -> Void
@@ -11,18 +13,36 @@ struct ChatSourceCard: View {
     @State private var loaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title.isEmpty ? (source.title ?? "引用来源") : title).font(.headline).textSelection(.enabled)
-            if !error.isEmpty { Text(error).foregroundStyle(.red) }
-            else if !loaded { ProgressView() }
-            else { ScrollView { Text(text).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }.frame(maxHeight: 280) }
-            HStack {
-                Spacer()
-                Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(source.kind == .method ? "打开方法索引" : (source.blockId == nil ? "打开论文" : "打开论文并定位"), action: onOpen)
-                    .disabled(!loaded || !error.isEmpty).keyboardShortcut(.defaultAction)
+        VStack(alignment: .leading, spacing: SheetSpec.spacing) {
+            Text("引用来源").font(SheetSpec.titleFont).foregroundStyle(palette.gray900)
+            if !loaded && error.isEmpty {
+                ProgressView("正在读取来源…").font(SheetSpec.bodyFont).controlSize(.small)
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(title.isEmpty ? (source.title ?? "引用来源") : title)
+                            .font(SheetSpec.bodyFont.weight(.semibold)).foregroundStyle(palette.gray800)
+                        if !error.isEmpty {
+                            Text(error).font(SheetSpec.captionFont).foregroundStyle(palette.danger)
+                        } else {
+                            Text(text).font(SheetSpec.bodyFont).lineSpacing(4).foregroundStyle(palette.gray600)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                }.frame(maxHeight: 320)
             }
-        }.padding(24).frame(width: 520).task { await load() }
+            HStack(spacing: 8) {
+                Spacer()
+                ToolbarButton(title: "关闭") { dismiss() }.keyboardShortcut(.cancelAction)
+                ToolbarButton(title: source.kind == .method ? "打开方法索引" : (source.blockId == nil ? "打开论文" : "打开论文并定位"),
+                              kind: .primary, disabled: !loaded || !error.isEmpty, action: onOpen)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }.padding(SheetSpec.padding)
+            .frame(width: SheetSpec.width(preferred: 520, containerWidth: containerWidth))
+            .task { await load() }
     }
     private func load() async {
         do {

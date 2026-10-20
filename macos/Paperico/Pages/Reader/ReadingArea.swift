@@ -9,6 +9,7 @@ enum ReaderViewMode: String {
 struct ReadingArea: View {
     @Environment(\.palette) private var palette
     @Environment(\.containerWidth) private var containerWidth
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(ReaderStore.self) private var readerStore
     @Environment(AppServices.self) private var services
 
@@ -109,11 +110,11 @@ struct ReadingArea: View {
             }
             .frame(height: 2)
             .frame(maxHeight: .infinity, alignment: .bottom)
-            .animation(.easeInOut(duration: 0.18), value: activeProgress)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: activeProgress)
         }
         .background(Color.clear)
-        .animation(.easeInOut(duration: 0.18), value: retranslateActive)
-        .animation(.easeInOut(duration: 0.18), value: visibleRetranslateError == nil)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: retranslateActive)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: visibleRetranslateError == nil)
         .alert("重新翻译这篇论文？", isPresented: $confirmRetranslate) {
             Button("取消", role: .cancel) {}
             Button("重新翻译") { Task { await handleRetranslate() } }
@@ -162,63 +163,68 @@ struct ReadingArea: View {
     private var floatingTools: some View {
         GlassGroup(spacing: 8) {
             HStack(spacing: 8) {
-                toolButton(icon: viewMode == .text ? Ic.fileText : Ic.fileType,
-                           help: viewMode == .text ? "查看原始 PDF" : "返回文本精读") { toggleViewMode() }
-                toolButton(icon: readerStore.bilingualMode == .original ? Ic.pilcrow : Ic.languages,
-                           help: viewMode == .pdf ? "PDF 模式不提供译文切换" : "切换原文与双语") {
+                PillIconButton(title: viewMode == .text ? "查看原始 PDF" : "返回文本精读",
+                               icon: viewMode == .text ? Ic.fileText : Ic.fileType,
+                               active: viewMode == .pdf) { toggleViewMode() }
+                    .accessibilityValue(viewMode == .pdf ? "原始 PDF" : "文本精读")
+                    .accessibilityAddTraits(viewMode == .pdf ? .isSelected : [])
+                PillIconButton(title: viewMode == .pdf ? "PDF 模式不提供译文切换" : "切换原文与双语",
+                               icon: readerStore.bilingualMode == .original ? Ic.pilcrow : Ic.languages,
+                               active: viewMode == .text && readerStore.bilingualMode != .original) {
                     readerStore.setBilingualMode(readerStore.bilingualMode == .original ? .bilingual : .original)
-                }.disabled(viewMode == .pdf)
+                }
+                .disabled(viewMode == .pdf)
+                .accessibilityValue(viewMode == .pdf ? "不可用" : (readerStore.bilingualMode == .original ? "原文" : (readerStore.bilingualMode == .bilingual ? "双语" : "译文")))
+                .accessibilityAddTraits(viewMode == .text && readerStore.bilingualMode != .original ? .isSelected : [])
                 Button { confirmRetranslate = true } label: {
                     Group {
-                        if retranslateActive { SpinnerIcon(size: 16) }
-                        else { Image.ic(Ic.refresh).font(.system(size: 16, weight: .medium)) }
+                        if retranslateActive { SpinnerIcon(size: ControlSpec.iconSize) }
+                        else { Image.ic(Ic.refresh).font(.system(size: ControlSpec.iconSize, weight: .medium)) }
                     }
-                    .foregroundStyle(.primary)
-                    .frame(width: 40, height: 40)
+                    .foregroundStyle(retranslateActive ? palette.accent : palette.gray600)
+                    .frame(width: ControlSpec.height, height: ControlSpec.height)
                 }
-                .buttonStyle(.plain).noFocusRing()
-                .liquidTool(cornerRadius: 20)
+                .buttonStyle(.plain)
+                .liquidTool(cornerRadius: ControlSpec.radius, tint: retranslateActive ? palette.accentFaint : nil)
                 .disabled(paper == nil || blocks.isEmpty || paperProcessing || retranslateBusy)
                 .help("重新翻译").accessibilityLabel("重新翻译")
+                .accessibilityValue(retranslateActive ? "正在翻译" : "")
                 HStack(spacing: 7) {
                     ZStack {
-                        Circle().stroke(Color.secondary.opacity(0.3), lineWidth: 2)
+                        Circle().stroke(palette.gray300, lineWidth: 2)
                         Circle().trim(from: 0, to: activeProgress / 100)
-                            .stroke(Color.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                            .stroke(palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                             .rotationEffect(.degrees(-90))
-                    }.frame(width: 15, height: 15)
+                    }.frame(width: ControlSpec.iconSize, height: ControlSpec.iconSize)
                     Text(viewMode == .pdf ? String(format: "%.1f%%", activeProgress) : "\(Int(activeProgress.rounded()))%")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.primary)
+                        .monospacedDigit()
+                        .foregroundStyle(palette.gray700)
                 }
-                .frame(width: 84, height: 40).liquidTool(cornerRadius: 20)
+                .frame(width: 84, height: ControlSpec.height).liquidTool(cornerRadius: ControlSpec.radius)
                 .help("阅读进度")
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("阅读进度")
+                .accessibilityValue("\(Int(activeProgress.rounded()))%")
                 HStack(spacing: 0) {
                     scaleButton(icon: "minus", help: "缩小") { changeReadingScale(-1) }
                     Text(viewMode == .pdf ? "\(Int((pdfZoom * 100).rounded()))%" : "\(Int(readerStore.fontSize))")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.primary).frame(width: 48)
+                        .monospacedDigit()
+                        .foregroundStyle(palette.gray700).frame(width: 48)
                     scaleButton(icon: "plus", help: "放大") { changeReadingScale(1) }
-                }.frame(width: 112, height: 40).liquidTool(cornerRadius: 20)
+                }.frame(width: 112, height: ControlSpec.height).liquidTool(cornerRadius: ControlSpec.radius)
             }
         }
     }
 
     private func scaleButton(icon: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.primary).frame(width: 32, height: 36).contentShape(Circle())
-        }.buttonStyle(.plain).noFocusRing().help(help).accessibilityLabel(help)
-    }
-
-    private func toolButton(icon: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image.ic(icon).font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.primary).frame(width: 40, height: 40)
-        }
-        .buttonStyle(.plain).noFocusRing()
-        .liquidTool(cornerRadius: 20)
-        .help(help).accessibilityLabel(help)
+            Image(systemName: icon).font(.system(size: ControlSpec.compactIconSize, weight: .medium))
+                .foregroundStyle(palette.gray600)
+                .frame(width: ControlSpec.compactHeight, height: ControlSpec.height)
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).help(help).accessibilityLabel(help)
     }
 
     private func retryBanner(icon: String?, spinner: Bool, text: String, color: Color) -> some View {
@@ -434,7 +440,7 @@ struct ReadingArea: View {
             if let errorCode = paper.errorCode, !errorCode.isEmpty {
                 // Mirrors web .error-code-chip (T0.1): programmable failure reason.
                 Text(errorCode)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(palette.danger)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -442,7 +448,8 @@ struct ReadingArea: View {
                     .overlay(RoundedRectangle(cornerRadius: CornerRadius.chip, style: .continuous).stroke(palette.danger.opacity(0.3)))
             }
             Text(paper.errorMessage.isEmpty ? "请检查 API 配置后重新解析。" : paper.errorMessage)
-                .font(.system(size: 9))
+                .font(.system(size: 12))
+                .lineSpacing(3)
                 .foregroundStyle(palette.danger)
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -167,7 +167,7 @@ struct SettingsPage: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .noFocusRing()
+
                 .help(item.label).accessibilityLabel(item.label)
             }
 
@@ -305,15 +305,18 @@ struct SettingsPage: View {
     private var notes: [String] {
         switch tab {
         case .model:
-            return ["兼容 OpenAI Chat Completions 接口，配置用于全文翻译、逻辑归纳、论文问答与笔记生成。API Key 保存在本机钥匙串。",
+            return ["开启后，助手可按需把其他论文的摘要或原文发送给你配置的模型服务。关闭时仅使用当前论文。",
+                settingsStore.llmProfile.supportsTools == true ? "支持工具调用" : "使用兼容检索模式（测试连通性后更新能力）",
+                "全文分析会按原文长度提高输出预算，并受服务端实际输出容量限制；默认预算为 65,536 tokens。对话使用上面的输出上限。",
+                "兼容 OpenAI Chat Completions 接口，配置用于全文翻译、逻辑归纳、论文问答与笔记生成。API Key 保存在本机钥匙串。",
                 llmGateOpen ? "已获取模型能力，确认思考强度与对话输出上限后保存配置。" : "填好配置后点击「测试连通性」，即可选择思考强度与对话输出上限。",
                 "长论文分段完整翻译后汇总全文分析；每段只生成一次，失败响应保留，供手动重试。"]
         case .parser:
             return [mineruMode == "local" ? "连接本机 MinerU Gradio 服务，无需 Token；MinerU.Chem 化学解析目前仅云端提供。" : "MinerU Token 保存在本机钥匙串。PDF 上传到解析服务后，Paperico 自动等待解析结果。",
                 "可检索文字型 PDF 建议关闭强制 OCR，并开启公式与表格识别；扫描版或图片型 PDF 建议开启强制 OCR。"]
         case .appearance:
-            return ["外观设置保存在本机，修改即时生效。正文字号仅影响论文正文，其他界面统一使用系统默认字体。",
-                "背景透明度与玻璃透明度分别调节，文字和图标保持清晰。"]
+            return ["外观设置保存在本机。主题、强调色与正文字号在点击「保存配置」后生效；正文字号仅影响论文正文。",
+                    "背景透明度与玻璃透明度分别调节，即时生效；文字和图标保持清晰。"]
         case .automation:
             return ["支持 MCP Streamable HTTP 的客户端可通过服务地址与访问 Token 连接，也可使用通用 JSON 配置。认证请求头为 Authorization: Bearer <Token>。",
                 "提供 10 个只读工具及论文资源，不会触发解析或模型调用。Paperico 需要保持运行，关闭开关会断开连接。",
@@ -520,12 +523,6 @@ struct SettingsPage: View {
                 }
             }
             Toggle("允许对话参考论文库", isOn: $allowLibraryChat)
-            Text("开启后，助手可按需把其他论文的摘要或原文发送给你配置的模型服务。关闭时仅使用当前论文。")
-                .font(.system(size: 12)).foregroundStyle(palette.gray500)
-            Text(settingsStore.llmProfile.supportsTools == true ? "支持工具调用" : "使用兼容检索模式（测试连通性后更新能力）")
-                .font(.system(size: 12)).foregroundStyle(palette.gray500)
-            Text("全文分析会按原文长度提高输出预算，并受服务端实际输出容量限制；默认预算为 65,536 tokens。对话使用上面的输出上限。")
-                .font(.system(size: 12)).foregroundStyle(palette.gray500)
         }
     }
 
@@ -653,7 +650,7 @@ struct SettingsPage: View {
         .controlSize(.large)
         .tint(previewAccent)
         .frame(width: ControlSpec.height, height: ControlSpec.height)
-        .noFocusRing()
+
         .help("选取强调色")
         .popover(isPresented: $showAccentPicker, arrowEdge: .bottom) {
             accentPickerPopover
@@ -681,7 +678,7 @@ struct SettingsPage: View {
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
-                    .noFocusRing()
+
                     .help(hex)
                 }
             }
@@ -894,7 +891,7 @@ struct SettingsPage: View {
                 Image.ic(Ic.close).font(.system(size: 10)).foregroundStyle(palette.gray500)
                     .frame(width: 22, height: 22)
             }
-            .buttonStyle(.plain).noFocusRing().accessibilityLabel("关闭提示")
+            .buttonStyle(.plain).accessibilityLabel("关闭提示")
         }
         .foregroundStyle(notice.success ? palette.success : palette.danger)
     }

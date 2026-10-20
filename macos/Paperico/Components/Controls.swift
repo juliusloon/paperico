@@ -8,6 +8,22 @@ import SwiftUI
 enum ControlSpec {
     static let height: CGFloat = 38
     static let radius: CGFloat = height / 2
+    static let iconSize: CGFloat = 15
+    static let compactHeight: CGFloat = 32
+    static let compactIconSize: CGFloat = 13
+}
+
+/// Shared hierarchy for sheets and workspace overlays.
+enum SheetSpec {
+    static let titleFont = Font.system(size: 20, weight: .semibold)
+    static let bodyFont = Font.system(size: 13)
+    static let captionFont = Font.system(size: 12)
+    static let padding: CGFloat = 24
+    static let spacing: CGFloat = 16
+
+    static func width(preferred: CGFloat, containerWidth: CGFloat) -> CGFloat {
+        max(320, min(preferred, containerWidth - 32))
+    }
 }
 
 /// Shared title size; list pages leave a little space before the title.
@@ -86,7 +102,7 @@ struct PillSearchField: View {
             .liquidInset(cornerRadius: ControlSpec.radius)
             Button(action: onSubmit) {
                 Image.ic(Ic.search)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: ControlSpec.iconSize, weight: .medium))
                     .foregroundStyle(palette.accent)
                     .frame(width: ControlSpec.height, height: ControlSpec.height)
             }
@@ -111,13 +127,14 @@ struct PillIconButton: View {
     var body: some View {
         Button(action: action) {
             Image.ic(icon)
-                .font(.system(size: min(15, size / 2), weight: .medium))
+                .font(.system(size: min(ControlSpec.iconSize, size / 2), weight: .medium))
                 .foregroundStyle(active ? palette.accent : palette.gray600)
                 .frame(width: size, height: size)
         }
-        .buttonStyle(.plain).noFocusRing()
+        .buttonStyle(.plain)
         .liquidTool(tint: active ? palette.accentFaint : nil)
         .help(title).accessibilityLabel(title)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 }
 
@@ -139,13 +156,13 @@ struct PillIconMenu: View {
             .pickerStyle(.inline)
         } label: {
             Image.ic(icon)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: ControlSpec.iconSize, weight: .medium))
                 .foregroundStyle(active ? palette.accent : palette.gray600)
                 .frame(width: ControlSpec.height, height: ControlSpec.height)
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden)
         .frame(width: ControlSpec.height, height: ControlSpec.height)
-        .noFocusRing()
+
         .liquidTool(tint: active ? palette.accentFaint : nil)
         .help(title).accessibilityLabel(title)
         .accessibilityValue(options.first(where: { $0.0 == selection })?.1 ?? selection)
@@ -241,6 +258,7 @@ struct FormTextField: View {
         TextField(placeholder, text: $text)
             .textFieldStyle(.plain)
             .font(.system(size: 12.5))
+            .accessibilityLabel(placeholder)
             .padding(.horizontal, 10)
             .frame(height: ControlSpec.height)
             .frame(maxWidth: .infinity)
@@ -332,7 +350,7 @@ struct SlidingChoice: View {
                         }
                     }
                     .contentShape(Capsule())
-                }.buttonStyle(.plain).noFocusRing().help(label).accessibilityLabel(label)
+                }.buttonStyle(.plain).help(label).accessibilityLabel(label)
                     .accessibilityAddTraits(selection == value ? .isSelected : [])
             }
         }.padding(3).liquidInset(cornerRadius: ControlSpec.radius)

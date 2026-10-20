@@ -261,7 +261,7 @@ struct MethodsPage: View {
             }
             contentArea.mask { ScrollTitleFade() }
         }
-        .liquidPanel()
+        .liquidPanel(elevated: true)
     }
 
     private var toolbar: some View {
@@ -271,9 +271,9 @@ struct MethodsPage: View {
             }
             .padding(.leading, PageTitleSpec.listInset)
             .frame(width: 128, alignment: .leading)
+            Spacer(minLength: 0)
             PillIconMenu(title: "排序方法", icon: "arrow.up.arrow.down", selection: $sortMode,
                 options: [("name", "首字母（A–Z）"), ("recent", "最近添加（新到旧）")], active: sortMode == "name")
-            Spacer(minLength: 0)
             PillSearchField(text: $query, prompt: "搜索方法名称...") {
                 Task { await load() }
             }
@@ -284,12 +284,16 @@ struct MethodsPage: View {
         .frame(minHeight: 56)
     }
 
+    private var methodColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 280), spacing: 12)]
+    }
+
     @ViewBuilder
     private var contentArea: some View {
         ScrollView {
             if loading {
-                HStack(alignment: .top, spacing: 12) {
-                    SkeletonCard(); SkeletonCard(); SkeletonCard(); SkeletonCard()
+                LazyVGrid(columns: methodColumns, spacing: 12) {
+                    ForEach(0..<4) { _ in SkeletonCard() }
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -302,7 +306,7 @@ struct MethodsPage: View {
                 .frame(maxWidth: .infinity, minHeight: 380)
                 .padding(.top, 40)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: methodColumns, spacing: 12) {
                     ForEach(filteredItems) { item in
                         MethodCard(item: item, groupName: groups.first { $0.id == item.category }?.name ?? MethodCategory.label(item.category), selected: selectedIds.contains(item.id), selectionMode: selectionMode,
                             editing: editingId == item.id, saving: saving,
@@ -341,6 +345,7 @@ struct MethodCard: View {
     var dragIds: [String] = []
 
     @State private var expanded = false
+    @State private var hovered = false
     @State private var draftName = ""
     @State private var draftDefinition = ""
 
@@ -393,10 +398,11 @@ struct MethodCard: View {
         .liquidPanel(tint: selected || editing ? palette.accentFaint : nil)
         .overlay {
             RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
-                .stroke(selected || editing ? palette.accent.opacity(0.6) : .clear)
+                .stroke(selected || editing ? palette.accent.opacity(0.6) : (hovered ? palette.gray300 : .clear))
         }
         .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
+        .onHover { hovered = $0 }
         .onTapGesture {
             guard !editing else { return }
             if selectionMode { onToggle() }
@@ -439,7 +445,7 @@ private struct MethodMergePanel: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("合并方法").font(.system(size: 22, weight: .medium)).foregroundStyle(palette.gray900)
+                Text("合并方法").font(SheetSpec.titleFont).foregroundStyle(palette.gray900)
                 Spacer(minLength: 0)
                 RoundIconButton(systemName: Ic.close, size: 30, title: "取消合并", action: onCancel)
                     .disabled(saving)
@@ -478,7 +484,7 @@ private struct MethodMergePanel: View {
                 }
             }
         }
-        .padding(20).liquidPanel(cornerRadius: 22).environment(\.floatingSurface, true)
+        .padding(SheetSpec.padding).liquidPanel(cornerRadius: 22).environment(\.floatingSurface, true)
         .focusable().focusEffectDisabled().focused($panelFocused)
         .onAppear { applyChoice(); panelFocused = true }
         .onChange(of: choice) { _, _ in applyChoice() }
